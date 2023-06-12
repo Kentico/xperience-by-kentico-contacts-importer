@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Kentico.Xperience.Admin" Version="26.2.2" />
+      <PackageReference Include="Kentico.Xperience.WebApp" Version="26.2.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Admin\" />
+    </ItemGroup>
+
+</Project>
