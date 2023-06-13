@@ -10,7 +10,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Admin\" />
+      <EmbeddedResource Include="Resources\ContactsImporterResources.resx" />
     </ItemGroup>
 
 </Project>
