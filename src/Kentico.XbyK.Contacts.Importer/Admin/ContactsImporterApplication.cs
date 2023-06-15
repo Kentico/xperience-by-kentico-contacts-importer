@@ -7,7 +7,7 @@ namespace Kentico.Xperience.Contacts.Importer.Admin;
 /// The root application page for the Contacts Importer.
 /// </summary>
 [UIPermission(SystemPermissions.VIEW)]
-internal class ContactsImporterApplication
+internal class ContactsImporterApplication : ApplicationPage
 {
     public const string IDENTIFIER = "Kentico.Xperience.Contacts.Importer";
 }

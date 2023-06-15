@@ -8,4 +8,4 @@ using Kentico.Xperience.Contacts.Importer.Admin;
 // UI applications
 [assembly: UIApplication(ContactsImporterApplication.IDENTIFIER, typeof(ContactsImporterApplication), "contacts-importer", "{$contacts.importer.applicationname$}", BaseApplicationCategories.DEVELOPMENT, Icons.Users, TemplateNames.SECTION_LAYOUT)]
 
-
+[assembly: UIPage(typeof(ContactsImporterApplication), "import", typeof(ContactsImportForm), "{$contacts.importer.edit$}", TemplateNames.EDIT, UIPageOrder.First)]
