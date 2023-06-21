@@ -1,4 +1,5 @@
-﻿using Kentico.Xperience.Admin.Base.FormAnnotations;
+﻿using CMS.MediaLibrary;
+using Kentico.Xperience.Admin.Base.FormAnnotations;
 
 namespace Kentico.Xperience.Contacts.Importer.Models;
 
@@ -28,4 +29,7 @@ public class ContactsImportModel
     [RequiredValidationRule]
     [DropDownComponent(Label = "Contact group", Order = 4, DataProviderType = typeof(ContactGroupDataProvider))]
     public string ContactGroup { get; set; }
+
+    [AssetSelectorComponent(Label = "Asset", Order = 10, MaximumAssets = 1, AllowedExtensions = "csv")]
+    public IEnumerable<AssetRelatedItem> File { get; set; } = new List<AssetRelatedItem>();
 }

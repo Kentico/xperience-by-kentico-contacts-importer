@@ -17,7 +17,7 @@ public class ContactGroupDataProvider : IDropDownOptionsProvider
         var groups = _contactGroupInfoProvider.Get().ToList();
         
         var options = groups.Select(i => new DropDownOptionItem()
-            { Text = i.ContactGroupName, Value = i.ContactGroupID.ToString() });
+            { Text = i.ContactGroupName, Value = i.ContactGroupGUID.ToString() });
         
         return Task.FromResult(options);
     }
