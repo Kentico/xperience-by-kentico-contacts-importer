@@ -49,30 +49,10 @@ public class ContactsImportForm : ModelEditPage<ContactsImportModel>
         }
     }
 
-    private class ContactModel
-    {
-        public Guid ContactGuid { get; set; }
-        public string FirstName { get; set; }
-        public string LastName { get; set; }
-        public string Email { get; set; }
-    }
-
     protected override async Task<ICommandResponse> ProcessFormData(ContactsImportModel model,
         ICollection<IFormItem> formItems)
     {
         var items = GetContacts();
-
-        // Custom logic that processes the submitted data
-        // e.g., sends an email using IEmailClient
-        // var result = await _emailClient.SendEmail(new EmailMessage
-        // {
-        //     From = "admin@site.com",
-        //     Recipients = model.Recipients,
-        //     Subject = model.Subject,
-        //     Body = model.Body
-        // });
-
-        //var contacts = model.Contacts;
 
         // var contactFile = new ObjectQuery<MediaFileInfo>().ForAssets(model.File).GetEnumerableTypedResult()
         //     ?.FirstOrDefault();
@@ -86,102 +66,129 @@ public class ContactsImportForm : ModelEditPage<ContactsImportModel>
         // var libraryFolderPath = MediaLibraryInfoProvider.GetMediaLibraryFolderPath(library);
         // var fullPath = Path.GetFullPath(CMS.IO.Path.EnsureSlashes(Path.Combine(libraryFolderPath, library.LibraryFolder)));
 
-        var list = new List<string>()
-        {
-            "one",
-            "two"
-        };
-
-        //1. nacti dictionary guids, contactid pro parovaci klice -> ContactGuid
-
-        // var group = ContactGroupInfoProvider.ProviderObject.Get("");
-        //
-        //
-        // foreach (var item in list)
-        // {
-        //     //create - bulk insert po 1000
-        //     //update - continue
-        //     //delete - bulk delete po 1000
-        //
-        //     var provider = Provider<ContactInfo>.Instance;
-        //
-        //     provider.Set(new ContactInfo());
-        //
-        //     provider.Delete(new ContactInfo());
-        //
-        //     ContactGroupMemberInfo.Provider.Set(new ContactGroupMemberInfo()
-        //     {
-        //         ContactGroupMemberType = ContactGroupMemberTypeEnum.Contact,
-        //         //ContactGroupMemberID = 1334, //unique
-        //         ContactGroupMemberRelatedID = 1, //contact ID
-        //         ContactGroupMemberFromManual = true,
-        //         ContactGroupMemberContactGroupID = group.ContactGroupID
-        //     });
-        // }
-
         if (!string.IsNullOrWhiteSpace(model.Mode) && model.Mode.Equals(ContactImporterConstants.ModeUpsert,
                 StringComparison.InvariantCultureIgnoreCase))
         {
-            var groupId = Guid.Parse(model.ContactGroup);
-            var group = await _contactGroupInfoProvider.GetAsync(groupId);
+            return await ProcessUpsert(model, formItems, items);
+        }
 
-            if (group == null)
+        if (!string.IsNullOrWhiteSpace(model.Mode) && model.Mode.Equals(ContactImporterConstants.ModeDelete,
+                StringComparison.InvariantCultureIgnoreCase))
+        {
+            return await ProcessDelete(formItems, items);
+        }
+
+        return await GetResponse(formItems, FormSubmissionStatus.ValidationFailure,
+            $"Unexpected mode provided: {model.Mode}.");
+    }
+
+    private async Task<ICommandResponse> ProcessUpsert(ContactsImportModel model, ICollection<IFormItem> formItems, List<ContactModel> items)
+    {
+        var groupId = Guid.Parse(model.ContactGroup);
+        var group = await _contactGroupInfoProvider.GetAsync(groupId);
+
+        if (group == null)
+        {
+            return await GetResponse(formItems, FormSubmissionStatus.ValidationFailure,
+                "Unable to find the provided contact group.");
+        }
+
+        var contactProvider = Provider<ContactInfo>.Instance;
+
+        var existingContactsMapping = contactProvider.Get()
+            .Columns(nameof(ContactInfo.ContactGUID), nameof(ContactInfo.ContactID))
+            .AsEnumerable()
+            .ToDictionary(key => key.ContactGUID, value => value.ContactID);
+
+        var existingGroupMembersMapping = Provider<ContactGroupMemberInfo>.Instance.Get()
+            .Columns(nameof(ContactGroupMemberInfo.ContactGroupMemberRelatedID))
+            .WhereEquals(nameof(ContactGroupMemberInfo.ContactGroupMemberRelatedID), group.ContactGroupID)
+            .WhereEquals(nameof(ContactGroupMemberInfo.ContactGroupMemberType), ContactGroupMemberTypeEnum.Contact)
+            .AsEnumerable()
+            .Select(i => i.ContactGroupMemberRelatedID)
+            .ToHashSet();
+
+        var contactIds = new List<int>();
+
+        foreach (var item in items)
+        {
+            var contactExists = existingContactsMapping.ContainsKey(item.ContactGuid);
+            var contactId = contactExists ? existingContactsMapping[item.ContactGuid] : default(int?);
+
+            if (!contactExists)
             {
-                var groupResponse = ResponseFrom(new FormSubmissionResult(FormSubmissionStatus.ValidationFailure)
-                {
-                    // Returns the submitted field values to the client (repopulates the form)
-                    Items = await formItems.OnlyVisible().GetClientProperties()
-                });
-                
-                groupResponse.AddErrorMessage("Unable to find the provided contact group.");
-
-                return groupResponse;
-            }
-
-            var contactProvider = Provider<ContactInfo>.Instance;
-
-            foreach (var item in items)
-            {
-                //TODO 6/21/2023 PavelHess: rewrite to check existence against pre-loaded dictionary
-                var contact = contactProvider.Get().WhereEquals(nameof(ContactInfo.ContactGUID), item.ContactGuid)
-                    .FirstOrDefault();
-
-                if (contact != null)
-                    continue;
-
-                contact = new ContactInfo()
+                var contact = new ContactInfo()
                 {
                     ContactGUID = item.ContactGuid,
+                    ContactID = item.ContactId,
                     ContactFirstName = item.FirstName,
                     ContactLastName = item.LastName,
                     ContactEmail = item.Email
                 };
-                
+
                 contactProvider.Set(contact);
+
+                contactIds.Add(contact.ContactID);
+                contactId = contact.ContactID;
+            }
+
+            if (contactId.HasValue && !existingGroupMembersMapping.Contains(contactId.Value))
+            {
+                ContactGroupMemberInfo.Provider.Set(new ContactGroupMemberInfo()
+                {
+                    ContactGroupMemberType = ContactGroupMemberTypeEnum.Contact,
+                    ContactGroupMemberRelatedID = contactId.Value,
+                    ContactGroupMemberFromManual = true,
+                    ContactGroupMemberContactGroupID = group.ContactGroupID
+                });
             }
         }
 
-        var result = true;
+        return await GetResponse(formItems, FormSubmissionStatus.ValidationSuccess,
+            $"Contacts upserted {contactIds.Count}.");
+    }
 
-        // Initializes a client response
-        var response = ResponseFrom(new FormSubmissionResult(result
-            ? FormSubmissionStatus.ValidationSuccess
-            : FormSubmissionStatus.ValidationFailure)
+    private async Task<ICommandResponse> ProcessDelete(ICollection<IFormItem> formItems, List<ContactModel> items)
+    {
+        var count = 0;
+
+        var contactProvider = Provider<ContactInfo>.Instance;
+
+        var existingContacts = contactProvider.Get().Columns(nameof(ContactInfo.ContactID))
+            .WhereIn(nameof(ContactInfo.ContactGUID), items.Select(i => i.ContactGuid).ToList())
+            .AsEnumerable()
+            .Select(i => i.ContactID)
+            .ToList();
+
+        foreach (var item in existingContacts)
         {
-            // Returns the submitted field values to the client (repopulates the form)
+            contactProvider.Delete(new ContactInfo() { ContactID = item });
+            count++;
+        }
+
+        return await GetResponse(formItems, FormSubmissionStatus.ValidationSuccess, $"Contacts deleted {count}.");
+    }
+
+    private async Task<ICommandResponse> GetResponse(ICollection<IFormItem> formItems, FormSubmissionStatus status, string message)
+    {
+        var upsertResult = ResponseFrom(new FormSubmissionResult(status)
+        {
             Items = await formItems.OnlyVisible().GetClientProperties()
         });
 
-        if (result)
-        {
-            //response.AddSuccessMessage($"Contacts upserted {lineIndex}.");
-        }
-        else
-        {
-            response.AddErrorMessage(string.Format("Email sending failed."));
-        }
+        if (string.IsNullOrWhiteSpace(message))
+            upsertResult.AddSuccessMessage(message);
 
-        return response;
+        return upsertResult;
+    }
+
+    private class ContactModel
+    {
+        public Guid ContactGuid { get; set; }
+        public int ContactId { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string Email { get; set; }
     }
 
     private List<ContactModel> GetContacts()
