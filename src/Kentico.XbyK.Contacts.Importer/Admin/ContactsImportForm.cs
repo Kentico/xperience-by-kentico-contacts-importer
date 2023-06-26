@@ -1,6 +1,9 @@
-﻿using CMS.ContactManagement;
+﻿using System.Globalization;
+using CMS.ContactManagement;
 using CMS.DataEngine.Internal;
 using CMS.MediaLibrary;
+using CsvHelper;
+using CsvHelper.Configuration;
 using Kentico.Xperience.Admin.Base;
 using Kentico.Xperience.Admin.Base.Forms;
 using Kentico.Xperience.Contacts.Importer.Models;
@@ -52,7 +55,7 @@ public class ContactsImportForm : ModelEditPage<ContactsImportModel>
     protected override async Task<ICommandResponse> ProcessFormData(ContactsImportModel model,
         ICollection<IFormItem> formItems)
     {
-        var items = GetContacts();
+        var items = GetContactsInternal();
 
         // var contactFile = new ObjectQuery<MediaFileInfo>().ForAssets(model.File).GetEnumerableTypedResult()
         //     ?.FirstOrDefault();
@@ -69,20 +72,20 @@ public class ContactsImportForm : ModelEditPage<ContactsImportModel>
         if (!string.IsNullOrWhiteSpace(model.Mode) && model.Mode.Equals(ContactImporterConstants.ModeUpsert,
                 StringComparison.InvariantCultureIgnoreCase))
         {
-            return await ProcessUpsert(model, formItems, items);
+            return await ProcessUpsert(model, formItems);
         }
 
         if (!string.IsNullOrWhiteSpace(model.Mode) && model.Mode.Equals(ContactImporterConstants.ModeDelete,
                 StringComparison.InvariantCultureIgnoreCase))
         {
-            return await ProcessDelete(formItems, items);
+            return await ProcessDelete(formItems);
         }
 
         return await GetResponse(formItems, FormSubmissionStatus.ValidationFailure,
             $"Unexpected mode provided: {model.Mode}.");
     }
 
-    private async Task<ICommandResponse> ProcessUpsert(ContactsImportModel model, ICollection<IFormItem> formItems, List<ContactModel> items)
+    private async Task<ICommandResponse> ProcessUpsert(ContactsImportModel model, ICollection<IFormItem> formItems)
     {
         var groupId = Guid.Parse(model.ContactGroup);
         var group = await _contactGroupInfoProvider.GetAsync(groupId);
@@ -110,37 +113,65 @@ public class ContactsImportForm : ModelEditPage<ContactsImportModel>
 
         var contactIds = new List<int>();
 
-        foreach (var item in items)
+        var config = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
-            var contactExists = existingContactsMapping.ContainsKey(item.ContactGuid);
-            var contactId = contactExists ? existingContactsMapping[item.ContactGuid] : default(int?);
+            Delimiter = ";"
+        };
 
-            if (!contactExists)
+        using (var reader = new StreamReader(@"c:\_temp\contacts.csv"))
+        {
+            using (var csv = new CsvReader(reader, config))
             {
-                var contact = new ContactInfo()
+                var records = csv.GetRecords<ContactModel>();
+                var contactsToProcess = new List<ContactInfo>();
+                var contactsIds = new List<int>();
+
+                foreach (var item in records)
                 {
-                    ContactGUID = item.ContactGuid,
-                    ContactID = item.ContactId,
-                    ContactFirstName = item.FirstName,
-                    ContactLastName = item.LastName,
-                    ContactEmail = item.Email
-                };
+                    var contactExists = existingContactsMapping.ContainsKey(item.ContactGuid);
+                    //var contactId = contactExists ? existingContactsMapping[item.ContactGuid] : default(int?);
 
-                contactProvider.Set(contact);
+                    if (!contactExists)
+                    {
+                        var contact = new ContactInfo()
+                        {
+                            ContactGUID = item.ContactGuid,
+                            ContactID = item.ContactId,
+                            ContactFirstName = item.FirstName,
+                            ContactLastName = item.LastName,
+                            ContactEmail = item.Email,
+                            ContactCreated = DateTime.Now
+                        };
 
-                contactIds.Add(contact.ContactID);
-                contactId = contact.ContactID;
-            }
+                        contactsToProcess.Add(contact);
 
-            if (contactId.HasValue && !existingGroupMembersMapping.Contains(contactId.Value))
-            {
-                ContactGroupMemberInfo.Provider.Set(new ContactGroupMemberInfo()
-                {
-                    ContactGroupMemberType = ContactGroupMemberTypeEnum.Contact,
-                    ContactGroupMemberRelatedID = contactId.Value,
-                    ContactGroupMemberFromManual = true,
-                    ContactGroupMemberContactGroupID = group.ContactGroupID
-                });
+                        if (contactsToProcess.Count == 100)
+                        {
+                            InsertContacts(contactsToProcess, contactIds, existingGroupMembersMapping);
+                        }
+
+                        // contactProvider.Set(contact);
+                        //
+                        // contactIds.Add(contact.ContactID);
+                        // contactId = contact.ContactID;
+                    }
+
+                    // if (contactId.HasValue && !existingGroupMembersMapping.Contains(contactId.Value))
+                    // {
+                    //     //ContactGroupMemberInfoProvider.ProviderObject.BulkInsertInfos();
+                    //     
+                    //     ContactGroupMemberInfo.Provider.Set(new ContactGroupMemberInfo()
+                    //     {
+                    //         ContactGroupMemberType = ContactGroupMemberTypeEnum.Contact,
+                    //         ContactGroupMemberRelatedID = contactId.Value,
+                    //         ContactGroupMemberFromManual = true,
+                    //         ContactGroupMemberContactGroupID = group.ContactGroupID
+                    //     });
+                    // }
+                }
+                
+                InsertContacts(contactsToProcess, contactIds, existingGroupMembersMapping);
+                InsertGroupMembers(contactsIds, group);
             }
         }
 
@@ -148,38 +179,86 @@ public class ContactsImportForm : ModelEditPage<ContactsImportModel>
             $"Contacts upserted {contactIds.Count}.");
     }
 
-    private async Task<ICommandResponse> ProcessDelete(ICollection<IFormItem> formItems, List<ContactModel> items)
+    private void InsertGroupMembers(List<int> contactsIds, ContactGroupInfo group)
+    {
+        foreach (var chunk in contactsIds.Chunk(100))
+        {
+            var items = chunk.Select(i => new ContactGroupMemberInfo()
+            {
+                ContactGroupMemberType = ContactGroupMemberTypeEnum.Contact,
+                ContactGroupMemberRelatedID = i,
+                ContactGroupMemberFromManual = true,
+                ContactGroupMemberContactGroupID = group.ContactGroupID
+            });
+
+            ContactGroupMemberInfoProvider.ProviderObject.BulkInsertInfos(items);
+        }
+    }
+
+    private static void InsertContacts(List<ContactInfo> contactsToProcess, List<int> contactIds, HashSet<int> existingGroupMembersMapping)
+    {
+        if (contactsToProcess.Count == 0)
+            return;
+        
+        ContactInfoProvider.ProviderObject.BulkInsertInfos(contactsToProcess);
+
+        contactIds.AddRange(contactsToProcess
+            .Where(i => !existingGroupMembersMapping.Contains(i.ContactID))
+            .Select(i => i.ContactID));
+
+        contactsToProcess.Clear();
+    }
+
+    private async Task<ICommandResponse> ProcessDelete(ICollection<IFormItem> formItems)
     {
         var count = 0;
 
         var contactProvider = Provider<ContactInfo>.Instance;
 
-        var existingContacts = contactProvider.Get().Columns(nameof(ContactInfo.ContactID))
-            .WhereIn(nameof(ContactInfo.ContactGUID), items.Select(i => i.ContactGuid).ToList())
-            .AsEnumerable()
-            .Select(i => i.ContactID)
-            .ToList();
-
-        foreach (var item in existingContacts)
+        var config = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
-            contactProvider.Delete(new ContactInfo() { ContactID = item });
-            count++;
-        }
+            Delimiter = ";"
+        };
 
+        using (var reader = new StreamReader(@"c:\_temp\contacts.csv"))
+        {
+            using (var csv = new CsvReader(reader, config))
+            {
+                var records = csv.GetRecords<ContactModel>();
+                
+                var existingContacts = contactProvider.Get().Columns(nameof(ContactInfo.ContactID))
+                    .WhereIn(nameof(ContactInfo.ContactGUID), records.Select(i => i.ContactGuid).ToList())
+                    .AsEnumerable()
+                    .Select(i => i.ContactID)
+                    .ToList();
+
+                foreach (var item in existingContacts)
+                {
+                    contactProvider.Delete(new ContactInfo() { ContactID = item });
+                    count++;
+                }
+                
+                //ContactInfoProvider.ProviderObject.BulkInsertInfos();
+            }
+        }
+        
         return await GetResponse(formItems, FormSubmissionStatus.ValidationSuccess, $"Contacts deleted {count}.");
     }
 
     private async Task<ICommandResponse> GetResponse(ICollection<IFormItem> formItems, FormSubmissionStatus status, string message)
     {
-        var upsertResult = ResponseFrom(new FormSubmissionResult(status)
+        var result = ResponseFrom(new FormSubmissionResult(status)
         {
             Items = await formItems.OnlyVisible().GetClientProperties()
         });
 
-        if (string.IsNullOrWhiteSpace(message))
-            upsertResult.AddSuccessMessage(message);
+        if (!string.IsNullOrWhiteSpace(message) && status == FormSubmissionStatus.ValidationSuccess)
+            result.AddSuccessMessage(message);
+        
+        if (!string.IsNullOrWhiteSpace(message) && status == FormSubmissionStatus.Error)
+            result.AddErrorMessage(message);
 
-        return upsertResult;
+        return result;
     }
 
     private class ContactModel
@@ -189,6 +268,18 @@ public class ContactsImportForm : ModelEditPage<ContactsImportModel>
         public string FirstName { get; set; }
         public string LastName { get; set; }
         public string Email { get; set; }
+    }
+
+    private IEnumerable<ContactModel> GetContactsInternal()
+    {
+        var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+        {
+            Delimiter = ";"
+        };
+
+        using var reader = new StreamReader(@"c:\_temp\contacts.csv");
+        using var csv = new CsvReader(reader, config);
+        return csv.GetRecords<ContactModel>();
     }
 
     private List<ContactModel> GetContacts()
