@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, ButtonSize, FileInput, UploadTile, UploadTileSize } from "@kentico/xperience-admin-components";
+import { Button, ButtonSize, DropDownActionMenu, FileInput, MenuItem, TreeNodeMenuAction, UploadTile, UploadTileSize } from "@kentico/xperience-admin-components";
 
 
 /*
@@ -12,30 +12,48 @@ import { Button, ButtonSize, FileInput, UploadTile, UploadTileSize } from "@kent
 
 interface CustomLayoutProps {
   readonly label: string;
+  readonly contactGroups: any[];
 }
 
-export const CustomLayoutTemplate = ({ label }: CustomLayoutProps) => {
+let canContinue = true;
+let toofast = false;
+
+export const CustomLayoutTemplate = ({ label, contactGroups }: CustomLayoutProps) => {
   const [labelValue, setLabelValue] = useState(label);
+
+  // console.log('contactGroups', contactGroups);
 
   const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<string[]>([]);
   const [currentFile, setCurrentFile] = useState({ current: 0, total: 0 });
 
-  function parseFile(this: any, file: File, callback: (buffer: ArrayBuffer) => void, finishedCallback: () => void) {
+  const [importKind, setImportKind] = useState('insert');
+  const [contactGroup, setContactGroup] = useState<string>('<null>');
+
+
+  function parseFile(this: any, file: File, callback: (buffer: ArrayBuffer) => boolean, finishedCallback: () => void) {
     var fileSize = file.size;
-    var chunkSize = 8 * 1024; // bytes
+    var chunkSize = 32 * 1024; // bytes
     var offset = 0;
     var self = this as unknown; // we need a reference to the current object
     var chunkReaderBlock: null | ((_offset: number, length: number, _file: File) => void) = null;
 
     var readEventHandler = function (evt: ProgressEvent<FileReader>) {
+      if (!canContinue) {
+        return;
+      }
+
       if (evt.target == null) {
         console.log('progress is null');
         return;
       }
       if (evt.target.error == null && evt.target.result != null) {
-        offset += (evt.target.result as any).length;
-        callback(evt.target.result as ArrayBuffer); // callback for handling read chunk
+        // offset += (evt.target.result as any).length;
+        offset += chunkSize;
+        if (!callback(evt.target.result as ArrayBuffer)) // callback for handling read chunk
+        {
+          return;
+        }
       } else {
         finishedCallback();
         console.log("Read error: " + evt.target.error);
@@ -48,14 +66,24 @@ export const CustomLayoutTemplate = ({ label }: CustomLayoutProps) => {
       }
 
       // of to the next chunk
-      if (chunkReaderBlock != null) chunkReaderBlock(offset, chunkSize, file);
+      if (chunkReaderBlock != null && canContinue) {
+        // console.log('reading next block');
+        chunkReaderBlock(offset, chunkSize, file);
+      }
     }
 
     chunkReaderBlock = function (_offset: number, length: number, _file: File) {
       var r = new FileReader();
       var blob = _file.slice(_offset, length + _offset);
       r.onload = readEventHandler;
-      r.readAsText(blob);
+      if (toofast) {
+        setTimeout(() => { r.readAsText(blob); }, 3000);
+        console.log('too fast => wait 3s');
+        toofast = false;
+      }
+      else {
+        r.readAsText(blob);
+      }
     }
 
     // now let's start the read with the first block
@@ -67,10 +95,51 @@ export const CustomLayoutTemplate = ({ label }: CustomLayoutProps) => {
       <h1>{labelValue}</h1>
       {/* {fu} */}
       <input type="file" onChange={(event) => event.target.files != null ? setFile(event.target.files[0] || null) : null} />
-      <pre style={{ border: '2px dotted magenta' }}>{`Progress:${Math.floor((currentFile.current / currentFile.total) * 100)}%
-BytesSent: ${currentFile.current}
-Total: ${currentFile.total}      
-      `}</pre>
+      <div onChange={(evt) => {
+        console.log('target', evt.target, evt.currentTarget);
+        const value = (evt.target as any)?.value;
+        if (value) {
+          setImportKind(value);
+        }
+      }}>
+        <h3>Select mode</h3>
+        <div>
+          <label htmlFor="pk_delete">Delete</label>
+          <input id="pk_delete" name="ProcessingKind" type="radio" value="delete" checked={importKind === "delete"} />
+        </div>
+        <div style={{ paddingTop: '10px' }}>
+          <label htmlFor="pk_insert">Insert (skip existing)</label>
+          <input id="pk_insert" name="ProcessingKind" type="radio" value="insert" checked={importKind === "insert"} />
+        </div>
+        {/* <div style={{ paddingTop: '10px' }}>
+          <label htmlFor="pk_upsert">Upsert</label>
+          <input id="pk_upsert" name="ProcessingKind" type="radio" value="upsert" checked={importKind === "upsert"} />
+        </div> */}
+      </div>
+      <div style={{ paddingTop: '10px' }}>
+        <label htmlFor="cgSelector">
+          Assign to contact group
+          {/* onSelect={(evt: React.ChangeEvent<HTMLSelectElement>) => {
+            const selected = evt.target.value;
+            setContactGroup(selected);
+            console.log('selected CG:', selected);
+          }} */}
+          <DropDownActionMenu renderTrigger={function (ref: React.RefObject<HTMLElement>, onTriggerClick: () => void, isOpened: boolean): React.ReactNode {
+            return <>Hello!</>
+          }}>
+              {contactGroups.map(cg => <MenuItem primaryLabel={cg.displayName} value={cg.guid}></MenuItem>)}              
+          </DropDownActionMenu>
+          <select value={contactGroup}
+            onChange={e => setContactGroup(e.target.value)}>
+            <option value={'<null>'}>No contact group</option>
+            {contactGroups.map(cg => <option value={cg.guid}>{cg.displayName}</option>)}
+          </select>
+        </label>
+      </div>
+      {/* BytesSent: ${currentFile.current}
+Total: ${currentFile.total} */}
+      <pre style={{ border: '2px dotted magenta' }}>{`Uplaod progress:${Math.floor((currentFile.current / currentFile.total) * 100)}%
+`}<progress id="progress_" value={currentFile.current} max={currentFile.total} style={{ width: '100%' }}></progress></pre>
       <Button
         label="Send file"
         size={ButtonSize.S}
@@ -80,9 +149,37 @@ Total: ${currentFile.total}
             let port = location.port != '' ? `:${location.port}` : '';
             const socket = new WebSocket('wss://' + location.hostname + `${port}/contactsimport/ws`);
             socket.binaryType = 'blob';
+            socket.onerror = (e) => {
+              console.log('error occured', e);
+              canContinue = false;
+            }
             socket.onmessage = (event) => {
               var p = JSON.parse(event.data);
               switch (p.type) {
+                case "headerConfirmed": {
+                  console.log('header confirmed, starting import');
+                  parseFile(file, (buffer) => {
+                    // console.log('chunk');     
+                    if (socket.readyState == socket.OPEN) {
+                      socket.send(buffer);
+                      return true;
+                    }
+                    else {
+                      return false;
+                    }
+                  }, () => {
+                    setTimeout(() => {
+
+                      // socket.send("---FINISHED---");
+                      socket.close();
+                    }, 2000);
+                  });
+                  break;
+                }
+                case "toofast": {
+                  toofast = true;
+                  break;
+                }
                 case "msg": {
                   setState((prev) => [
                     ...prev,
@@ -100,7 +197,8 @@ Total: ${currentFile.total}
                 }
                 case "finished": {
                   console.log('closing socket');
-                  if(socket.readyState < socket.CLOSING){
+                  canContinue = false;
+                  if (socket.readyState < socket.CLOSING) {
                     socket.close();
                   }
                   break;
@@ -108,6 +206,7 @@ Total: ${currentFile.total}
               }
             };
             socket.onopen = function (event) {
+              canContinue = true;
               setState((prev) => [
                 ...prev,
                 `Sending file of length: ${file.size}`
@@ -118,22 +217,20 @@ Total: ${currentFile.total}
                 current: 0
               })
 
-              parseFile(file, (buffer) => {
-                // console.log('chunk');
-                socket.send(buffer);
-              }, () => {
-                setTimeout(() => {                
-                  socket.dispatchEvent                  
-                  socket.send("---FINISHED---");
-                }, 2000);
-              });
+              socket.send(JSON.stringify({
+                type: 'header',
+                payload: {
+                  importKind,
+                  contactGroup: contactGroup === '<null>' ? null : contactGroup,
+                }
+              }));
             };
           } else {
             alert('no file selected');
           }
         }}
       />
-      <pre style={{overflow: 'scroll'}}>{[...state].reverse().join("\r\n")}</pre>
+      <pre style={{ overflow: 'scroll' }}>{[...state].reverse().join("\r\n")}</pre>
     </div>
   );
 };
