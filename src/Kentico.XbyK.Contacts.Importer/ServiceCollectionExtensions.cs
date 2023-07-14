@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Http;
 
 namespace Kentico.Xperience.Contacts.Importer
 {
+    using System.Net.Sockets;
     using System.Net.WebSockets;
     using System.Text;
+    using CMS.Core;
     using Kentico.Xperience.Contacts.Importer.Auxiliary;
     using Kentico.Xperience.Contacts.Importer.Services;
     using Microsoft.Extensions.DependencyInjection;
@@ -13,6 +15,8 @@ namespace Kentico.Xperience.Contacts.Importer
 
     public static class ServiceCollectionExtensions
     {
+        private const string SOURCE = "Contact.Importer";
+
         public static void AddContactsImport(this IServiceCollection services)
         {
             services.AddTransient<IImportService, ImportService>();
@@ -29,10 +33,11 @@ namespace Kentico.Xperience.Contacts.Importer
                     if (context.WebSockets.IsWebSocketRequest)
                     {
                         var importService = context.RequestServices.GetRequiredService<IImportService>();
+                        var eventLogService = context.RequestServices.GetRequiredService<IEventLogService>();
 
                         using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
 
-                        await DownloadAndImport(webSocket, importService);
+                        await DownloadAndImport(webSocket, importService, eventLogService);
                     }
                     else
                     {
@@ -49,24 +54,43 @@ namespace Kentico.Xperience.Contacts.Importer
         private record Message(string Type, HeaderPayload? Payload);
 
         private record HeaderPayload(string ImportKind, Guid? ContactGroup, int? BatchSize, string Delimiter);
-        private static async Task DownloadAndImport(WebSocket webSocket, IImportService importService)
+
+        private static async Task DownloadAndImport(WebSocket webSocket, IImportService importService, IEventLogService logService)
         {
             async Task SendProgressReport(string message)
             {
-                var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "msg", payload = $"{message}" }));
-                await webSocket.SendAsync(new ArraySegment<byte>(payload, 0, payload.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                if (webSocket.State == WebSocketState.Open)
+                {
+                    var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "msg", payload = $"{message}" }));
+                    await webSocket.SendAsync(new ArraySegment<byte>(payload, 0, payload.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                }
             }
 
             async Task SendTooFastReport()
             {
-                var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "toofast", payload =  $"" }));
-                await webSocket.SendAsync(new ArraySegment<byte>(payload, 0, payload.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                if (webSocket.State == WebSocketState.Open)
+                {
+                    var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "toofast", payload = $"" }));
+                    await webSocket.SendAsync(new ArraySegment<byte>(payload, 0, payload.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                }
             }
 
             async Task SendProgressFinished()
             {
-                var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "finished", payload = $"" }));
-                await webSocket.SendAsync(new ArraySegment<byte>(payload, 0, payload.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                if (webSocket.State == WebSocketState.Open)
+                {
+                    var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "finished", payload = $"" }));
+                    await webSocket.SendAsync(new ArraySegment<byte>(payload, 0, payload.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                }
+            }
+
+            async Task SendConfirmHeader()
+            {
+                if (webSocket.State == WebSocketState.Open)
+                {
+                    var msg = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "headerConfirmed", payload = "" }));
+                    await webSocket.SendAsync(new ArraySegment<byte>(msg, 0, msg.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                }
             }
 
             var header = (await ReceiveHeader(webSocket))?.ToObject<Message>()?.Payload;
@@ -76,33 +100,40 @@ namespace Kentico.Xperience.Contacts.Importer
                 header?.Delimiter ?? ",",
                 header?.ImportKind ?? ImportKind.InsertAndSkipExisting
             );
-            
-            var msg = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "headerConfirmed", payload = "" }));
-            await webSocket.SendAsync(new ArraySegment<byte>(msg, 0, msg.Length), WebSocketMessageType.Text, true, CancellationToken.None);
-            
+
+            await SendConfirmHeader();
+
             var consumerIsRunning = true;
             var ms = new AsynchronousStream(1024 * 32 * 500);
             var consumerTask = Task.Run(async () =>
             {
                 try
                 {
-                    await importService.RunImport(ms, context, async (result, totalProcessed) => { await SendProgressReport($"Total processed {totalProcessed} CachedBlocks: {ms.CachedBlocks}"); });
+                    await importService.RunImport(ms, context, async (result, totalProcessed) =>
+                        {
+                            await SendProgressReport($"Total processed {totalProcessed} CachedBlocks: {ms.CachedBlocks}");
+                        },
+                        async exception => { await SendProgressReport($"{exception}"); }
+                    );
                     await SendProgressReport($"...finished");
-                    await SendProgressFinished();
+                    // await SendProgressFinished();
                 }
-                catch (Exception ex)
-                {
-                    await SendProgressReport($"{ex}");
-                }
+                // catch (Exception ex)
+                // {
+                //     logService.LogException(SOURCE, "CONSUMER", ex);
+                //     await SendProgressReport($"Consumer error: {ex}");
+                // }
                 finally
                 {
                     consumerIsRunning = false;
                 }
             });
 
-            WebSocketReceiveResult? receiveResult = null;
-            try
+            var producerTask = Task.Run(async () =>
             {
+                WebSocketReceiveResult? receiveResult = null;
+                // try
+                // {
                 var bufferSize = 1024 * 32;
                 while (true)
                 {
@@ -124,40 +155,85 @@ namespace Kentico.Xperience.Contacts.Importer
                         var response = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "progress", payload = count }));
                         await webSocket.SendAsync(new ArraySegment<byte>(response, 0, response.Length), WebSocketMessageType.Text, true, CancellationToken.None);
 
-                        if (ms.CachedBlocks > 8500)
+                        if (ms.CachedBlocks > 3500)
                         {
                             await SendTooFastReport();
                             await SendProgressReport($"Too fast, waiting 3s CachedBlocks: {ms.CachedBlocks}");
                             await Task.Delay(3000);
                         }
-                        // if (receiveResult.Count < bufferSize)
-                        // {
-                        //     break;
-                        // }
                     }
                     else
                     {
                         break;
                     }
                 }
-            }
-            catch (Exception ex)
+                // }
+                // catch (Exception ex)
+                // {
+                //     logService.LogException(SOURCE, "PRODUCER", ex);
+                //     await SendProgressReport($"Producer error: {ex}");
+                //     await SendProgressFinished();
+                // }
+                // finally
+                // {
+                //     
+                //     // await consumerTask;
+                //     // if (receiveResult != null)
+                //     // {
+                //     //     await webSocket.CloseAsync(
+                //     //         WebSocketCloseStatus.NormalClosure,
+                //     //         receiveResult.CloseStatusDescription,
+                //     //         CancellationToken.None);
+                //     // }
+                // }
+            });
+
+            var socketAvailable = true;
+            try
             {
-                await SendProgressReport($"{ex}");
-                await SendProgressFinished();
+                await producerTask;
+            }
+            catch (SocketException se)
+            {
+                socketAvailable = false;
+                logService.LogException(SOURCE, "PRODUCER", se);
+            }
+            catch (Exception e)
+            {
+                logService.LogException(SOURCE, "PRODUCER", e);
+                await SendProgressReport($"{e}");
             }
             finally
             {
-                ms.CompleteWriting();
+                ms.TryCompleteWriting();
+            }
+
+            try
+            {
                 await consumerTask;
-                if (receiveResult != null)
-                {
-                    await webSocket.CloseAsync(
-                        WebSocketCloseStatus.NormalClosure,
-                        receiveResult.CloseStatusDescription,
-                        CancellationToken.None);
-                }
-                // ms.Dispose();
+            }
+            catch (SocketException se)
+            {
+                logService.LogException(SOURCE, "CONSUMER", se);
+                socketAvailable = false;
+            }
+            catch (Exception e)
+            {
+                logService.LogException(SOURCE, "CONSUMER", e);
+                await SendProgressReport($"{e}");
+            }
+            // finally
+            // {
+            // }
+
+            if (socketAvailable)
+            {
+                await SendProgressFinished();
+                await Task.Delay(1000);
+                await webSocket.CloseAsync(
+                    WebSocketCloseStatus.NormalClosure,
+                    "Standard closing",
+                    CancellationToken.None);
             }
         }
 
@@ -172,33 +248,25 @@ namespace Kentico.Xperience.Contacts.Importer
                 if (!receiveResult.CloseStatus.HasValue)
                 {
                     var data = new ArraySegment<byte>(buffer);
-        
+
                     ms.Write(data.Array, data.Offset, receiveResult.Count);
                     ms.Flush();
-        
-                    // var count = receiveResult.Count;
-                    // var response = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "progress", payload = count }));
-                    // await webSocket.SendAsync(new ArraySegment<byte>(response, 0, response.Length), WebSocketMessageType.Text, true, CancellationToken.None);
                 }
                 else
                 {
                     break;
                 }
-        
+
                 if (receiveResult.EndOfMessage)
                 {
                     break;
                 }
             }
-        
+
             ms.Seek(0, SeekOrigin.Begin);
-            
-            var serializer = new Newtonsoft.Json.JsonSerializer();
+
             using var sr = new StreamReader(ms);
-            var msg = sr.ReadToEnd();
-            // using var jsonTextReader = new JsonTextReader(sr);
-            
-            // var deserialized = serializer.Deserialize<JsonDocument>(jsonTextReader);
+            var msg = await sr.ReadToEndAsync();
             var deserialized = JObject.Parse(msg);
             return deserialized;
         }

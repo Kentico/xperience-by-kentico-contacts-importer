@@ -138,6 +138,19 @@ internal sealed class AsynchronousStream: Stream
     {
         _blocks.CompleteAdding();
     }
+    
+    public bool TryCompleteWriting()
+    {
+        try
+        {
+            _blocks.CompleteAdding();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            return false;
+        }
+    }
 
     private static void ValidateBufferArgs(byte[] buffer, int offset, int count)
     {

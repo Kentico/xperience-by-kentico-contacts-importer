@@ -5,10 +5,8 @@ using System.Globalization;
 using CMS.Base;
 using CMS.ContactManagement;
 using CMS.DataEngine;
-using CMS.Helpers.UniGraphConfig;
 using CsvHelper;
 using CsvHelper.Configuration;
-using CsvHelper.Configuration.Attributes;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 
@@ -23,22 +21,9 @@ public class ImportService : IImportService
         _contactGroupInfoProvider = contactGroupInfoProvider;
     }
 
-    public class ContactModel
-    {
-        [Name("ContactGUID")]
-        public Guid ContactGUID { get; set; }
-
-        // public int ContactID { get; set; }
-        [Name("ContactFirstName")]
-        public string ContactFirstName { get; set; }
-
-        [Name("ContactLastName")]
-        public string ContactLastName { get; set; }
-
-        [Name("ContactEmail")]
-        public string ContactEmail { get; set; }
-    }
-
+    /// <summary>
+    /// Defined how ContactInfo columns will be mapped from CSV
+    /// </summary>
     public sealed class ContactInfoMap : ClassMap<ContactInfo>
     {
         public ContactInfoMap()
@@ -70,18 +55,18 @@ public class ImportService : IImportService
 
     /// <exception cref="Exception">Thrown when contact group is missing</exception>
     /// <inheritdoc />
-    public async Task RunImport(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync)
+    public async Task RunImport(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync)
     {
         switch (context.ImportKind)
         {
             case ImportKind.InsertAndSkipExisting:
             {
-                await InsertContactsFromCsvAsync(csvStream, context, onResultCallbackAsync);
+                await InsertContactsFromCsvAsync(csvStream, context, onResultCallbackAsync, onErrorCallbackAsync);
                 break;
             }
             case ImportKind.Delete:
             {
-                await BulkDeleteContactFromCsvAsync(csvStream, context, onResultCallbackAsync);
+                await BulkDeleteContactFromCsvAsync(csvStream, context, onResultCallbackAsync, onErrorCallbackAsync);
                 break;
             }
             default:
@@ -91,7 +76,7 @@ public class ImportService : IImportService
         }
     }
 
-    private async Task BulkDeleteContactFromCsvAsync(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync)
+    private async Task BulkDeleteContactFromCsvAsync(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync)
     {
         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
@@ -124,7 +109,7 @@ public class ImportService : IImportService
                 }
                 catch (Exception ex)
                 {
-                    // TODO tomas.krch: 2023-07-14 report error
+                    onErrorCallbackAsync?.Invoke(ex);
                     continue;
                 }
                 finally
@@ -164,7 +149,7 @@ public class ImportService : IImportService
         }
     }
 
-    private async Task InsertContactsFromCsvAsync(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync)
+    private async Task InsertContactsFromCsvAsync(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync)
     {
         ContactGroupInfo? group = null;
         if (context.AssignToContactGroupGuid is { } assignToContactGroupGuid)
@@ -176,36 +161,14 @@ public class ImportService : IImportService
             }
         }
 
-
-        // var contactProvider = Provider<ContactInfo>.Instance;
-
-
         var contactGuids = ConnectionHelper.ExecuteQuery(@"SELECT ContactGUID FROM OM_Contact", new QueryDataParameters(), QueryTypeEnum.SQLQuery)
             .Tables[0].AsEnumerable().Select(x => (Guid)x[nameof(ContactInfo.ContactGUID)]).ToHashSet();
 
-        // var existingContactsMapping = contactProvider.Get()
-        //     .Columns(nameof(ContactInfo.ContactGUID))
-        //     .Select(x => x.ContactGUID)
-        //     .ToHashSet();
-
-        // var existingGroupMembersMapping = group != null
-        //     ? Provider<ContactGroupMemberInfo>.Instance.Get()
-        //         .Columns(nameof(ContactGroupMemberInfo.ContactGroupMemberRelatedID))
-        //         .WhereEquals(nameof(ContactGroupMemberInfo.ContactGroupMemberRelatedID), group.ContactGroupID)
-        //         .WhereEquals(nameof(ContactGroupMemberInfo.ContactGroupMemberType), ContactGroupMemberTypeEnum.Contact)
-        //         .AsEnumerable()
-        //         .Select(i => i.ContactGroupMemberRelatedID)
-        //         .ToHashSet()
-        //     : null;
-
-        // var contactIds = new List<int>();
-
         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
-            Delimiter = context.Delimiter, //";" // TODO tomas.krch: 2023-07-12 to config/dialog
+            Delimiter = context.Delimiter,
             PrepareHeaderForMatch = args => args.Header.ToLower(),
         };
-
 
         using var reader = new StreamReader(csvStream);
         using var csv = new CsvReader(reader, config);
@@ -213,125 +176,20 @@ public class ImportService : IImportService
         csv.Context.RegisterClassMap<ContactInfoMap>();
 
         var records = csv.GetRecords<ContactInfo>();
-        var contactsToProcess = new List<ContactInfo>();
-        // var contactsIds = new List<int>();
-
         var totalProcessed = 0;
 
-        IEnumerable<ContactInfo> PipeTransform(IEnumerable<ContactModel> models)
+        IEnumerable<List<(ContactInfo info, bool insert)>> Pipe2TransformBatches(IEnumerable<ContactInfo> models)
         {
+            var currentBatch = new List<(ContactInfo info, bool insert)>(context.BatchSize);
             foreach (var item in models)
             {
-                ContactInfo? newContact = null;
                 try
                 {
-                    if (contactGuids.Contains(item.ContactGUID))
-                    {
-                        continue;
-                    }
-
-                    newContact = new ContactInfo
-                    {
-                        ContactGUID = item.ContactGUID,
-                        // ContactID = item.ContactId,
-                        ContactFirstName = item.ContactFirstName,
-                        ContactLastName = item.ContactLastName,
-                        ContactEmail = item.ContactEmail,
-                        ContactCreated = DateTime.Now
-                    };
-
-                    contactsToProcess.Add(newContact);
+                    currentBatch.Add((item, !contactGuids.Contains(item.ContactGUID)));
                 }
                 catch (Exception ex)
                 {
-                    continue;
-                }
-                finally
-                {
-                    totalProcessed += 1;
-                    if (totalProcessed % context.BatchSize == 0)
-                    {
-                        Task.Run((Func<Task?>)(async () => { await onResultCallbackAsync.Invoke(contactsToProcess.Select(x => new ImportResult(true, x.ContactGUID, null)).ToList(), totalProcessed); }));
-                    }
-                }
-
-                if (newContact != null)
-                {
-                    yield return newContact;
-                }
-            }
-        }
-
-        IEnumerable<ContactInfo> Pipe2Transform(IEnumerable<ContactInfo> models)
-        {
-            foreach (var item in models)
-            {
-                // ContactInfo? newContact = null;
-                try
-                {
-                    if (contactGuids.Contains(item.ContactGUID))
-                    {
-                        continue;
-                    }
-                    //
-                    // newContact = new ContactInfo
-                    // {
-                    //     ContactGUID = item.ContactGUID,
-                    //     // ContactID = item.ContactId,
-                    //     ContactFirstName = item.ContactFirstName,
-                    //     ContactLastName = item.ContactLastName,
-                    //     ContactEmail = item.ContactEmail,
-                    //     ContactCreated = DateTime.Now
-                    // };
-                    //
-                    // contactsToProcess.Add(newContact);
-                }
-                catch (Exception ex)
-                {
-                    continue;
-                }
-                finally
-                {
-                    totalProcessed += 1;
-                    if (totalProcessed % context.BatchSize == 0)
-                    {
-                        Task.Run((Func<Task?>)(async () => { await onResultCallbackAsync.Invoke(null, totalProcessed); }));
-                    }
-                }
-
-                yield return item;
-            }
-        }
-
-        IEnumerable<List<ContactInfo>> Pipe2TransformBatches(IEnumerable<ContactInfo> models)
-        {
-            var currentBatch = new List<ContactInfo>(context.BatchSize);
-            foreach (var item in models)
-            {
-                // ContactInfo? newContact = null;
-                try
-                {
-                    if (contactGuids.Contains(item.ContactGUID))
-                    {
-                        continue;
-                    }
-
-                    currentBatch.Add(item);
-                    //
-                    // newContact = new ContactInfo
-                    // {
-                    //     ContactGUID = item.ContactGUID,
-                    //     // ContactID = item.ContactId,
-                    //     ContactFirstName = item.ContactFirstName,
-                    //     ContactLastName = item.ContactLastName,
-                    //     ContactEmail = item.ContactEmail,
-                    //     ContactCreated = DateTime.Now
-                    // };
-                    //
-                    // contactsToProcess.Add(newContact);
-                }
-                catch (Exception ex)
-                {
+                    onErrorCallbackAsync?.Invoke(ex);
                     continue;
                 }
                 finally
@@ -346,7 +204,7 @@ public class ImportService : IImportService
                 if (currentBatch.Count >= context.BatchSize)
                 {
                     yield return currentBatch;
-                    currentBatch = new List<ContactInfo>();
+                    currentBatch = new List<(ContactInfo info, bool insert)>();
                 }
             }
 
@@ -358,90 +216,70 @@ public class ImportService : IImportService
                    LogEvents = false,
                })
         {
-            // insert is not so instance so direct piping is not possible 
+            // insert is not immediate (all items stored in memory before insert) so direct piping is not possible 
             // ContactInfoProvider.ProviderObject.BulkInsertInfos(Pipe2Transform(records), new BulkInsertSettings
             // {
             //     BatchSize = context.BatchSize,
             //     Options = SqlBulkCopyOptions.Default,
             // });
 
+            // Task? previousInsertGroupMemberBatch = null;
             foreach (var contactBatch in Pipe2TransformBatches(records))
             {
-                ContactInfoProvider.ProviderObject.BulkInsertInfos(contactBatch, new BulkInsertSettings
+                ContactInfoProvider.ProviderObject.BulkInsertInfos(contactBatch.Where(x => x.insert).Select(x => x.info), new BulkInsertSettings
                 {
                     // BatchSize = context.BatchSize,
                     Options = SqlBulkCopyOptions.Default,
                 });
+
+                if (group != null)
+                {
+                    // if (previousInsertGroupMemberBatch != null)
+                    // {
+                    //     await previousInsertGroupMemberBatch;
+                    // }
+
+                    // previousInsertGroupMemberBatch =
+                    // cannot employ async insert, it is not stable (bricks bulk contact sql connection)
+                    await InsertGroupMembersAsync(contactBatch.Select(x => x.info.ContactGUID), group);
+                }
             }
-        }
 
-
-        // foreach (var item in records)
-        // {
-        //     var contactExists = existingContactsMapping.ContainsKey(item.ContactGUID);
-        //     //var contactId = contactExists ? existingContactsMapping[item.ContactGuid] : default(int?);
-        //
-        //     if (!contactExists)
-        //     {
-        //         var contact = new ContactInfo
-        //         {
-        //             ContactGUID = item.ContactGUID,
-        //             // ContactID = item.ContactId,
-        //             ContactFirstName = item.ContactFirstName,
-        //             ContactLastName = item.ContactLastName,
-        //             ContactEmail = item.ContactEmail,
-        //             ContactCreated = DateTime.Now
-        //         };
-        //
-        //         contactsToProcess.Add(contact);
-        //
-        //         if (contactsToProcess.Count == context.BatchSize)
-        //         {
-        //             InsertContacts(contactsToProcess, contactIds, existingGroupMembersMapping);
-        //             await onResultCallbackAsync.Invoke(contactsToProcess.Select(x => new ImportResult(true, x.ContactGUID, null)).ToList());
-        //             contactsToProcess.Clear();
-        //         }
-        //     }
-        // }
-
-        // InsertContacts(contactsToProcess, contactIds, existingGroupMembersMapping);
-        // await onResultCallbackAsync.Invoke(contactsToProcess.Select(x => new ImportResult(true, x.ContactGUID, null)).ToList());
-        //
-        // if (group != null && contactIds is { Count: > 0 })
-        // {
-        //     InsertGroupMembers(contactsIds, group);
-        // }
-    }
-
-    private static void InsertContacts(List<ContactInfo> contactsToProcess, List<int> contactIds, HashSet<int>? existingGroupMembersMapping)
-    {
-        if (contactsToProcess.Count == 0)
-            return;
-
-        ContactInfoProvider.ProviderObject.BulkInsertInfos(contactsToProcess);
-
-        if (existingGroupMembersMapping != null)
-        {
-            contactIds.AddRange(contactsToProcess
-                .Where(i => !existingGroupMembersMapping.Contains(i.ContactID))
-                .Select(i => i.ContactID));
+            // if (previousInsertGroupMemberBatch != null)
+            // {
+            //     await previousInsertGroupMemberBatch;
+            // }
         }
     }
 
-    private void InsertGroupMembers(List<int> contactsIds, ContactGroupInfo group)
+    private Task InsertGroupMembersAsync(IEnumerable<Guid> contactGuids, ContactGroupInfo group)
     {
-        foreach (var chunk in contactsIds.Chunk(100))
+        return Task.Run(() =>
         {
-            var items = chunk.Select(i => new ContactGroupMemberInfo()
+            var query = @"
+INSERT INTO [dbo].[OM_ContactGroupMember] ([ContactGroupMemberContactGroupID], [ContactGroupMemberType], [ContactGroupMemberRelatedID],
+                                           [ContactGroupMemberFromCondition], [ContactGroupMemberFromAccount], [ContactGroupMemberFromManual])
+-- OUTPUT [inserted].[ContactGroupMemberContactGroupID]
+SELECT @contactGroupId [ContactGroup], @contactGroupMemberType AS [ContactGroupMemberType], [C].[ContactID], NULL, NULL, 1 [ContactGroupMemberFromManual]
+FROM [dbo].[OM_Contact] [C]
+WHERE EXISTS (SELECT 1
+              FROM OPENJSON(@jsonGuidArray, '$')
+              WHERE CAST([value] AS UNIQUEIDENTIFIER) = [C].[ContactGUID])
+      AND NOT EXISTS (SELECT 1
+          FROM [dbo].[OM_ContactGroupMember] [CGM]
+          WHERE [CGM].[ContactGroupMemberContactGroupID] = @contactGroupId
+            AND [CGM].[ContactGroupMemberRelatedID] = [C].[ContactID])
+";
+
+            var jsonGuidArray = JsonConvert.SerializeObject(contactGuids);
+            
+            ConnectionHelper.ExecuteNonQuery(query, new QueryDataParameters
             {
-                ContactGroupMemberType = ContactGroupMemberTypeEnum.Contact,
-                ContactGroupMemberRelatedID = i,
-                ContactGroupMemberFromManual = true,
-                ContactGroupMemberContactGroupID = group.ContactGroupID
-            });
-
-            ContactGroupMemberInfoProvider.ProviderObject.BulkInsertInfos(items);
-        }
+                new("contactGroupId", group.ContactGroupID),
+                new("jsonGuidArray", jsonGuidArray),
+                new("contactGroupMemberType", (int)ContactGroupMemberTypeEnum.Contact),
+            }, QueryTypeEnum.SQLQuery);
+        });
     }
 
     private Task DeletedContactsAsync(List<Guid> contactGuids, int batchLimit)

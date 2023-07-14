@@ -10,6 +10,7 @@ public interface IImportService
     /// <param name="csvStream"></param>
     /// <param name="onResultCallbackAsync">Called when contact info is imported</param>
     /// <param name="context">Context values</param>
+    /// <param name="onErrorCallbackAsync">called when item related exception occurs</param>
     /// <returns>Enumeration of imported contacts</returns>
-    Task RunImport(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync);
+    Task RunImport(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync);
 }

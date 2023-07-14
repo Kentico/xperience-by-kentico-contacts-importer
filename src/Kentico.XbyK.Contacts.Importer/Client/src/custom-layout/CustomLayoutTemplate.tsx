@@ -29,6 +29,9 @@ export const CustomLayoutTemplate = ({ label, contactGroups }: CustomLayoutProps
 
   const [importKind, setImportKind] = useState('insert');
   const [contactGroup, setContactGroup] = useState<string>('<null>');
+  const [delimiter, setDelimiter] = useState<string>(',');
+  const [batchSize, setBatchSize] = useState<number>(5000);
+  // const [blockCache, setBlockCache] = useState<number>(1500);
 
 
   function parseFile(this: any, file: File, callback: (buffer: ArrayBuffer) => boolean, finishedCallback: () => void) {
@@ -123,12 +126,7 @@ export const CustomLayoutTemplate = ({ label, contactGroups }: CustomLayoutProps
             const selected = evt.target.value;
             setContactGroup(selected);
             console.log('selected CG:', selected);
-          }} */}
-          <DropDownActionMenu renderTrigger={function (ref: React.RefObject<HTMLElement>, onTriggerClick: () => void, isOpened: boolean): React.ReactNode {
-            return <>Hello!</>
-          }}>
-              {contactGroups.map(cg => <MenuItem primaryLabel={cg.displayName} value={cg.guid}></MenuItem>)}              
-          </DropDownActionMenu>
+          }} */}          
           <select value={contactGroup}
             onChange={e => setContactGroup(e.target.value)}>
             <option value={'<null>'}>No contact group</option>
@@ -136,9 +134,17 @@ export const CustomLayoutTemplate = ({ label, contactGroups }: CustomLayoutProps
           </select>
         </label>
       </div>
+      <label>
+        Delimiter
+        <input value={delimiter} onChange={(evt) => { setDelimiter(evt.target.value) }}></input>
+      </label>
+      <label>
+        Batch size
+        <input value={batchSize} onChange={(evt) => { setBatchSize(Number(evt.target.value)) }} type="number"></input>
+      </label>
       {/* BytesSent: ${currentFile.current}
 Total: ${currentFile.total} */}
-      <pre style={{ border: '2px dotted magenta' }}>{`Uplaod progress:${Math.floor((currentFile.current / currentFile.total) * 100)}%
+      <pre style={{ border: '2px dotted magenta' }}>{`Upload progress:${Math.floor((currentFile.current / currentFile.total) * 100)}%
 `}<progress id="progress_" value={currentFile.current} max={currentFile.total} style={{ width: '100%' }}></progress></pre>
       <Button
         label="Send file"
@@ -152,6 +158,7 @@ Total: ${currentFile.total} */}
             socket.onerror = (e) => {
               console.log('error occured', e);
               canContinue = false;
+              socket.close();
             }
             socket.onmessage = (event) => {
               var p = JSON.parse(event.data);
@@ -222,6 +229,8 @@ Total: ${currentFile.total} */}
                 payload: {
                   importKind,
                   contactGroup: contactGroup === '<null>' ? null : contactGroup,
+                  delimiter,
+                  batchSize
                 }
               }));
             };
