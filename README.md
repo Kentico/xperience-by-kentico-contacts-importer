@@ -30,26 +30,53 @@ This is an example of how to list things you need to use the software and how to
 
 ### Installation
 
-_Below is an example of how you can instruct your audience on installing and setting up your app. This template doesn't rely on any external dependencies or services._
+### Register Contacts importer to you dependency injection container
+```csharp
+builder.Services.AddKentico();
+// ... other registrations
+services.AddContactsImport();
+```
 
-1. Get a free API Key at ... 
-2. Clone the repo
-   ```sh
-   git clone ...
-   ```
-3. Install
-4. Enter your API ...
-
+### Register Contacts importer to your application
+```csharp
+app.InitKentico();
+// ... other registrations
+app.AddContactsImport();
+```
 
 
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
+1) open contact importer application <br>
+![ContactImporterApplication](ContactImporterApplication.png) 
+3) select file
+4) select mode 
+   1) Delete - this mode will delete contact by ContactGUID (CSV shall contain column with ContactGUID header)
+   2) Insert (skip existing) - this mode will import contacts (CSV shall contain column with ContactGUID)
+5) "Assign to contact group" - all contact (existing included) will be assigned to specified group
+6) Delimiter - delimiter used for CSV (common are `;`, `,`, `\\t`, ..)
+7) "Batch size" - size of batch used for database operation, for instances with limited resources this value should not exeed 5000, lower than 100 is not reccomended.
+8) Click  "Send file" button
 
-_For more examples, please refer to the [Documentation](put URL to documentation here)_
+> Depends on resources available to application, but degraded application performance is expected during import.
+
+Notes:
+- do not close window with progress, file is uploaded from that window.
+- do not manipulate file during import, close all applications write access to file (or lock)
 
 
+### Supported columns
+
+|Column|.NET Type|Required|
+|---|---|---|
+|ContactGUID|Guid|yes|
+|ContactCreated|DateTime|yes|
+|ContactFirstName|string|no|
+|ContactLastName|string|no|
+|ContactEmail|string|no|
+|ContactAge|Int32|no|
+|ContactMiddleName|string|no|
 
 <!-- CONTRIBUTING -->
 ## Contributing
@@ -57,12 +84,10 @@ _For more examples, please refer to the [Documentation](put URL to documentation
 For Contributing please see  <a href="./CONTRIBUTING.md">`CONTRIBUTING.md`</a> for more information.
 
 
-
 <!-- LICENSE -->
 ## License
 
 Distributed under the MIT License. See [`LICENSE.md`](./LICENSE.md) for more information.
-
 
 
 <!-- MARKDOWN LINKS & IMAGES -->

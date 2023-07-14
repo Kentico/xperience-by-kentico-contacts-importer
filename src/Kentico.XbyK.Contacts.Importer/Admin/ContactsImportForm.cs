@@ -261,7 +261,7 @@ public class ContactsImportForm : ModelEditPage<ContactsImportModel>
         return result;
     }
 
-    private class ContactModel
+    public class ContactModel
     {
         public Guid ContactGuid { get; set; }
         public int ContactId { get; set; }
