@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{8864B8E5-2F23-4778-BBF7-DDEFD166950B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{ED0957C3-0B03-4EFE-9282-B37ABB6CDB24}"
+	ProjectSection(SolutionItems) = preProject
+		Directory.Build.props = Directory.Build.props
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{85B04BD2-2182-450B-BD91-83023633E95E}"
+	ProjectSection(SolutionItems) = preProject
+		README.md = README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "config", "config", "{3BBEF48A-8C70-476D-A90A-5F37E7CD46EC}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kentico.XbyK.Contacts.Importer", "src\Kentico.XbyK.Contacts.Importer\Kentico.XbyK.Contacts.Importer.csproj", "{C6D47E41-7FC9-4611-AC0A-828BCD4B4162}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C6D47E41-7FC9-4611-AC0A-828BCD4B4162}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C6D47E41-7FC9-4611-AC0A-828BCD4B4162}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C6D47E41-7FC9-4611-AC0A-828BCD4B4162}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C6D47E41-7FC9-4611-AC0A-828BCD4B4162}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{C6D47E41-7FC9-4611-AC0A-828BCD4B4162} = {8864B8E5-2F23-4778-BBF7-DDEFD166950B}
+	EndGlobalSection
+EndGlobal

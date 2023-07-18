@@ -1,0 +1,47 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<AdminOrgName>community</AdminOrgName>
+    </PropertyGroup>
+
+	<PropertyGroup>
+		<Title>Xperience by Kentico Contacts Import</Title>
+		<PackageId>Kentico.Xperience.Contacts.Import</PackageId>
+		<VersionPrefix>0.1.0</VersionPrefix>
+		<Authors>Kentico Software</Authors>
+		<Company>Kentico Software</Company>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<RepositoryType>git</RepositoryType>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+		<VersionSuffix Condition="$(Configuration) == 'Debug'">$([System.DateTime]::Now.ToString('yyMMddHHmm'))</VersionSuffix>
+		<PackageOutputDir Condition="$(Configuration) == 'Debug'">$(LOCAL_NUGET_REPO)\</PackageOutputDir>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<AdminClientPath Include="Client\dist\**">
+			<ProjectName>web-admin</ProjectName>
+		</AdminClientPath>
+	</ItemGroup>
+	<ItemGroup>
+		<Compile Remove="Client\node_modules\**" />
+		<EmbeddedResource Remove="Client\node_modules\**" />
+		<None Remove="Client\node_modules\**" />
+	</ItemGroup>
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+    <ItemGroup>
+      <PackageReference Include="CsvHelper" Version="30.0.1" />
+      <PackageReference Include="Kentico.Xperience.Admin" Version="26.3.2" />
+    </ItemGroup>
+
+    <!--<ItemGroup>
+      <EmbeddedResource Include="Resources\ContactsImporterResources.resx" />
+    </ItemGroup>-->
+
+</Project>
