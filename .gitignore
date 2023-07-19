@@ -260,5 +260,6 @@ xcuserdata
 
 # nodejs
 node_modules
+dist
 
 Kentico.Xperience.Contacts.Importer.sln.DotSettings
