@@ -1,5 +1,7 @@
 # Xperience by Kentico Contacts Importer
 
+[![CI: Build and Test](https://github.com/Kentico/xperience-by-kentico-contacts-importer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kentico/xperience-by-kentico-contacts-importer/actions/workflows/ci.yml)
+
 <!-- ABOUT THE PROJECT -->
 
 ## About The Project
