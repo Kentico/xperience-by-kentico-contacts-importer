@@ -3,13 +3,17 @@ using Kentico.Xperience.Contacts.Importer;
 
 [assembly: CMS.AssemblyDiscoverable]
 [assembly: CMS.RegisterModule(typeof(ContactImportAdminModule))]
-[assembly: UICategory(ContactImportAdminModule.CUSTOM_CATEGORY, "Contacts import", Icons.PersonalisationVariants, 100)]
+[assembly: UICategory(
+   codeName: ContactImportAdminModule.CATEGORY,
+   name: "Contacts import",
+   icon: Icons.PersonalisationVariants,
+   order: 100)]
 
 namespace Kentico.Xperience.Contacts.Importer
 {
     internal class ContactImportAdminModule : AdminModule
     {
-        public const string CUSTOM_CATEGORY = "community.web.admin.category";
+        public const string CATEGORY = "Kentico.Xperience.Contacts.Import.Web.Admin.Category";
 
         public ContactImportAdminModule()
             : base(nameof(ContactImportAdminModule))
@@ -20,7 +24,7 @@ namespace Kentico.Xperience.Contacts.Importer
         {
             base.OnInit();
 
-            RegisterClientModule("community", "web-admin");
+            RegisterClientModule("kentico-xperience-contacts-import", "web-admin");
         }
     }
 }

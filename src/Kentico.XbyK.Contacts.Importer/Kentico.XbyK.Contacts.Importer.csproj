@@ -1,46 +1,49 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>net6.0</TargetFramework>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<Nullable>enable</Nullable>
-		<AdminOrgName>community</AdminOrgName>
-    </PropertyGroup>
-
 	<PropertyGroup>
-		<Title>Xperience by Kentico Contacts Import</Title>
+		<Product>Xperience by Kentico Contacts Importer</Product>
+		<Title>$(Product)</Title>
 		<PackageId>Kentico.Xperience.Contacts.Import</PackageId>
-		<VersionPrefix>0.1.0</VersionPrefix>
-		<Authors>Kentico Software</Authors>
-		<Company>Kentico Software</Company>
-		<PackageLicenseExpression>MIT</PackageLicenseExpression>
-		<RepositoryType>git</RepositoryType>
-		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-		<GenerateDocumentationFile>true</GenerateDocumentationFile>
-
 		<VersionSuffix Condition="$(Configuration) == 'Debug'">$([System.DateTime]::Now.ToString('yyMMddHHmm'))</VersionSuffix>
 		<PackageOutputDir Condition="$(Configuration) == 'Debug'">$(LOCAL_NUGET_REPO)\</PackageOutputDir>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<PropertyGroup>
+		<LangVersion>latest</LangVersion>
+		<NoWarn>$(NoWarn);S1075</NoWarn>
+		<AdminOrgName>kentico-xperience-contacts-import</AdminOrgName>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<AdminClientPath Include="Client\dist\**">
 			<ProjectName>web-admin</ProjectName>
 		</AdminClientPath>
-	</ItemGroup>
-	<ItemGroup>
 		<Compile Remove="Client\node_modules\**" />
 		<EmbeddedResource Remove="Client\node_modules\**" />
 		<None Remove="Client\node_modules\**" />
 	</ItemGroup>
-	<ItemGroup>
-		<FrameworkReference Include="Microsoft.AspNetCore.App" />
-	</ItemGroup>
-    <ItemGroup>
-      <PackageReference Include="CsvHelper" Version="30.0.1" />
-      <PackageReference Include="Kentico.Xperience.Admin" Version="26.3.2" />
-    </ItemGroup>
 
-    <!--<ItemGroup>
+	<Target Name="NpmInstall" BeforeTargets="NpmBuildClient" Condition=" '$(Configuration)|$(Platform)' != 'Debug|AnyCPU' ">
+		<Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(MSBuildProjectDirectory)\Client" />
+	</Target>
+	<Target Name="NpmBuildClient" BeforeTargets="BeforeBuild" Condition=" '$(Configuration)|$(Platform)' != 'Debug|AnyCPU' ">
+		<Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)\Client" />
+	</Target>
+
+	<ItemGroup>
+		<PackageReference Include="CsvHelper" Version="30.0.1" />
+		<PackageReference Include="Kentico.Xperience.Admin" Version="26.3.2" />
+		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<!--<ItemGroup>
       <EmbeddedResource Include="Resources\ContactsImporterResources.resx" />
     </ItemGroup>-->
 
