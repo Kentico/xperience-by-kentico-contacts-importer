@@ -17,16 +17,16 @@ namespace Kentico.Xperience.Contacts.Importer
     {
         private const string SOURCE = "Contact.Importer";
 
-        public static void AddContactsImport(this IServiceCollection services)
+        public static IServiceCollection AddContactsImport(this IServiceCollection services)
         {
-            services.AddTransient<IImportService, ImportService>();
+            return services.AddTransient<IImportService, ImportService>();
         }
 
-        public static void UseContactsImport(this IApplicationBuilder app)
+        public static IApplicationBuilder UseContactsImport(this IApplicationBuilder app)
         {
             app.UseWebSockets();
 
-            app.Use(async (HttpContext context, RequestDelegate next) =>
+            return app.Use(async (HttpContext context, RequestDelegate next) =>
             {
                 if (context.Request.Path == "/contactsimport/ws")
                 {
