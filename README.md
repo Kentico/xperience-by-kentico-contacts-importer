@@ -1,3 +1,5 @@
+# Xperience by Kentico Contacts Importer
+
 [![Contributors][contributors-shield]][contributors-url]
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
@@ -5,14 +7,10 @@
 [![MIT License][license-shield]][license-url]
 [![Discord][discussion-shield]][discussion-url]
 
-
-
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
 Please put here some general information about your Intergration / App / Solution.
-
-
 
 <!-- GETTING STARTED -->
 ## Getting Started
@@ -23,7 +21,9 @@ To get a local copy up and running follow these simple example steps.
 ### Prerequisites
 
 This is an example of how to list things you need to use the software and how to install them.
+
 * npm
+
   ```sh
   npm install npm@latest -g
   ```
@@ -31,6 +31,7 @@ This is an example of how to list things you need to use the software and how to
 ### Installation
 
 ### Register Contacts importer to you dependency injection container
+
 ```csharp
 builder.Services.AddKentico();
 // ... other registrations
@@ -38,33 +39,33 @@ services.AddContactsImport();
 ```
 
 ### Register Contacts importer to your application
+
 ```csharp
 app.InitKentico();
 // ... other registrations
 app.AddContactsImport();
 ```
 
-
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-1) open contact importer application <br>
-![ContactImporterApplication](ContactImporterApplication.png) 
-3) select file
-4) select mode 
-   1) Delete - this mode will delete contact by ContactGUID (CSV shall contain column with ContactGUID header)
-   2) Insert (skip existing) - this mode will import contacts (CSV shall contain column with ContactGUID)
-5) "Assign to contact group" - all contact (existing included) will be assigned to specified group
-6) Delimiter - delimiter used for CSV (common are `;`, `,`, `\\t`, ..)
-7) "Batch size" - size of batch used for database operation, for instances with limited resources this value should not exeed 5000, lower than 100 is not reccomended.
-8) Click  "Send file" button
+1. open contact importer application <br>
+![ContactImporterApplication](./images/ContactImporterApplication.png)
+1. select file
+1. select mode
+   1. Delete - this mode will delete contact by ContactGUID (CSV shall contain column with ContactGUID header)
+   1. Insert (skip existing) - this mode will import contacts (CSV shall contain column with ContactGUID)
+1. "Assign to contact group" - all contact (existing included) will be assigned to specified group
+1. Delimiter - delimiter used for CSV (common are `;`, `,`, `\\t`, ..)
+1. "Batch size" - size of batch used for database operation, for instances with limited resources this value should not exeed 5000, lower than 100 is not reccomended.
+1. Click  "Send file" button
 
 > Depends on resources available to application, but degraded application performance is expected during import.
 
 Notes:
-- do not close window with progress, file is uploaded from that window.
-- do not manipulate file during import, close all applications write access to file (or lock)
 
+* do not close window with progress, file is uploaded from that window.
+* do not manipulate file during import, close all applications write access to file (or lock)
 
 ### Supported columns
 
@@ -81,14 +82,12 @@ Notes:
 <!-- CONTRIBUTING -->
 ## Contributing
 
-For Contributing please see  <a href="./CONTRIBUTING.md">`CONTRIBUTING.md`</a> for more information.
-
+For Contributing please see  [`CONTRIBUTING.md`](./CONTRIBUTING.md) for more information.
 
 <!-- LICENSE -->
 ## License
 
 Distributed under the MIT License. See [`LICENSE.md`](./LICENSE.md) for more information.
-
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://github.com/Kentico/Home/wiki/Checklist-for-publishing-a-new-OS-project#badges-->
