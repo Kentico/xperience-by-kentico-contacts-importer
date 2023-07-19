@@ -1,0 +1,45 @@
+name: "CI: Build and Test"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**.cs"
+      - "**.tsx"
+      - "**.js"
+      - "**.csproj"
+      - "**.props"
+      - "**.targets"
+      - "**.sln"
+  pull_request:
+    branches: [main]
+    paths:
+      - "**.cs"
+      - "**.tsx"
+      - "**.js"
+      - "**.csproj"
+      - "**.props"
+      - "**.targets"
+      - "**.sln"
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v3
+        with:
+          global-json-file: global.json
+
+      - name: Install dependencies
+        run: dotnet restore --locked-mode
+
+      - name: Build Solution
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test Solution
+        run: dotnet test --configuration Release --no-build --no-restore
