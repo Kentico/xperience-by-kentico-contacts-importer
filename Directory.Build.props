@@ -1,40 +1,47 @@
 <Project>
-  <!-- See https://aka.ms/dotnet/msbuild/customize for more details on customizing your build -->
-  <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <AdminOrgName>kentico</AdminOrgName>
-    <RootNamespace>Kentico.Xperience.Contacts.Importer</RootNamespace>
-    <LangVersion>Latest</LangVersion>
-    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
-    <NoWarn>S1075</NoWarn>
-  </PropertyGroup>
 
   <PropertyGroup>
-    <Title>Xperience by Kentico Contacts Importer</Title>
-    <PackageId>Kentico.Xperience.Contacts.Importer</PackageId>
-    <Version>1.0.0</Version>
-    <Authors>Kentico Software</Authors>
     <Company>Kentico Software</Company>
-    <PackageIcon>icon.png</PackageIcon>
+    <Authors>$(Company)</Authors>
+    <Copyright>Copyright © $(Company) $([System.DateTime]::Now.Year)</Copyright>
+    <Trademark>$(Company)™</Trademark>
+    <VersionPrefix>1.0.0</VersionPrefix>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageTags>kentico xperience mvc core contacts importer</PackageTags>
-    <Description></Description>
-    <RepositoryUrl>https://github.com/Kentico/xperience-by-kentico-contacts-importer</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <PackageProjectUrl>https://github.com/Kentico/xperience-by-kentico-contacts-importer</PackageProjectUrl>
+    <PackageReleaseNotes>https://github.com/Kentico/xperience-by-kentico-contacts-importer/releases</PackageReleaseNotes>
+    <PackageIcon>logo.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>xperience;kentico;aspnetcore;marketing</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="/">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
+    <None Include="$(MSBuildThisFileDirectory)\images\logo.png" Pack="true" Visible="false" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)\README.md" Pack="true" PackagePath=""/>
   </ItemGroup>
 
   <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <WarningsAsErrors>nullable</WarningsAsErrors>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <CopyDocumentationFilesFromPackages>true</CopyDocumentationFilesFromPackages>
+    <CopyDebugSymbolFilesFromPackages>true</CopyDebugSymbolFilesFromPackages>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <RootNamespace>Kentico.Xperience.Contacts.Importer</RootNamespace>
+
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" $(Configuration) == 'Release' ">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
   <ItemGroup Label="StaticCodeAnalysis">
@@ -43,4 +50,5 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
+
 </Project>
