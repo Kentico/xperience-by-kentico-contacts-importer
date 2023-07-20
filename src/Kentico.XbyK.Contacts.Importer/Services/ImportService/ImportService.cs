@@ -16,10 +16,7 @@ public class ImportService : IImportService
     private readonly IContactGroupInfoProvider _contactGroupInfoProvider;
 
     /// <param name="contactGroupInfoProvider"></param>
-    public ImportService(IContactGroupInfoProvider contactGroupInfoProvider)
-    {
-        _contactGroupInfoProvider = contactGroupInfoProvider;
-    }
+    public ImportService(IContactGroupInfoProvider contactGroupInfoProvider) => _contactGroupInfoProvider = contactGroupInfoProvider;
 
     /// <summary>
     /// Defined how ContactInfo columns will be mapped from CSV
@@ -40,17 +37,14 @@ public class ImportService : IImportService
         }
     }
 
-    private class ContactDeleteArgument
+    private sealed class ContactDeleteArgument
     {
         public Guid ContactGUID { get; set; }
     };
 
     private sealed class SimplifiedMap : ClassMap<ContactDeleteArgument>
     {
-        public SimplifiedMap()
-        {
-            Map(m => m.ContactGUID);
-        }
+        public SimplifiedMap() => Map(m => m.ContactGUID);
     }
 
     /// <exception cref="Exception">Thrown when contact group is missing</exception>
@@ -91,11 +85,12 @@ public class ImportService : IImportService
 
         var records = csv.GetRecords<ContactDeleteArgument>();
 
-        var totalProcessed = 0;
+        int totalProcessed = 0;
 
         async IAsyncEnumerable<List<Guid>> Pipe2TransformBatches(IEnumerable<ContactDeleteArgument> models)
         {
             var currentBatch = new List<Guid>(context.BatchSize);
+            
             foreach (var item in models)
             {
                 try
@@ -115,12 +110,13 @@ public class ImportService : IImportService
                 finally
                 {
                     totalProcessed += 1;
+                    
                     if (totalProcessed % context.BatchSize == 0)
                     {
                         // we are no concerned here that totalProcessed is captured from foreign closure
                         // we do not await this task, it doesn't concern import routine 
 #pragma warning disable CS4014
-                        Task.Run(async () => { await onResultCallbackAsync.Invoke(null, totalProcessed); });
+                        Task.Run(async () => { await onResultCallbackAsync.Invoke(new List<ImportResult>(), totalProcessed); });
 #pragma warning restore CS4014
                     }
                 }
@@ -136,6 +132,7 @@ public class ImportService : IImportService
         }
 
         Task? previousDeleteBatch = null;
+        
         await foreach (var deleteArg in Pipe2TransformBatches(records))
         {
             if (previousDeleteBatch != null)
@@ -152,6 +149,7 @@ public class ImportService : IImportService
     private async Task InsertContactsFromCsvAsync(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync)
     {
         ContactGroupInfo? group = null;
+        
         if (context.AssignToContactGroupGuid is { } assignToContactGroupGuid)
         {
             group = await _contactGroupInfoProvider.GetAsync(assignToContactGroupGuid);
@@ -181,6 +179,7 @@ public class ImportService : IImportService
         IEnumerable<List<(ContactInfo info, bool insert)>> Pipe2TransformBatches(IEnumerable<ContactInfo> models)
         {
             var currentBatch = new List<(ContactInfo info, bool insert)>(context.BatchSize);
+            
             foreach (var item in models)
             {
                 try
@@ -195,9 +194,10 @@ public class ImportService : IImportService
                 finally
                 {
                     totalProcessed += 1;
+                    
                     if (totalProcessed % context.BatchSize == 0)
                     {
-                        Task.Run((Func<Task?>)(async () => { await onResultCallbackAsync.Invoke(null, totalProcessed); }));
+                        Task.Run(async () => { await onResultCallbackAsync.Invoke(new List<ImportResult>(), totalProcessed); });
                     }
                 }
 
@@ -252,9 +252,8 @@ public class ImportService : IImportService
         }
     }
 
-    private Task InsertGroupMembersAsync(IEnumerable<Guid> contactGuids, ContactGroupInfo group)
-    {
-        return Task.Run(() =>
+    private Task InsertGroupMembersAsync(IEnumerable<Guid> contactGuids, ContactGroupInfo group) =>
+        Task.Run(() =>
         {
             var query = @"
 INSERT INTO [dbo].[OM_ContactGroupMember] ([ContactGroupMemberContactGroupID], [ContactGroupMemberType], [ContactGroupMemberRelatedID],
@@ -280,7 +279,6 @@ WHERE EXISTS (SELECT 1
                 new("contactGroupMemberType", (int)ContactGroupMemberTypeEnum.Contact),
             }, QueryTypeEnum.SQLQuery);
         });
-    }
 
     private Task DeletedContactsAsync(List<Guid> contactGuids, int batchLimit)
     {

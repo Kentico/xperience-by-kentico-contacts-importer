@@ -14,48 +14,29 @@ internal sealed class AsynchronousStream: Stream
     public int CachedBlocks => _blocks.Count;
 
     /// <inheritdoc />
-    public AsynchronousStream(int streamWriteCountCache)
-    {
-        _blocks = new BlockingCollection<byte[]>(streamWriteCountCache);
-    }
+    public AsynchronousStream(int streamWriteCountCache) => _blocks = new BlockingCollection<byte[]>(streamWriteCountCache);
 
     /// <inheritdoc />
-    public override bool CanTimeout
-    {
-        get { return false; }
-    }
+    public override bool CanTimeout => false;
 
-    private bool canRead = true;
+    private readonly bool canRead = true;
 
     /// <inheritdoc />
-    public override bool CanRead
-    {
-        get => canRead;
-    }
+    public override bool CanRead => canRead;
 
     /// <inheritdoc />
-    public override bool CanSeek
-    {
-        get { return false; }
-    }
+    public override bool CanSeek => false;
 
     /// <inheritdoc />
-    public override bool CanWrite
-    {
-        get { return true; }
-    }
+    public override bool CanWrite => true;
 
     /// <inheritdoc />
-    public override long Length
-    {
-        get { throw new NotSupportedException(); }
-    }
+    public override long Length => throw new NotSupportedException();
 
     /// <inheritdoc />
     public override void Flush()
     {
     }
-
 
     public long TotalBytesWritten { get; private set; }
 
@@ -63,25 +44,20 @@ internal sealed class AsynchronousStream: Stream
 
     public override long Position
     {
-        get { throw new NotSupportedException(); }
-        set { throw new NotSupportedException(); }
+        get => throw new NotSupportedException();
+        set => throw new NotSupportedException();
     }
 
-    public override long Seek(long offset, SeekOrigin origin)
-    {
-        throw new NotSupportedException();
-    }
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
 
-    public override void SetLength(long value)
-    {
-        throw new NotSupportedException();
-    }
+    public override void SetLength(long value) => throw new NotSupportedException();
 
     public override int Read(byte[] buffer, int offset, int count)
     {
         ValidateBufferArgs(buffer, offset, count);
 
         var bytesRead = 0;
+        
         while (true)
         {
             if (_currentBlock != null)
@@ -122,6 +98,7 @@ internal sealed class AsynchronousStream: Stream
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
+        
         if (disposing)
         {
             _blocks.Dispose();
@@ -134,19 +111,17 @@ internal sealed class AsynchronousStream: Stream
         base.Close();
     }
 
-    public void CompleteWriting()
-    {
-        _blocks.CompleteAdding();
-    }
-    
+    public void CompleteWriting() => _blocks.CompleteAdding();
+
     public bool TryCompleteWriting()
     {
         try
         {
             _blocks.CompleteAdding();
+            
             return true;
         }
-        catch (Exception ex)
+        catch 
         {
             return false;
         }

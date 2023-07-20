@@ -51,9 +51,9 @@ namespace Kentico.Xperience.Contacts.Importer
             });
         }
 
-        private record Message(string Type, HeaderPayload? Payload);
+        private sealed record Message(string Type, HeaderPayload? Payload);
 
-        private record HeaderPayload(string ImportKind, Guid? ContactGroup, int? BatchSize, string Delimiter);
+        private sealed record HeaderPayload(string ImportKind, Guid? ContactGroup, int? BatchSize, string Delimiter);
 
         private static async Task DownloadAndImport(WebSocket webSocket, IImportService importService, IEventLogService logService)
         {
@@ -105,6 +105,7 @@ namespace Kentico.Xperience.Contacts.Importer
 
             var consumerIsRunning = true;
             var ms = new AsynchronousStream(1024 * 32 * 500);
+            
             var consumerTask = Task.Run(async () =>
             {
                 try
@@ -135,6 +136,7 @@ namespace Kentico.Xperience.Contacts.Importer
                 // try
                 // {
                 var bufferSize = 1024 * 32;
+                
                 while (true)
                 {
                     if (!consumerIsRunning)
@@ -144,12 +146,16 @@ namespace Kentico.Xperience.Contacts.Importer
 
                     var buffer = new byte[bufferSize];
                     receiveResult = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                    
                     if (!receiveResult.CloseStatus.HasValue)
                     {
                         var data = new ArraySegment<byte>(buffer);
 
-                        ms.Write(data.Array, data.Offset, receiveResult.Count);
-                        ms.Flush();
+                        if (data.Array != null)
+                        {
+                            ms.Write(data.Array, data.Offset, receiveResult.Count);
+                            ms.Flush();
+                        }
 
                         var count = receiveResult.Count;
                         var response = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "progress", payload = count }));
@@ -189,6 +195,7 @@ namespace Kentico.Xperience.Contacts.Importer
             });
 
             var socketAvailable = true;
+            
             try
             {
                 await producerTask;
@@ -241,16 +248,21 @@ namespace Kentico.Xperience.Contacts.Importer
         {
             var ms = new MemoryStream();
             const int bufferSize = 1024 * 32;
+            
             while (true)
             {
                 var buffer = new byte[bufferSize];
                 var receiveResult = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                
                 if (!receiveResult.CloseStatus.HasValue)
                 {
                     var data = new ArraySegment<byte>(buffer);
 
-                    ms.Write(data.Array, data.Offset, receiveResult.Count);
-                    ms.Flush();
+                    if (data.Array != null)
+                    {
+                        ms.Write(data.Array, data.Offset, receiveResult.Count);
+                        ms.Flush();    
+                    }
                 }
                 else
                 {
