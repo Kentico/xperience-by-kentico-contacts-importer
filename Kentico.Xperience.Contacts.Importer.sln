@@ -17,7 +17,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "config", "config", "{3BBEF4
 		.gitignore = .gitignore
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kentico.XbyK.Contacts.Importer", "src\Kentico.XbyK.Contacts.Importer\Kentico.XbyK.Contacts.Importer.csproj", "{C6D47E41-7FC9-4611-AC0A-828BCD4B4162}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kentico.Xperience.Contacts.Importer", "src\Kentico.Xperience.Contacts.Importer\Kentico.Xperience.Contacts.Importer.csproj", "{C6D47E41-7FC9-4611-AC0A-828BCD4B4162}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

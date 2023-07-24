@@ -14,5 +14,9 @@
 
   "[csharp]": {
     "editor.defaultFormatter": "ms-dotnettools.csharp"
+  },
+
+  "files.associations": {
+    ".azuredevops/**/*.yml": "azure-pipelines"
   }
 }
