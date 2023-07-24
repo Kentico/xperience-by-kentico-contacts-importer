@@ -18,7 +18,7 @@ interface CustomLayoutProps {
 let canContinue = true;
 let toofast = false;
 
-export const CustomLayoutTemplate = ({ label, contactGroups }: CustomLayoutProps) => {
+export const ImportLayoutTemplate = ({ label, contactGroups }: CustomLayoutProps) => {
   const [labelValue, setLabelValue] = useState(label);
 
   // console.log('contactGroups', contactGroups);
