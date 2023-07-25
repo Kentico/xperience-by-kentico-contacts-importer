@@ -285,10 +285,22 @@ export const ImportLayoutTemplate = ({
             <RadioGroup
               label="Select Upload Mode"
               name="uploadMode"
-              size={RadioGroupSize.Medium}
+              size={RadioGroupSize.Large}
               markAsRequired={true}
               value={importKind}
               onChange={setImportKind}
+              explanationText={`<p>All Contacts in the import file will be processed.</p>
+              <ul>
+                <li>
+                  Insert: Any existing Contacts (matched by ContactGUID)
+                  will be skipped for import.
+                </li>
+                <li>
+                  Delete: Any existing Contacts (matched by ContactGUID)
+                  will be deleted from the database.
+                </li>
+              </ul>`}
+              explanationTextAsHtml={true}
             >
               {uploadModeOptions.map((option, key) => (
                 <RadioButton key={key} {...option}>
@@ -304,6 +316,7 @@ export const ImportLayoutTemplate = ({
               onChange={setContactGroup}
               value={contactGroup}
               disabled={!contactGroups.length}
+              explanationText="Select a Contact Group that all Contacts will be associated with"
             >
               {contactGroups.map((c) => (
                 <MenuItem
@@ -335,10 +348,11 @@ export const ImportLayoutTemplate = ({
             )}
 
             <Input
-              label="CSV record delimeter"
+              label="CSV record delimiter"
               type="text"
               onChange={(v) => setDelimiter(v.target.value)}
               value={delimiter}
+              explanationText="The delimiter for each CSV row data item."
             />
             <Input
               label="Batch size"
@@ -346,6 +360,7 @@ export const ImportLayoutTemplate = ({
               onChange={(v) => setBatchSize(parseInt(v.target.value, 10))}
               value={batchSize}
               min={1}
+              explanationText="The number of records that will be uploaded and processed at a time."
             />
 
             {currentFile.total > 0 && (

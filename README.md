@@ -2,18 +2,13 @@
 
 [![CI: Build and Test](https://github.com/Kentico/xperience-by-kentico-contacts-importer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kentico/xperience-by-kentico-contacts-importer/actions/workflows/ci.yml)
 
-<!-- ABOUT THE PROJECT -->
-
 ## About The Project
 
-Please put here some general information about your Intergration / App / Solution.
+Enables bulk importing of Contacts into an Xperience by Kentico solution using a `.csv` file.
 
-<!-- GETTING STARTED -->
+![View of the Import Upload dashboard](./images/screenshot-upload.jpg)
 
 ## Getting Started
-
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
 
 ### Prerequisites
 
@@ -23,9 +18,13 @@ To get a local copy up and running follow these simple example steps.
 
 ### Installation
 
-Add the package to your ASP.NET Core application or Admin class library.
+Add the package to your application using the .NET CLI
 
-### Register Contacts importer to you dependency injection container
+```powershell
+dotnet add package Kentico.Xperience.Contacts.Importer
+```
+
+### Add to your application dependencies
 
 ```csharp
 builder.Services.AddKentico();
@@ -33,15 +32,13 @@ builder.Services.AddKentico();
 services.AddContactsImport();
 ```
 
-### Register Contacts importer to your application
+### Add to your middleware pipeline
 
 ```csharp
 app.InitKentico();
 // ... other registrations
 app.UseContactsImport();
 ```
-
-<!-- USAGE EXAMPLES -->
 
 ## Usage
 
@@ -75,8 +72,6 @@ Notes:
 | ContactAge        | Int32     | no       |
 | ContactMiddleName | string    | no       |
 
-<!-- CONTRIBUTING -->
-
 ## Contributing
 
 - .NET SDK >= 7.0.109
@@ -90,8 +85,12 @@ Notes:
 
 For Contributing please see [`CONTRIBUTING.md`](./CONTRIBUTING.md) for more information.
 
-<!-- LICENSE -->
-
 ## License
 
 Distributed under the MIT License. See [`LICENSE.md`](./LICENSE.md) for more information.
+
+## Support
+
+This contribution has **Full support by 7-day bug-fix policy** / **Kentico Labs limited support**. See [`SUPPORT.md`](./SUPPORT.md) for more information.
+
+For any security issues see [`SECURITY.md`](./SECURITY.md).
