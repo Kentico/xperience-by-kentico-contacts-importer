@@ -330,7 +330,7 @@ export const ImportLayoutTemplate = ({
 
             {file && (
               <p style={{ color: "var(--color-text-default-on-light)" }}>
-                File Selected: {file.name}
+                File Selected: {file.name} ({getFileSize(file)})
               </p>
             )}
 
