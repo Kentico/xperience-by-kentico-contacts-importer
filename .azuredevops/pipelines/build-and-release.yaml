@@ -57,12 +57,12 @@ stages:
                 # Get the value of engines.node
                 $enginesNode = $jsonObject.engines.node
                 Write-Host "Required Node version $enginesNode"
-                Write-Host "##vso[task.setvariable variable=PACKAGE_JSON_NODE_VERSION;isOutput=true]$enginesNode"
+                Write-Host "##vso[task.setvariable variable=PACKAGE_JSON_NODE_VERSION]$enginesNode"
 
           - task: UseNode@1
             displayName: "Install Node.js from package.json version"
             inputs:
-              version: "$(PACKAGE_JSON_NODE_VERSION)"
+              version: $(PACKAGE_JSON_NODE_VERSION)
 
           - task: UseDotNet@2
             displayName: Select dotnet version
