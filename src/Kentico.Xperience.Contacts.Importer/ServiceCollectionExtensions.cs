@@ -57,7 +57,7 @@ namespace Microsoft.Extensions.DependencyInjection
             {
                 if (webSocket.State == WebSocketState.Open)
                 {
-                    var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "msg", payload = $"{message}" }));
+                    byte[] payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "msg", payload = $"{message}" }));
                     await webSocket.SendAsync(new ArraySegment<byte>(payload, 0, payload.Length), WebSocketMessageType.Text, true, CancellationToken.None);
                 }
             }
@@ -66,7 +66,7 @@ namespace Microsoft.Extensions.DependencyInjection
             {
                 if (webSocket.State == WebSocketState.Open)
                 {
-                    var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "toofast", payload = $"" }));
+                    byte[] payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "toofast", payload = $"" }));
                     await webSocket.SendAsync(new ArraySegment<byte>(payload, 0, payload.Length), WebSocketMessageType.Text, true, CancellationToken.None);
                 }
             }
@@ -75,7 +75,7 @@ namespace Microsoft.Extensions.DependencyInjection
             {
                 if (webSocket.State == WebSocketState.Open)
                 {
-                    var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "finished", payload = $"" }));
+                    byte[] payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "finished", payload = $"" }));
                     await webSocket.SendAsync(new ArraySegment<byte>(payload, 0, payload.Length), WebSocketMessageType.Text, true, CancellationToken.None);
                 }
             }
@@ -84,7 +84,7 @@ namespace Microsoft.Extensions.DependencyInjection
             {
                 if (webSocket.State == WebSocketState.Open)
                 {
-                    var msg = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "headerConfirmed", payload = "" }));
+                    byte[] msg = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "headerConfirmed", payload = "" }));
                     await webSocket.SendAsync(new ArraySegment<byte>(msg, 0, msg.Length), WebSocketMessageType.Text, true, CancellationToken.None);
                 }
             }
@@ -99,7 +99,7 @@ namespace Microsoft.Extensions.DependencyInjection
 
             await SendConfirmHeader();
 
-            var consumerIsRunning = true;
+            bool consumerIsRunning = true;
             var ms = new AsynchronousStream(1024 * 32 * 500);
 
             var consumerTask = Task.Run(async () =>
@@ -113,13 +113,7 @@ namespace Microsoft.Extensions.DependencyInjection
                         async exception => { await SendProgressReport($"{exception}"); }
                     );
                     await SendProgressReport($"...finished");
-                    // await SendProgressFinished();
                 }
-                // catch (Exception ex)
-                // {
-                //     logService.LogException(SOURCE, "CONSUMER", ex);
-                //     await SendProgressReport($"Consumer error: {ex}");
-                // }
                 finally
                 {
                     consumerIsRunning = false;
@@ -129,9 +123,7 @@ namespace Microsoft.Extensions.DependencyInjection
             var producerTask = Task.Run(async () =>
             {
                 WebSocketReceiveResult? receiveResult = null;
-                // try
-                // {
-                var bufferSize = 1024 * 32;
+                int bufferSize = 1024 * 32;
 
                 while (true)
                 {
@@ -140,7 +132,7 @@ namespace Microsoft.Extensions.DependencyInjection
                         break;
                     }
 
-                    var buffer = new byte[bufferSize];
+                    byte[] buffer = new byte[bufferSize];
                     receiveResult = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
 
                     if (!receiveResult.CloseStatus.HasValue)
@@ -153,8 +145,8 @@ namespace Microsoft.Extensions.DependencyInjection
                             ms.Flush();
                         }
 
-                        var count = receiveResult.Count;
-                        var response = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "progress", payload = count }));
+                        int count = receiveResult.Count;
+                        byte[] response = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "progress", payload = count }));
                         await webSocket.SendAsync(new ArraySegment<byte>(response, 0, response.Length), WebSocketMessageType.Text, true, CancellationToken.None);
 
                         if (ms.CachedBlocks > 3500)
@@ -169,28 +161,9 @@ namespace Microsoft.Extensions.DependencyInjection
                         break;
                     }
                 }
-                // }
-                // catch (Exception ex)
-                // {
-                //     logService.LogException(SOURCE, "PRODUCER", ex);
-                //     await SendProgressReport($"Producer error: {ex}");
-                //     await SendProgressFinished();
-                // }
-                // finally
-                // {
-                //     
-                //     // await consumerTask;
-                //     // if (receiveResult != null)
-                //     // {
-                //     //     await webSocket.CloseAsync(
-                //     //         WebSocketCloseStatus.NormalClosure,
-                //     //         receiveResult.CloseStatusDescription,
-                //     //         CancellationToken.None);
-                //     // }
-                // }
             });
 
-            var socketAvailable = true;
+            bool socketAvailable = true;
 
             try
             {
@@ -225,9 +198,6 @@ namespace Microsoft.Extensions.DependencyInjection
                 logService.LogException(SOURCE, "CONSUMER", e);
                 await SendProgressReport($"{e}");
             }
-            // finally
-            // {
-            // }
 
             if (socketAvailable)
             {
@@ -247,7 +217,7 @@ namespace Microsoft.Extensions.DependencyInjection
 
             while (true)
             {
-                var buffer = new byte[bufferSize];
+                byte[] buffer = new byte[bufferSize];
                 var receiveResult = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
 
                 if (!receiveResult.CloseStatus.HasValue)
@@ -274,7 +244,7 @@ namespace Microsoft.Extensions.DependencyInjection
             ms.Seek(0, SeekOrigin.Begin);
 
             using var sr = new StreamReader(ms);
-            var msg = await sr.ReadToEndAsync();
+            string msg = await sr.ReadToEndAsync();
             var deserialized = JObject.Parse(msg);
             return deserialized;
         }

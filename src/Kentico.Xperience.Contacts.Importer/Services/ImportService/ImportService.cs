@@ -39,7 +39,11 @@ public class ImportService : IImportService
 
     private sealed class ContactDeleteArgument
     {
+        // Pragma disable reason: used implicitly
+#pragma warning disable S3459
+        // ReSharper disable once InconsistentNaming // kentico naming convention
         public Guid ContactGUID { get; set; }
+#pragma warning restore S3459
     };
 
     private sealed class SimplifiedMap : ClassMap<ContactDeleteArgument>
@@ -74,7 +78,7 @@ public class ImportService : IImportService
     {
         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
-            Delimiter = context.Delimiter, //";" // TODO tomas.krch: 2023-07-12 to config/dialog
+            Delimiter = context.Delimiter,
             PrepareHeaderForMatch = args => args.Header.ToLower(),
         };
 
@@ -83,23 +87,18 @@ public class ImportService : IImportService
 
         csv.Context.RegisterClassMap<SimplifiedMap>();
 
-        var records = csv.GetRecords<ContactDeleteArgument>();
+        var records = csv.GetRecordsAsync<ContactDeleteArgument>();
 
         int totalProcessed = 0;
-
-        async IAsyncEnumerable<List<Guid>> Pipe2TransformBatches(IEnumerable<ContactDeleteArgument> models)
+        
+        async IAsyncEnumerable<List<Guid>> Pipe2TransformBatches(IAsyncEnumerable<ContactDeleteArgument> models)
         {
             var currentBatch = new List<Guid>(context.BatchSize);
 
-            foreach (var item in models)
+            await foreach (var item in models)
             {
                 try
                 {
-                    // if (contactGuids.Contains(item.ContactGUID))
-                    // {
-                    //     continue;
-                    // }
-
                     currentBatch.Add(item.ContactGUID);
                 }
                 catch (Exception ex)
@@ -174,7 +173,7 @@ public class ImportService : IImportService
         csv.Context.RegisterClassMap<ContactInfoMap>();
 
         var records = csv.GetRecords<ContactInfo>();
-        var totalProcessed = 0;
+        int totalProcessed = 0;
 
         IEnumerable<List<(ContactInfo info, bool insert)>> Pipe2TransformBatches(IEnumerable<ContactInfo> models)
         {
@@ -216,14 +215,8 @@ public class ImportService : IImportService
             LogEvents = false,
         })
         {
-            // insert is not immediate (all items stored in memory before insert) so direct piping is not possible 
-            // ContactInfoProvider.ProviderObject.BulkInsertInfos(Pipe2Transform(records), new BulkInsertSettings
-            // {
-            //     BatchSize = context.BatchSize,
-            //     Options = SqlBulkCopyOptions.Default,
-            // });
-
-            // Task? previousInsertGroupMemberBatch = null;
+            // we cannot use ContactInfoProvider.ProviderObject.BulkInsertInfos - insert is not immediate (all items stored in memory before insert) so direct piping is not possible 
+            
             foreach (var contactBatch in Pipe2TransformBatches(records))
             {
                 ContactInfoProvider.ProviderObject.BulkInsertInfos(contactBatch.Where(x => x.insert).Select(x => x.info), new BulkInsertSettings
@@ -234,28 +227,17 @@ public class ImportService : IImportService
 
                 if (group != null)
                 {
-                    // if (previousInsertGroupMemberBatch != null)
-                    // {
-                    //     await previousInsertGroupMemberBatch;
-                    // }
-
-                    // previousInsertGroupMemberBatch =
                     // cannot employ async insert, it is not stable (bricks bulk contact sql connection)
                     await InsertGroupMembersAsync(contactBatch.Select(x => x.info.ContactGUID), group);
                 }
             }
-
-            // if (previousInsertGroupMemberBatch != null)
-            // {
-            //     await previousInsertGroupMemberBatch;
-            // }
         }
     }
 
     private Task InsertGroupMembersAsync(IEnumerable<Guid> contactGuids, ContactGroupInfo group) =>
         Task.Run(() =>
         {
-            var query = @"
+            string query = @"
 INSERT INTO [dbo].[OM_ContactGroupMember] ([ContactGroupMemberContactGroupID], [ContactGroupMemberType], [ContactGroupMemberRelatedID],
                                            [ContactGroupMemberFromCondition], [ContactGroupMemberFromAccount], [ContactGroupMemberFromManual])
 -- OUTPUT [inserted].[ContactGroupMemberContactGroupID]
@@ -270,7 +252,7 @@ WHERE EXISTS (SELECT 1
             AND [CGM].[ContactGroupMemberRelatedID] = [C].[ContactID])
 ";
 
-            var jsonGuidArray = JsonConvert.SerializeObject(contactGuids);
+            string jsonGuidArray = JsonConvert.SerializeObject(contactGuids);
 
             ConnectionHelper.ExecuteNonQuery(query, new QueryDataParameters
             {
@@ -283,6 +265,7 @@ WHERE EXISTS (SELECT 1
     private Task DeletedContactsAsync(List<Guid> contactGuids, int batchLimit)
     {
         // for future implementation of bulk delete
+#pragma warning disable S125
         // var query = @"WITH [CTE]([Guid])
         //  AS
         //  (SELECT CAST([l].[value] AS UNIQUEIDENTIFIER) [Guid]
@@ -291,13 +274,16 @@ WHERE EXISTS (SELECT 1
         // FROM [dbo].[OM_Contact]
         // OUTPUT [deleted].[ContactID]
         // WHERE EXISTS (SELECT 1 FROM [CTE] WHERE [CTE].[Guid] = [ContactGUID])";
+#pragma warning restore S125
         if (contactGuids.Count == 0)
+        {
             return Task.CompletedTask;
+        }
 
         return Task.Run(() =>
         {
-            var jsonGuidArray = JsonConvert.SerializeObject(contactGuids);
-            var whereCondition = $"""
+            string jsonGuidArray = JsonConvert.SerializeObject(contactGuids);
+            string whereCondition = $"""
 EXISTS (SELECT 1 FROM OPENJSON('{jsonGuidArray}', '$') [l] WHERE CAST([l].[value] AS UNIQUEIDENTIFIER) = [ContactGUID])
 """;
 
