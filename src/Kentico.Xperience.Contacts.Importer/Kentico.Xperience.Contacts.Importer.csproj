@@ -19,6 +19,8 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<AssemblyAttribute Include="CMS.AssemblyDiscoverableAttribute">
+		</AssemblyAttribute>
 		<AdminClientPath Include="Client\dist\**">
 			<ProjectName>web-admin</ProjectName>
 		</AdminClientPath>

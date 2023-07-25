@@ -1,11 +1,10 @@
 ﻿using Kentico.Xperience.Admin.Base;
 using Kentico.Xperience.Contacts.Importer;
 
-[assembly: CMS.AssemblyDiscoverable]
 [assembly: CMS.RegisterModule(typeof(ContactImportAdminModule))]
 [assembly: UICategory(
    codeName: ContactImportAdminModule.CATEGORY,
-   name: "Contacts import",
+   name: "Contacts Import",
    icon: Icons.PersonalisationVariants,
    order: 100)]
 

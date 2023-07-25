@@ -1,36 +1,33 @@
 ﻿using Kentico.Xperience.Admin.Base;
-using Kentico.Xperience.Contacts.Importer;
-using Kentico.Xperience.Contacts.Importer.UIPages.CustomTemplate;
+using Kentico.Xperience.Contacts.Importer.Admin;
 using CMS.ContactManagement;
 
-[assembly: UIApplication(
-   identifier: ImportTemplate.IDENTIFIER,
-   type: typeof(ImportTemplate),
-   slug: "ImportTemplate",
-   name: "Upload file",
-   category: ContactImportAdminModule.CATEGORY,
-   icon: Icons.Clock,
-   templateName: ImportTemplate.TEMPLATE_NAME)]
+[assembly: UIPage(
+   parentType: typeof(ContactsImporterApplication),
+   name: "Importer",
+   slug: "import",
+   uiPageType: typeof(ImportTemplate),
+   icon: Icons.PersonalisationVariants,
+   templateName: ImportTemplate.TEMPLATE_NAME,
+   order: 100)]
 
-namespace Kentico.Xperience.Contacts.Importer.UIPages.CustomTemplate
+namespace Kentico.Xperience.Contacts.Importer.Admin
 {
     internal class ImportTemplate : Page<CustomLayoutProperties>
     {
         public const string IDENTIFIER = "Kentico.Xperience.Contacts.Import.Web.Admin.ImportTemplate";
         public const string TEMPLATE_NAME = "@kentico-xperience-contacts-import/web-admin/ImportLayout";
 
-        private readonly IContactGroupInfoProvider _contactGroupInfoProvider;
+        private readonly IContactGroupInfoProvider contactGroupInfoProvider;
 
-        public ImportTemplate(IContactGroupInfoProvider contactGroupInfoProvider)
-        {
-            _contactGroupInfoProvider = contactGroupInfoProvider;
-        }
+        public ImportTemplate(IContactGroupInfoProvider contactGroupInfoProvider) =>
+            this.contactGroupInfoProvider = contactGroupInfoProvider;
 
         public override async Task<CustomLayoutProperties> ConfigureTemplateProperties(CustomLayoutProperties properties)
         {
-            properties.Label = "Insert CSV file";
+            properties.Label = "Import Contacts";
 
-            var contactGroups = await _contactGroupInfoProvider.Get()
+            var contactGroups = await contactGroupInfoProvider.Get()
                 .Columns(nameof(ContactGroupInfo.ContactGroupGUID), nameof(ContactGroupInfo.ContactGroupDisplayName))
                 .GetEnumerableTypedResultAsync();
 
