@@ -51,7 +51,12 @@ stages:
             inputs:
               targetType: inline
               script: |
-                Write-Host "##vso[task.setvariable variable=PACKAGE_JSON_NODE_VERSION]"$(node -p "require('./src/${{ variables.ProjectFolder }}/Client/package.json').engines.node")
+                $fileContent = Get-Content -Path './src/${{ variables.ProjectFolder }}/Client/package.json' -Raw
+                $jsonObject = ConvertFrom-Json -InputObject $fileContent
+
+                # Get the value of engines.node
+                $enginesNode = $jsonObject.engines.node
+                Write-Host "##vso[task.setvariable variable=PACKAGE_JSON_NODE_VERSION;isOutput=true]"$enginesNode
 
           - task: UseNode@1
             displayName: "Install Node.js from package.json version"
