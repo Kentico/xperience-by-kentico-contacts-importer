@@ -1,5 +1,4 @@
-﻿namespace Kentico.Xperience.Contacts.Importer.Services;
-
+﻿
 using System.Data;
 using System.Globalization;
 using CMS.Base;
@@ -10,13 +9,14 @@ using CsvHelper.Configuration;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 
+namespace Kentico.Xperience.Contacts.Importer.Services;
 /// <inheritdoc />
 public class ImportService : IImportService
 {
-    private readonly IContactGroupInfoProvider _contactGroupInfoProvider;
+    private readonly IContactGroupInfoProvider contactGroupInfoProvider;
 
     /// <param name="contactGroupInfoProvider"></param>
-    public ImportService(IContactGroupInfoProvider contactGroupInfoProvider) => _contactGroupInfoProvider = contactGroupInfoProvider;
+    public ImportService(IContactGroupInfoProvider contactGroupInfoProvider) => this.contactGroupInfoProvider = contactGroupInfoProvider;
 
     /// <summary>
     /// Defined how ContactInfo columns will be mapped from CSV
@@ -90,7 +90,7 @@ public class ImportService : IImportService
         async IAsyncEnumerable<List<Guid>> Pipe2TransformBatches(IEnumerable<ContactDeleteArgument> models)
         {
             var currentBatch = new List<Guid>(context.BatchSize);
-            
+
             foreach (var item in models)
             {
                 try
@@ -110,7 +110,7 @@ public class ImportService : IImportService
                 finally
                 {
                     totalProcessed += 1;
-                    
+
                     if (totalProcessed % context.BatchSize == 0)
                     {
                         // we are no concerned here that totalProcessed is captured from foreign closure
@@ -132,7 +132,7 @@ public class ImportService : IImportService
         }
 
         Task? previousDeleteBatch = null;
-        
+
         await foreach (var deleteArg in Pipe2TransformBatches(records))
         {
             if (previousDeleteBatch != null)
@@ -149,10 +149,10 @@ public class ImportService : IImportService
     private async Task InsertContactsFromCsvAsync(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync)
     {
         ContactGroupInfo? group = null;
-        
+
         if (context.AssignToContactGroupGuid is { } assignToContactGroupGuid)
         {
-            group = await _contactGroupInfoProvider.GetAsync(assignToContactGroupGuid);
+            group = await contactGroupInfoProvider.GetAsync(assignToContactGroupGuid);
             if (group == null)
             {
                 throw new("Contact group not found");
@@ -179,7 +179,7 @@ public class ImportService : IImportService
         IEnumerable<List<(ContactInfo info, bool insert)>> Pipe2TransformBatches(IEnumerable<ContactInfo> models)
         {
             var currentBatch = new List<(ContactInfo info, bool insert)>(context.BatchSize);
-            
+
             foreach (var item in models)
             {
                 try
@@ -194,7 +194,7 @@ public class ImportService : IImportService
                 finally
                 {
                     totalProcessed += 1;
-                    
+
                     if (totalProcessed % context.BatchSize == 0)
                     {
                         Task.Run(async () => { await onResultCallbackAsync.Invoke(new List<ImportResult>(), totalProcessed); });
@@ -212,9 +212,9 @@ public class ImportService : IImportService
         }
 
         using (new CMSActionContext
-               {
-                   LogEvents = false,
-               })
+        {
+            LogEvents = false,
+        })
         {
             // insert is not immediate (all items stored in memory before insert) so direct piping is not possible 
             // ContactInfoProvider.ProviderObject.BulkInsertInfos(Pipe2Transform(records), new BulkInsertSettings
@@ -271,7 +271,7 @@ WHERE EXISTS (SELECT 1
 ";
 
             var jsonGuidArray = JsonConvert.SerializeObject(contactGuids);
-            
+
             ConnectionHelper.ExecuteNonQuery(query, new QueryDataParameters
             {
                 new("contactGroupId", group.ContactGroupID),
@@ -291,7 +291,8 @@ WHERE EXISTS (SELECT 1
         // FROM [dbo].[OM_Contact]
         // OUTPUT [deleted].[ContactID]
         // WHERE EXISTS (SELECT 1 FROM [CTE] WHERE [CTE].[Guid] = [ContactGUID])";
-        if (contactGuids.Count == 0) return Task.CompletedTask;
+        if (contactGuids.Count == 0)
+            return Task.CompletedTask;
 
         return Task.Run(() =>
         {

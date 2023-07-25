@@ -1,26 +1,22 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using System.Net.Sockets;
+using System.Net.WebSockets;
+using System.Text;
+using CMS.Core;
+using Kentico.Xperience.Contacts.Importer.Auxiliary;
+using Kentico.Xperience.Contacts.Importer.Services;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
-namespace Kentico.Xperience.Contacts.Importer
+namespace Microsoft.Extensions.DependencyInjection
 {
-    using System.Net.Sockets;
-    using System.Net.WebSockets;
-    using System.Text;
-    using CMS.Core;
-    using Kentico.Xperience.Contacts.Importer.Auxiliary;
-    using Kentico.Xperience.Contacts.Importer.Services;
-    using Microsoft.Extensions.DependencyInjection;
-    using Newtonsoft.Json;
-    using Newtonsoft.Json.Linq;
-
     public static class ServiceCollectionExtensions
     {
         private const string SOURCE = "Contact.Importer";
 
-        public static IServiceCollection AddContactsImport(this IServiceCollection services)
-        {
-            return services.AddTransient<IImportService, ImportService>();
-        }
+        public static IServiceCollection AddContactsImport(this IServiceCollection services) =>
+            services.AddTransient<IImportService, ImportService>();
 
         public static IApplicationBuilder UseContactsImport(this IApplicationBuilder app)
         {
@@ -105,7 +101,7 @@ namespace Kentico.Xperience.Contacts.Importer
 
             var consumerIsRunning = true;
             var ms = new AsynchronousStream(1024 * 32 * 500);
-            
+
             var consumerTask = Task.Run(async () =>
             {
                 try
@@ -136,7 +132,7 @@ namespace Kentico.Xperience.Contacts.Importer
                 // try
                 // {
                 var bufferSize = 1024 * 32;
-                
+
                 while (true)
                 {
                     if (!consumerIsRunning)
@@ -146,7 +142,7 @@ namespace Kentico.Xperience.Contacts.Importer
 
                     var buffer = new byte[bufferSize];
                     receiveResult = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                    
+
                     if (!receiveResult.CloseStatus.HasValue)
                     {
                         var data = new ArraySegment<byte>(buffer);
@@ -195,7 +191,7 @@ namespace Kentico.Xperience.Contacts.Importer
             });
 
             var socketAvailable = true;
-            
+
             try
             {
                 await producerTask;
@@ -248,12 +244,12 @@ namespace Kentico.Xperience.Contacts.Importer
         {
             var ms = new MemoryStream();
             const int bufferSize = 1024 * 32;
-            
+
             while (true)
             {
                 var buffer = new byte[bufferSize];
                 var receiveResult = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                
+
                 if (!receiveResult.CloseStatus.HasValue)
                 {
                     var data = new ArraySegment<byte>(buffer);
@@ -261,7 +257,7 @@ namespace Kentico.Xperience.Contacts.Importer
                     if (data.Array != null)
                     {
                         ms.Write(data.Array, data.Offset, receiveResult.Count);
-                        ms.Flush();    
+                        ms.Flush();
                     }
                 }
                 else

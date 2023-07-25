@@ -6,7 +6,7 @@
 /// <param name="AssignToContactGroupGuid">null if no assignment is requested</param>
 /// <param name="BatchSize"></param>
 /// <param name="Delimiter"></param>
-/// <param name="ImportKind"><see cref="Kentico.Xperience.Contacts.Importer.Services.ImportKind"/></param>
+/// <param name="ImportKind"><see cref="Services.ImportKind"/></param>
 public record ImportContext(Guid? AssignToContactGroupGuid, int BatchSize, string Delimiter, string ImportKind);
 
 /// <summary>
