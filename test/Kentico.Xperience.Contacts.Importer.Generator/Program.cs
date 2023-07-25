@@ -1,8 +1,11 @@
 ﻿using System.Globalization;
 using CMS.ContactManagement;
+using CMS.DataEngine;
 using CsvHelper;
 using Kentico.Xperience.Contacts.Importer.Generator;
 using static Kentico.Xperience.Contacts.Importer.Services.ImportService;
+
+CMSApplication.Init();
 
 string? solutionFolder = FindSolutionFolder();
 
@@ -15,7 +18,7 @@ csv.Context.RegisterClassMap<ContactInfoMap>();
 csv.WriteHeader<ContactInfo>();
 csv.NextRecord();
 
-foreach (var contact in ContactsGenerator.Generate(200000))
+foreach (var contact in ContactsGenerator.Generate(200_000))
 {
     csv.WriteRecord(contact);
     csv.NextRecord();

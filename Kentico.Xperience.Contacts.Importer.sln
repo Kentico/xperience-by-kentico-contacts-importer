@@ -26,6 +26,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{FC395345-C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kentico.Xperience.Contacts.Importer.Generator", "test\Kentico.Xperience.Contacts.Importer.Generator\Kentico.Xperience.Contacts.Importer.Generator.csproj", "{C3F895F9-7AC4-423D-9355-FC2C52CDAD4C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kentico.Xperience.Contacts.Importer.Generator.Configuration", "test\Kentico.Xperience.Contacts.Importer.Generator.Configuration\Kentico.Xperience.Contacts.Importer.Generator.Configuration.csproj", "{C3A2413A-E93C-424D-A097-06C934D41359}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -40,6 +42,10 @@ Global
 		{C3F895F9-7AC4-423D-9355-FC2C52CDAD4C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C3F895F9-7AC4-423D-9355-FC2C52CDAD4C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C3F895F9-7AC4-423D-9355-FC2C52CDAD4C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C3A2413A-E93C-424D-A097-06C934D41359}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C3A2413A-E93C-424D-A097-06C934D41359}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C3A2413A-E93C-424D-A097-06C934D41359}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C3A2413A-E93C-424D-A097-06C934D41359}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -47,5 +53,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{C6D47E41-7FC9-4611-AC0A-828BCD4B4162} = {8864B8E5-2F23-4778-BBF7-DDEFD166950B}
 		{C3F895F9-7AC4-423D-9355-FC2C52CDAD4C} = {FC395345-C5AA-42FE-906B-4392A29C5D6D}
+		{C3A2413A-E93C-424D-A097-06C934D41359} = {FC395345-C5AA-42FE-906B-4392A29C5D6D}
 	EndGlobalSection
 EndGlobal

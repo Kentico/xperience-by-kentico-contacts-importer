@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <UserSecretsId>8c53de6e-2446-4d49-ba4b-3908108c15b8</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -9,7 +10,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Kentico.Xperience.Contacts.Importer\Kentico.Xperience.Contacts.Importer.csproj" />
+    <ProjectReference Include="..\Kentico.Xperience.Contacts.Importer.Generator.Configuration\Kentico.Xperience.Contacts.Importer.Generator.Configuration.csproj" />
   </ItemGroup>
 
 </Project>

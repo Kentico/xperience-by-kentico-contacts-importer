@@ -19,6 +19,16 @@
     },
     {
       "type": "dotnet",
+      "task": "build",
+      "problemMatcher": ["$msCompile"],
+      "group": "build",
+      "label": "dotnet: build Generator",
+      "options": {
+        "cwd": "${workspaceFolder}/test/Kentico.Xperience.Contacts.Importer.Generator"
+      }
+    },
+    {
+      "type": "dotnet",
       "task": "clean",
       "problemMatcher": ["$msCompile"],
       "group": "clean",
