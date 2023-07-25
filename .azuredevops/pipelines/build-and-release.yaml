@@ -39,10 +39,25 @@ stages:
           - name: Configuration
             value: Release
 
-          - name: ProjectPath
+          - name: ProjectFolder
+            value: src/Kentico.Xperience.Contacts.Importer
+
+          - name: ProjectFilePath
             value: src/Kentico.Xperience.Contacts.Importer/Kentico.Xperience.Contacts.Importer.csproj
 
         steps:
+          - task: PowerShell@2
+            displayName: Set Node.js version from package.json
+            inputs:
+              targetType: inline
+              script: |
+                Write-Host "##vso[task.setvariable variable=PACKAGE_JSON_NODE_VERSION]"$(node -p "require('./src/${{ variables.ProjectFolder }}/Client/package.json').engines.node")
+
+          - task: UseNode@1
+            displayName: "Install Node.js from package.json version"
+            inputs:
+              version: "$(PACKAGE_JSON_NODE_VERSION)"
+
           - task: UseDotNet@2
             displayName: Select dotnet version
             inputs:
@@ -53,7 +68,7 @@ stages:
             displayName: Restore dependencies
             inputs:
               command: restore
-              projects: ${{ variables.ProjectPath }}
+              projects: ${{ variables.ProjectFilePath }}
               feedsToUse: select
               restoreArguments: --locked-mode
 
@@ -61,7 +76,7 @@ stages:
             displayName: Build
             inputs:
               command: build
-              projects: ${{ variables.ProjectPath }}
+              projects: ${{ variables.ProjectFilePath }}
               configuration: ${{ variables.Configuration }}
               arguments: --no-restore
 
@@ -69,7 +84,7 @@ stages:
             displayName: Create NuGet package
             inputs:
               command: pack
-              packagesToPack: ${{ variables.ProjectPath }}
+              packagesToPack: ${{ variables.ProjectFilePath }}
               configuration: ${{ variables.Configuration }}
               packDirectory: $(System.DefaultWorkingDirectory)/packages
               includesymbols: true
