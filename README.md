@@ -38,7 +38,7 @@ services.AddContactsImport();
 ```csharp
 app.InitKentico();
 // ... other registrations
-app.AddContactsImport();
+app.UseContactsImport();
 ```
 
 <!-- USAGE EXAMPLES -->
