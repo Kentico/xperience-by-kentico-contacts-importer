@@ -1,5 +1,16 @@
 {
-  "dotnet.defaultSolution": "Kentico.Xperience.Contacts.Importer.sln",
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/CVS": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/node_modules": true,
+    "**/bin": true,
+    "**/obj": true,
+    "**/packages.lock.json": true
+  },
 
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
@@ -18,5 +29,6 @@
 
   "files.associations": {
     ".azuredevops/**/*.yml": "azure-pipelines"
-  }
+  },
+  "dotnet.defaultSolution": "Kentico.Xperience.Contacts.Importer.sln"
 }
