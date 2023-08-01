@@ -268,6 +268,9 @@ dotnet_diagnostic.IDE0056.severity                                        = warn
 csharp_style_prefer_range_operator                                        = true : warning
 dotnet_diagnostic.IDE0057.severity                                        = warning
 
+csharp_style_namespace_declarations                                       = file_scoped : error
+dotnet_diagnostic.IDE0161.severity                                        = error
+
 ## Rules without Style Options
 
 # IDE0050: Convert anonymous type to tuple

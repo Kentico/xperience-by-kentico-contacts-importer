@@ -8,22 +8,21 @@ using Kentico.Xperience.Contacts.Importer;
    icon: Icons.PersonalisationVariants,
    order: 100)]
 
-namespace Kentico.Xperience.Contacts.Importer
+namespace Kentico.Xperience.Contacts.Importer;
+
+internal class ContactImportAdminModule : AdminModule
 {
-    internal class ContactImportAdminModule : AdminModule
+    public const string CATEGORY = "Kentico.Xperience.Contacts.Import.Web.Admin.Category";
+
+    public ContactImportAdminModule()
+        : base(nameof(ContactImportAdminModule))
     {
-        public const string CATEGORY = "Kentico.Xperience.Contacts.Import.Web.Admin.Category";
+    }
 
-        public ContactImportAdminModule()
-            : base(nameof(ContactImportAdminModule))
-        {
-        }
+    protected override void OnInit()
+    {
+        base.OnInit();
 
-        protected override void OnInit()
-        {
-            base.OnInit();
-
-            RegisterClientModule("kentico", "contacts-import-web-admin");
-        }
+        RegisterClientModule("kentico", "contacts-import-web-admin");
     }
 }

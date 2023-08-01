@@ -1,11 +1,11 @@
-﻿namespace Kentico.Xperience.Contacts.Importer.Auxiliary;
-
+﻿
 using System.Collections.Concurrent;
 
+namespace Kentico.Xperience.Contacts.Importer.Auxiliary;
 /// <summary>
 /// single purpose stream - consumer (read) waits for promised data, implementation of stream abstract class is not complete and is not needed (internal class) 
 /// </summary>
-internal sealed class AsynchronousStream: Stream
+internal sealed class AsynchronousStream : Stream
 {
     private readonly BlockingCollection<byte[]> _blocks;
     private byte[]? _currentBlock;
@@ -56,13 +56,13 @@ internal sealed class AsynchronousStream: Stream
     {
         ValidateBufferArgs(buffer, offset, count);
 
-        var bytesRead = 0;
-        
+        int bytesRead = 0;
+
         while (true)
         {
             if (_currentBlock != null)
             {
-                var copy = Math.Min(count - bytesRead, _currentBlock.Length - _currentBlockIndex);
+                int copy = Math.Min(count - bytesRead, _currentBlock.Length - _currentBlockIndex);
                 Array.Copy(_currentBlock, _currentBlockIndex, buffer, offset + bytesRead, copy);
                 _currentBlockIndex += copy;
                 bytesRead += copy;
@@ -74,7 +74,9 @@ internal sealed class AsynchronousStream: Stream
                 }
 
                 if (bytesRead == count)
+                {
                     return bytesRead;
+                }
             }
 
             if (!_blocks.TryTake(out _currentBlock, Timeout.Infinite))
@@ -88,7 +90,7 @@ internal sealed class AsynchronousStream: Stream
     {
         ValidateBufferArgs(buffer, offset, count);
 
-        var newBuf = new byte[count];
+        byte[] newBuf = new byte[count];
         Array.Copy(buffer, offset, newBuf, 0, count);
         _blocks.Add(newBuf);
         TotalBytesWritten += count;
@@ -98,7 +100,7 @@ internal sealed class AsynchronousStream: Stream
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        
+
         if (disposing)
         {
             _blocks.Dispose();
@@ -118,10 +120,10 @@ internal sealed class AsynchronousStream: Stream
         try
         {
             _blocks.CompleteAdding();
-            
+
             return true;
         }
-        catch 
+        catch
         {
             return false;
         }
@@ -130,12 +132,23 @@ internal sealed class AsynchronousStream: Stream
     private static void ValidateBufferArgs(byte[] buffer, int offset, int count)
     {
         if (buffer == null)
+        {
             throw new ArgumentNullException("buffer");
+        }
+
         if (offset < 0)
+        {
             throw new ArgumentOutOfRangeException("offset");
+        }
+
         if (count < 0)
+        {
             throw new ArgumentOutOfRangeException("count");
+        }
+
         if (buffer.Length - offset < count)
+        {
             throw new ArgumentException("buffer.Length - offset < count");
+        }
     }
 }
