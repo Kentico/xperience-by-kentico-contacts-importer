@@ -32,8 +32,6 @@
     <CopyDocumentationFilesFromPackages>true</CopyDocumentationFilesFromPackages>
     <CopyDebugSymbolFilesFromPackages>true</CopyDebugSymbolFilesFromPackages>
     <NoWarn>$(NoWarn);1591</NoWarn>
-    <RootNamespace>Kentico.Xperience.Contacts.Importer</RootNamespace>
-
     <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
   </PropertyGroup>
 
@@ -46,7 +44,7 @@
   </PropertyGroup>
 
   <ItemGroup Label="StaticCodeAnalysis">
-    <PackageReference Include="SonarAnalyzer.CSharp" Version="8.41.0.50478">
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="9.6.0.74858">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>

@@ -23,6 +23,9 @@ public class ImportService : IImportService
     /// </summary>
     public sealed class ContactInfoMap : ClassMap<ContactInfo>
     {
+        /// <summary>
+        /// Defines import map for ContactInfo.TYPEINFO.ColumnNames
+        /// </summary>
         public ContactInfoMap()
         {
             Map(m => m.ContactGUID);
@@ -33,7 +36,6 @@ public class ImportService : IImportService
             Map(m => m.ContactAddress1);
             Map(m => m.ContactAge);
             Map(m => m.ContactMiddleName);
-            // ContactInfo.TYPEINFO.ColumnNames
         }
     }
 
@@ -42,13 +44,15 @@ public class ImportService : IImportService
         // Pragma disable reason: used implicitly
 #pragma warning disable S3459
         // ReSharper disable once InconsistentNaming // kentico naming convention
-        public Guid ContactGUID { get; set; }
+        public Guid ContactGUID { get; }
 #pragma warning restore S3459
     };
 
     private sealed class SimplifiedMap : ClassMap<ContactDeleteArgument>
     {
+#pragma warning disable S1144
         public SimplifiedMap() => Map(m => m.ContactGUID);
+#pragma warning restore S1144
     }
 
     /// <exception cref="Exception">Thrown when contact group is missing</exception>
@@ -90,7 +94,7 @@ public class ImportService : IImportService
         var records = csv.GetRecordsAsync<ContactDeleteArgument>();
 
         int totalProcessed = 0;
-        
+
         async IAsyncEnumerable<List<Guid>> Pipe2TransformBatches(IAsyncEnumerable<ContactDeleteArgument> models)
         {
             var currentBatch = new List<Guid>(context.BatchSize);
@@ -115,7 +119,7 @@ public class ImportService : IImportService
                         // we are no concerned here that totalProcessed is captured from foreign closure
                         // we do not await this task, it doesn't concern import routine 
 #pragma warning disable CS4014
-                        Task.Run(async () => { await onResultCallbackAsync.Invoke(new List<ImportResult>(), totalProcessed); });
+                        Task.Run(async () => await onResultCallbackAsync.Invoke(new List<ImportResult>(), totalProcessed));
 #pragma warning restore CS4014
                     }
                 }
@@ -196,7 +200,7 @@ public class ImportService : IImportService
 
                     if (totalProcessed % context.BatchSize == 0)
                     {
-                        Task.Run(async () => { await onResultCallbackAsync.Invoke(new List<ImportResult>(), totalProcessed); });
+                        Task.Run(async () => await onResultCallbackAsync.Invoke(new List<ImportResult>(), totalProcessed));
                     }
                 }
 
@@ -216,7 +220,7 @@ public class ImportService : IImportService
         })
         {
             // we cannot use ContactInfoProvider.ProviderObject.BulkInsertInfos - insert is not immediate (all items stored in memory before insert) so direct piping is not possible 
-            
+
             foreach (var contactBatch in Pipe2TransformBatches(records))
             {
                 ContactInfoProvider.ProviderObject.BulkInsertInfos(contactBatch.Where(x => x.insert).Select(x => x.info), new BulkInsertSettings
@@ -234,7 +238,7 @@ public class ImportService : IImportService
         }
     }
 
-    private Task InsertGroupMembersAsync(IEnumerable<Guid> contactGuids, ContactGroupInfo group) =>
+    private static Task InsertGroupMembersAsync(IEnumerable<Guid> contactGuids, ContactGroupInfo group) =>
         Task.Run(() =>
         {
             string query = @"
@@ -262,7 +266,7 @@ WHERE EXISTS (SELECT 1
             }, QueryTypeEnum.SQLQuery);
         });
 
-    private Task DeletedContactsAsync(List<Guid> contactGuids, int batchLimit)
+    private static Task DeletedContactsAsync(List<Guid> contactGuids, int batchLimit)
     {
         // for future implementation of bulk delete
 #pragma warning disable S125

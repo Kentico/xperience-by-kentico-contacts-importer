@@ -23,7 +23,7 @@ namespace Kentico.Xperience.Contacts.Importer
         {
             base.OnInit();
 
-            RegisterClientModule("kentico-xperience-contacts-import", "web-admin");
+            RegisterClientModule("kentico", "contacts-import-web-admin");
         }
     }
 }

@@ -7,8 +7,8 @@ module.exports = (opts, argv) => {
     return baseWebpackConfig({
       // Sets the organizationName and projectName
       // The JS module is registered on the backend using these values
-      orgName: "kentico-xperience-contacts-import",
-      projectName: "web-admin",
+      orgName: "kentico",
+      projectName: "contacts-import-web-admin",
       webpackConfigEnv,
       argv,
     });

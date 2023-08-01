@@ -6,6 +6,7 @@
 		<PackageId>Kentico.Xperience.Contacts.Import</PackageId>
 		<VersionSuffix Condition="$(Configuration) == 'Debug'">$([System.DateTime]::Now.ToString('yyMMddHHmm'))</VersionSuffix>
 		<PackageOutputDir Condition="$(Configuration) == 'Debug'">$(LOCAL_NUGET_REPO)\</PackageOutputDir>
+		<RootNamespace>Kentico.Xperience.Contacts.Importer</RootNamespace>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -15,14 +16,14 @@
 	<PropertyGroup>
 		<LangVersion>latest</LangVersion>
 		<NoWarn>$(NoWarn);S1075</NoWarn>
-		<AdminOrgName>kentico-xperience-contacts-import</AdminOrgName>
+		<AdminOrgName>kentico</AdminOrgName>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<AssemblyAttribute Include="CMS.AssemblyDiscoverableAttribute">
 		</AssemblyAttribute>
 		<AdminClientPath Include="Client\dist\**">
-			<ProjectName>web-admin</ProjectName>
+			<ProjectName>contacts-import-web-admin</ProjectName>
 		</AdminClientPath>
 		<Compile Remove="Client\node_modules\**" />
 		<EmbeddedResource Remove="Client\node_modules\**" />

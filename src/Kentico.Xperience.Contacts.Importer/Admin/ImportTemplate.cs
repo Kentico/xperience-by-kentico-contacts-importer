@@ -4,8 +4,8 @@ using CMS.ContactManagement;
 
 [assembly: UIPage(
    parentType: typeof(ContactsImporterApplication),
-   name: "Importer",
-   slug: "import",
+   name: "Upload",
+   slug: "upload",
    uiPageType: typeof(ImportTemplate),
    icon: Icons.PersonalisationVariants,
    templateName: ImportTemplate.TEMPLATE_NAME,
@@ -16,7 +16,7 @@ namespace Kentico.Xperience.Contacts.Importer.Admin
     internal class ImportTemplate : Page<CustomLayoutProperties>
     {
         public const string IDENTIFIER = "Kentico.Xperience.Contacts.Import.Web.Admin.ImportTemplate";
-        public const string TEMPLATE_NAME = "@kentico-xperience-contacts-import/web-admin/ImportLayout";
+        public const string TEMPLATE_NAME = "@kentico/contacts-import-web-admin/ImportLayout";
 
         private readonly IContactGroupInfoProvider contactGroupInfoProvider;
 
@@ -25,7 +25,7 @@ namespace Kentico.Xperience.Contacts.Importer.Admin
 
         public override async Task<CustomLayoutProperties> ConfigureTemplateProperties(CustomLayoutProperties properties)
         {
-            properties.Label = "Import Contacts";
+            properties.Label = "Upload Contacts";
 
             var contactGroups = await contactGroupInfoProvider.Get()
                 .Columns(nameof(ContactGroupInfo.ContactGroupGUID), nameof(ContactGroupInfo.ContactGroupDisplayName))

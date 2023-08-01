@@ -9,7 +9,8 @@ public static class ContactsGenerator
         var faker = new Bogus.Faker<ContactInfo>();
 
         faker.RuleFor(c => c.ContactGUID, f => f.Random.Guid())
-            .RuleFor(c => c.ContactCreated, f => f.Date.Between(new DateTime(), new DateTime()))
+            .RuleFor(c => c.ContactCreated, f => f.Date.Between(
+                new DateTime(2023, 01, 01, 01, 01, 01, DateTimeKind.Utc), new DateTime(2023, 08, 01, 01, 01, 01, DateTimeKind.Utc)))
             .RuleFor(c => c.ContactFirstName, f => f.Person.FirstName)
             .RuleFor(c => c.ContactEmail, f => f.Internet.Email())
             .RuleFor(c => c.ContactLastName, f => f.Person.LastName)
