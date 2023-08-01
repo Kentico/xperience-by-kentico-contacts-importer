@@ -6,7 +6,7 @@
 
 Enables bulk importing of Contacts into an Xperience by Kentico solution using a `.csv` file.
 
-![View of the Import Upload dashboard](./images/screenshot-upload.jpg)
+![View of the Import Upload dashboard](https://raw.githubusercontent.com/Kentico/xperience-by-kentico-contacts-importer/main/images/screenshot-upload.jpg)
 
 ## Getting Started
 
@@ -60,7 +60,7 @@ Notes:
 - do not close window with progress, file is uploaded from that window.
 - do not manipulate file during import, close all applications write access to file (or lock)
 
-### Supported columns
+### Supported CSV columns
 
 | Column            | .NET Type | Required |
 | ----------------- | --------- | -------- |
@@ -83,7 +83,7 @@ Notes:
   - <https://nodejs.org/en/download>
   - <https://github.com/coreybutler/nvm-windows>
 
-For Contributing please see [`CONTRIBUTING.md`](./CONTRIBUTING.md) for more information.
+For Contributing please see [`CONTRIBUTING.md`](https://github.com/Kentico/.github/blob/main/CONTRIBUTING.md) for more information.
 
 ## License
 
@@ -91,6 +91,8 @@ Distributed under the MIT License. See [`LICENSE.md`](./LICENSE.md) for more inf
 
 ## Support
 
-This contribution has **Full support by 7-day bug-fix policy** / **Kentico Labs limited support**. See [`SUPPORT.md`](./SUPPORT.md) for more information.
+This contribution has **Full support by 7-day bug-fix policy**.
 
-For any security issues see [`SECURITY.md`](./SECURITY.md).
+See [`SUPPORT.md`](https://github.com/Kentico/.github/blob/main/SUPPORT.md#full-support) for more information.
+
+For any security issues see [`SECURITY.md`](https://github.com/Kentico/.github/blob/main/SECURITY.md).
