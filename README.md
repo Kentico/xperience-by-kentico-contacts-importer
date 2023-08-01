@@ -83,7 +83,7 @@ Notes:
   - <https://nodejs.org/en/download>
   - <https://github.com/coreybutler/nvm-windows>
 
-For Contributing please see [`CONTRIBUTING.md`](https://github.com/Kentico/.github/blob/main/CONTRIBUTING.md) for more information.
+For Contributing please see [`CONTRIBUTING.md`](https://github.com/Kentico/.github/blob/main/CONTRIBUTING.md) for more information and follow the [`CODE_OF_CONDUCT`](https://github.com/Kentico/.github/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 
