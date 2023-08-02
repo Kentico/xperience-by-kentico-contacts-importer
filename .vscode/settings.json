@@ -14,6 +14,9 @@
 
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
 
   "[markdown]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
@@ -30,5 +33,13 @@
   "files.associations": {
     ".azuredevops/**/*.yml": "azure-pipelines"
   },
-  "dotnet.defaultSolution": "Kentico.Xperience.Contacts.Importer.sln"
+  "dotnet.defaultSolution": "Kentico.Xperience.Contacts.Importer.sln",
+
+  "eslint.workingDirectories": [
+    "./src/Kentico.Xperience.Contacts.Importer/Client"
+  ],
+
+  "[aspnetcorerazor]": {
+    "editor.defaultFormatter": "ms-dotnettools.csharp"
+  }
 }

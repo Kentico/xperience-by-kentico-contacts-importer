@@ -1,32 +1,32 @@
-import React, { useState } from "react";
 import {
-  Input,
-  UploadTile,
-  ProgressBar,
-  RadioGroup,
-  NotificationBarAlert,
-  RadioButton,
+  Box,
   Button,
   ButtonSize,
-  Stack,
-  Select,
   Callout,
-  MenuItem,
-  RadioGroupSize,
-  Headline,
-  HeadlineSize,
-  CalloutType,
   CalloutPlacementType,
-  Box,
-  Spacing,
-  UploadTileSize,
-  Shelf,
-  Column,
-  Row,
+  CalloutType,
   Cols,
+  Column,
   Divider,
   DividerOrientation,
-} from "@kentico/xperience-admin-components";
+  Headline,
+  HeadlineSize,
+  Input,
+  MenuItem,
+  NotificationBarAlert,
+  ProgressBar,
+  RadioButton,
+  RadioGroup,
+  RadioGroupSize,
+  Row,
+  Select,
+  Shelf,
+  Spacing,
+  Stack,
+  UploadTile,
+  UploadTileSize,
+} from '@kentico/xperience-admin-components';
+import React, { useState } from 'react';
 
 /*
 * This file demonstrates a custom UI page template.
@@ -38,7 +38,7 @@ import {
 
 interface CustomLayoutProps {
   readonly label: string;
-  readonly contactGroups: { guid: string; displayName: string }[];
+  readonly contactGroups: Array<{ guid: string; displayName: string }>;
 }
 
 let canContinue = true;
@@ -47,38 +47,37 @@ let toofast = false;
 export const ImportLayoutTemplate = ({
   label,
   contactGroups,
-}: CustomLayoutProps) => {
+}: CustomLayoutProps): JSX.Element => {
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<string[]>([]);
   const [currentFile, setCurrentFile] = useState({ current: 0, total: 0 });
 
-  const [importKind, setImportKind] = useState("insert");
-  const [contactGroup, setContactGroup] = useState<string | undefined>("");
-  const [delimiter, setDelimiter] = useState<string>(",");
+  const [importKind, setImportKind] = useState('insert');
+  const [contactGroup, setContactGroup] = useState<string | undefined>('');
+  const [delimiter, setDelimiter] = useState<string>(',');
   const [batchSize, setBatchSize] = useState<number>(5000);
 
   const uploadModeOptions = [
     {
-      label: "Insert (skip existing)",
-      value: "insert",
+      label: 'Insert (skip existing)',
+      value: 'insert',
     },
     {
-      label: "Delete (delete existing)",
-      value: "delete",
+      label: 'Delete (delete existing)',
+      value: 'delete',
     },
   ];
 
   function parseFile(
-    this: any,
     file: File,
     callback: (buffer: ArrayBuffer) => boolean,
-    finishedCallback: () => void
-  ) {
-    var fileSize = file.size;
-    var chunkSize = 32 * 1024; // bytes
-    var offset = 0;
-    var chunkReaderBlock:
+    finishedCallback: () => void,
+  ): void {
+    const fileSize = file.size;
+    const chunkSize = 32 * 1024; // bytes
+    let offset = 0;
+    let chunkReaderBlock:
       | null
       | ((_offset: number, length: number, _file: File) => void) = null;
 
@@ -90,15 +89,19 @@ export const ImportLayoutTemplate = ({
           return;
         }
 
-        if (evt.target == null) {
-          setError("An error occurred while reading the file.");
+        if (evt.target === null) {
+          setError('An error occurred while reading the file.');
 
           return;
         }
-        if (evt.target.error == null && evt.target.result != null) {
+        if (evt.target.error === null && evt.target.result !== null) {
           // offset += (evt.target.result as any).length;
           offset += chunkSize;
-          if (!callback(evt.target.result as ArrayBuffer)) {
+
+          if (
+            evt.target.result instanceof ArrayBuffer &&
+            !callback(evt.target.result)
+          ) {
             // callback for handling read chunk
             return;
           }
@@ -106,19 +109,19 @@ export const ImportLayoutTemplate = ({
           finishedCallback();
           setError(
             evt.target.error?.message ??
-              "An error occurred while reading the file."
+              'An error occurred while reading the file.',
           );
-          console.log("Read error: " + evt.target.error);
+
           return;
         }
         if (offset >= fileSize) {
           finishedCallback();
-          setState((prev) => [...prev, "Completed reading file."]);
+          setState((prev) => [...prev, 'Completed reading file.']);
           return;
         }
 
         // of to the next chunk
-        if (chunkReaderBlock != null && canContinue) {
+        if (chunkReaderBlock !== null && canContinue) {
           // console.log('reading next block');
           chunkReaderBlock(offset, chunkSize, file);
         }
@@ -129,7 +132,7 @@ export const ImportLayoutTemplate = ({
         }, 3000);
         setState((prev) => [
           ...prev,
-          "Pausing upload while contacts are imported.",
+          'Pausing upload while contacts are imported.',
         ]);
         toofast = false;
       } else {
@@ -141,23 +144,23 @@ export const ImportLayoutTemplate = ({
     chunkReaderBlock(offset, chunkSize, file);
   }
 
-  function onUpload() {
-    if (!file) {
-      setError("No file was selected");
+  function onUpload(): void {
+    if (file === null) {
+      setError('No file was selected');
 
       return;
     }
 
     setState([]);
 
-    const port = location.port != "" ? `:${location.port}` : "";
-    const scheme = window.location.protocol === "http:" ? "ws" : "wss";
+    const port = location.port !== '' ? `:${location.port}` : '';
+    const scheme = window.location.protocol === 'http:' ? 'ws' : 'wss';
     const socket = new WebSocket(
-      `${scheme}://${location.hostname}${port}/contactsimport/ws`
+      `${scheme}://${location.hostname}${port}/contactsimport/ws`,
     );
-    socket.binaryType = "blob";
+    socket.binaryType = 'blob';
     socket.onerror = (e) => {
-      setError("An error occurred while uploading the file.");
+      setError('An error occurred while uploading the file.');
       console.error(e);
       canContinue = false;
       socket.close();
@@ -165,16 +168,16 @@ export const ImportLayoutTemplate = ({
     socket.onmessage = (event) => {
       const p = JSON.parse(event.data);
       switch (p.type) {
-        case "headerConfirmed": {
+        case 'headerConfirmed': {
           setState((prev) => [
             ...prev,
-            "CSV header validated. Starting import.",
+            'CSV header validated. Starting import.',
           ]);
 
           parseFile(
             file,
             (buffer) => {
-              if (socket.readyState == socket.OPEN) {
+              if (socket.readyState === socket.OPEN) {
                 socket.send(buffer);
                 return true;
               } else {
@@ -185,24 +188,24 @@ export const ImportLayoutTemplate = ({
               setTimeout(() => {
                 socket.close();
               }, 2000);
-            }
+            },
           );
 
           break;
         }
-        case "toofast": {
+        case 'toofast': {
           toofast = true;
           break;
         }
-        case "msg": {
+        case 'msg': {
           setState((prev) => [...prev, p.payload]);
           break;
         }
-        case "progress": {
+        case 'progress': {
           const len = parseInt(p.payload, 10);
 
           if (len === currentFile.total) {
-            setState((prev) => [...prev, "Upload completed."]);
+            setState((prev) => [...prev, 'Upload completed.']);
             setFile(null);
             canContinue = false;
             if (socket.readyState < socket.CLOSING) {
@@ -217,8 +220,8 @@ export const ImportLayoutTemplate = ({
 
           break;
         }
-        case "finished": {
-          setState((prev) => [...prev, "Upload completed."]);
+        case 'finished': {
+          setState((prev) => [...prev, 'Upload completed.']);
           setFile(null);
           canContinue = false;
           if (socket.readyState < socket.CLOSING) {
@@ -228,8 +231,8 @@ export const ImportLayoutTemplate = ({
         }
       }
     };
-    socket.onopen = function (event) {
-      setError("");
+    socket.onopen = function (_event) {
+      setError('');
       setState((prev) => [
         ...prev,
         `Sending file of length: ${getFileSize(file)}`,
@@ -238,14 +241,14 @@ export const ImportLayoutTemplate = ({
 
       socket.send(
         JSON.stringify({
-          type: "header",
+          type: 'header',
           payload: {
             importKind,
-            contactGroup: !contactGroup ? null : contactGroup,
+            contactGroup: contactGroup === null ? null : contactGroup,
             delimiter,
             batchSize,
           },
-        })
+        }),
       );
     };
   }
@@ -276,7 +279,7 @@ export const ImportLayoutTemplate = ({
               </p>
             </Callout>
 
-            {error && (
+            {error !== null && (
               <NotificationBarAlert onDismiss={() => {}}>
                 {error}
               </NotificationBarAlert>
@@ -315,7 +318,7 @@ export const ImportLayoutTemplate = ({
               placeholder="Select Group"
               onChange={setContactGroup}
               value={contactGroup}
-              disabled={!contactGroups.length}
+              disabled={contactGroups.length === 0}
               explanationText="Select a Contact Group that all Contacts will be associated with"
             >
               {contactGroups.map((c) => (
@@ -334,15 +337,15 @@ export const ImportLayoutTemplate = ({
               buttonLabel="Browse"
               size={UploadTileSize.Compact}
               onUpload={([f]) => {
-                if (f) {
+                if (f instanceof File) {
                   setFile(f);
                   setCurrentFile({ current: 0, total: f.size });
                 }
               }}
             />
 
-            {file && (
-              <p style={{ color: "var(--color-text-default-on-light)" }}>
+            {file !== null && (
+              <p style={{ color: 'var(--color-text-default-on-light)' }}>
                 File Selected: {file.name}
               </p>
             )}
@@ -350,14 +353,18 @@ export const ImportLayoutTemplate = ({
             <Input
               label="CSV record delimiter"
               type="text"
-              onChange={(v) => setDelimiter(v.target.value)}
+              onChange={(v) => {
+                setDelimiter(v.target.value);
+              }}
               value={delimiter}
               explanationText="The delimiter for each CSV row data item."
             />
             <Input
               label="Batch size"
               type="number"
-              onChange={(v) => setBatchSize(parseInt(v.target.value, 10))}
+              onChange={(v) => {
+                setBatchSize(parseInt(v.target.value, 10));
+              }}
               value={batchSize}
               min={1}
               explanationText="The number of records that will be uploaded and processed at a time."
@@ -370,7 +377,7 @@ export const ImportLayoutTemplate = ({
                 </Headline>
                 <ProgressBar
                   completed={Math.floor(
-                    (currentFile.current / currentFile.total) * 100
+                    (currentFile.current / currentFile.total) * 100,
                   )}
                 />
               </div>
@@ -388,8 +395,8 @@ export const ImportLayoutTemplate = ({
               <Shelf>
                 <Box spacing={Spacing.M}>
                   <Headline size={HeadlineSize.S}>Upload Log</Headline>
-                  <pre style={{ color: "var(--color-text-default-on-light)" }}>
-                    {[...state].reverse().join("\r\n")}
+                  <pre style={{ color: 'var(--color-text-default-on-light)' }}>
+                    {[...state].reverse().join('\r\n')}
                   </pre>
                 </Box>
               </Shelf>
@@ -405,23 +412,23 @@ function getFileSize(file: File): string {
   const fileSizeBytes = file.size;
   const fileSizeKB = fileSizeBytes / 1024;
   if (fileSizeKB < 0.01) {
-    return msg(fileSizeBytes, "B");
+    return msg(fileSizeBytes, 'B');
   }
 
   const fileSizeMB = fileSizeKB / 1024;
 
   if (fileSizeMB < 0.01) {
-    return msg(fileSizeKB, "KB");
+    return msg(fileSizeKB, 'KB');
   }
 
   const fileSizeGB = fileSizeMB / 1024;
   if (fileSizeGB < 0.01) {
-    return msg(fileSizeMB, "MB");
+    return msg(fileSizeMB, 'MB');
   }
 
-  return msg(fileSizeGB, "GB");
+  return msg(fileSizeGB, 'GB');
 
-  function msg(size: number, unit: string) {
+  function msg(size: number, unit: string): string {
     return `${size.toFixed(2)} ${unit}`;
   }
 }

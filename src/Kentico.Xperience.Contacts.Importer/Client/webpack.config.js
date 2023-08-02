@@ -1,14 +1,14 @@
-const webpackMerge = require("webpack-merge");
+const webpackMerge = require('webpack-merge');
 
-const baseWebpackConfig = require("@kentico/xperience-webpack-config");
+const baseWebpackConfig = require('@kentico/xperience-webpack-config');
 
 module.exports = (opts, argv) => {
   const baseConfig = (webpackConfigEnv, argv) => {
     return baseWebpackConfig({
       // Sets the organizationName and projectName
       // The JS module is registered on the backend using these values
-      orgName: "kentico",
-      projectName: "contacts-import-web-admin",
+      orgName: 'kentico',
+      projectName: 'contacts-import-web-admin',
       webpackConfigEnv,
       argv,
     });
@@ -20,7 +20,7 @@ module.exports = (opts, argv) => {
         {
           test: /\.(js|ts)x?$/,
           exclude: [/node_modules/],
-          loader: "babel-loader",
+          loader: 'babel-loader',
         },
       ],
     },
