@@ -3,7 +3,7 @@
 	<PropertyGroup>
 		<Product>Xperience by Kentico Contacts Importer</Product>
 		<Title>$(Product)</Title>
-		<PackageId>Kentico.Xperience.Contacts.Import</PackageId>
+		<PackageId>Kentico.Xperience.Contacts.Importer</PackageId>
 		<VersionSuffix Condition="$(Configuration) == 'Debug'">$([System.DateTime]::Now.ToString('yyMMddHHmm'))</VersionSuffix>
 		<PackageOutputDir Condition="$(Configuration) == 'Debug'">$(LOCAL_NUGET_REPO)\</PackageOutputDir>
 		<RootNamespace>Kentico.Xperience.Contacts.Importer</RootNamespace>

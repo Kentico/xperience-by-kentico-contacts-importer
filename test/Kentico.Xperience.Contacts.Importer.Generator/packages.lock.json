@@ -631,7 +631,7 @@
           "System.Drawing.Common": "6.0.0"
         }
       },
-      "Kentico.Xperience.Contacts.Import": {
+      "kentico.xperience.contacts.importer": {
         "type": "Project",
         "dependencies": {
           "CsvHelper": "[30.0.1, )",

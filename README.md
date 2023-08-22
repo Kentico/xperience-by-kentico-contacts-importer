@@ -2,6 +2,8 @@
 
 [![CI: Build and Test](https://github.com/Kentico/xperience-by-kentico-contacts-importer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kentico/xperience-by-kentico-contacts-importer/actions/workflows/ci.yml)
 
+[![NuGet Package](https://img.shields.io/nuget/v/Kentico.Xperience.Contacts.Importer.svg)](https://www.nuget.org/packages/Kentico.Xperience.Contacts.Importer)
+
 ## About The Project
 
 Enables bulk importing of Contacts into an Xperience by Kentico solution using a `.csv` file.
@@ -74,6 +76,10 @@ Notes:
 
 ## Contributing
 
+For Contributing please see [`CONTRIBUTING.md`](https://github.com/Kentico/.github/blob/main/CONTRIBUTING.md) for more information and follow the [`CODE_OF_CONDUCT`](https://github.com/Kentico/.github/blob/main/CODE_OF_CONDUCT.md).
+
+### Requirements
+
 - .NET SDK >= 7.0.109
 
   - <https://dotnet.microsoft.com/en-us/download/dotnet/7.0>
@@ -82,8 +88,6 @@ Notes:
 
   - <https://nodejs.org/en/download>
   - <https://github.com/coreybutler/nvm-windows>
-
-For Contributing please see [`CONTRIBUTING.md`](https://github.com/Kentico/.github/blob/main/CONTRIBUTING.md) for more information and follow the [`CODE_OF_CONDUCT`](https://github.com/Kentico/.github/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 
