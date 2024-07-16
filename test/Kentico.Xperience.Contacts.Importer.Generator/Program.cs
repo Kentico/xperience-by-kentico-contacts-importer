@@ -1,7 +1,11 @@
 ﻿using System.Globalization;
+
 using CMS.ContactManagement;
+
 using CsvHelper;
+
 using Kentico.Xperience.Contacts.Importer.Generator;
+
 using static Kentico.Xperience.Contacts.Importer.Services.ImportService;
 
 string? solutionFolder = FindSolutionFolder();
@@ -13,15 +17,15 @@ using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture);
 csv.Context.RegisterClassMap<ContactInfoMap>();
 
 csv.WriteHeader<ContactInfo>();
-csv.NextRecord();
+await csv.NextRecordAsync();
 
 foreach (var contact in ContactsGenerator.Generate(200000))
 {
     csv.WriteRecord(contact);
-    csv.NextRecord();
+    await csv.NextRecordAsync();
 }
 
-csv.Flush();
+await csv.FlushAsync();
 
 
 static string? FindSolutionFolder()

@@ -5,16 +5,15 @@ namespace Kentico.Xperience.Contacts.Importer.Auxiliary;
 /// <summary>
 /// single purpose stream - consumer (read) waits for promised data, implementation of stream abstract class is not complete and is not needed (internal class) 
 /// </summary>
-internal sealed class AsynchronousStream : Stream
+/// <inheritdoc />
+internal sealed class AsynchronousStream(int streamWriteCountCache) : Stream
 {
-    private readonly BlockingCollection<byte[]> _blocks;
-    private byte[]? _currentBlock;
-    private int _currentBlockIndex;
+    private readonly BlockingCollection<byte[]> blocks = new(streamWriteCountCache);
+    private byte[]? currentBlock;
+    private int currentBlockIndex;
 
-    public int CachedBlocks => _blocks.Count;
+    public int CachedBlocks => blocks.Count;
 
-    /// <inheritdoc />
-    public AsynchronousStream(int streamWriteCountCache) => _blocks = new BlockingCollection<byte[]>(streamWriteCountCache);
 
     /// <inheritdoc />
     public override bool CanTimeout => false;
@@ -60,17 +59,17 @@ internal sealed class AsynchronousStream : Stream
 
         while (true)
         {
-            if (_currentBlock != null)
+            if (currentBlock != null)
             {
-                int copy = Math.Min(count - bytesRead, _currentBlock.Length - _currentBlockIndex);
-                Array.Copy(_currentBlock, _currentBlockIndex, buffer, offset + bytesRead, copy);
-                _currentBlockIndex += copy;
+                int copy = Math.Min(count - bytesRead, currentBlock.Length - currentBlockIndex);
+                Array.Copy(currentBlock, currentBlockIndex, buffer, offset + bytesRead, copy);
+                currentBlockIndex += copy;
                 bytesRead += copy;
 
-                if (_currentBlock.Length <= _currentBlockIndex)
+                if (currentBlock.Length <= currentBlockIndex)
                 {
-                    _currentBlock = null;
-                    _currentBlockIndex = 0;
+                    currentBlock = null;
+                    currentBlockIndex = 0;
                 }
 
                 if (bytesRead == count)
@@ -79,7 +78,7 @@ internal sealed class AsynchronousStream : Stream
                 }
             }
 
-            if (!_blocks.TryTake(out _currentBlock, Timeout.Infinite))
+            if (!blocks.TryTake(out currentBlock, Timeout.Infinite))
             {
                 return bytesRead;
             }
@@ -92,7 +91,7 @@ internal sealed class AsynchronousStream : Stream
 
         byte[] newBuf = new byte[count];
         Array.Copy(buffer, offset, newBuf, 0, count);
-        _blocks.Add(newBuf);
+        blocks.Add(newBuf);
         TotalBytesWritten += count;
         WriteCount++;
     }
@@ -103,7 +102,7 @@ internal sealed class AsynchronousStream : Stream
 
         if (disposing)
         {
-            _blocks.Dispose();
+            blocks.Dispose();
         }
     }
 
@@ -113,13 +112,13 @@ internal sealed class AsynchronousStream : Stream
         base.Close();
     }
 
-    public void CompleteWriting() => _blocks.CompleteAdding();
+    public void CompleteWriting() => blocks.CompleteAdding();
 
     public bool TryCompleteWriting()
     {
         try
         {
-            _blocks.CompleteAdding();
+            blocks.CompleteAdding();
 
             return true;
         }

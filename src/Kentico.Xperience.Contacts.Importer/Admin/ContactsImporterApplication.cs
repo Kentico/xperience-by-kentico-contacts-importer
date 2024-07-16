@@ -1,6 +1,7 @@
 ﻿using CMS.Membership;
+
 using Kentico.Xperience.Admin.Base;
-using Kentico.Xperience.Contacts.Importer;
+using Kentico.Xperience.Admin.Base.UIPages;
 using Kentico.Xperience.Contacts.Importer.Admin;
 
 [assembly: UIApplication(
@@ -8,7 +9,7 @@ using Kentico.Xperience.Contacts.Importer.Admin;
     type: typeof(ContactsImporterApplication),
     slug: "contacts-importer",
     name: "Contacts Importer",
-    category: ContactImportAdminModule.CATEGORY,
+    category: BaseApplicationCategories.DIGITAL_MARKETING,
     icon: Icons.RectangleParagraph,
     templateName: TemplateNames.SECTION_LAYOUT)]
 

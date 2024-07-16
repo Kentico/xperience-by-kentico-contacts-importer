@@ -13,13 +13,17 @@
   },
 
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.defaultFormatter": "biomejs.biome",
   "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": true
+    "source.fixAll.eslint": "explicit"
   },
 
   "[markdown]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
   },
 
   "[xml]": {
@@ -35,11 +39,9 @@
   },
   "dotnet.defaultSolution": "Kentico.Xperience.Contacts.Importer.sln",
 
-  "eslint.workingDirectories": [
-    "./src/Kentico.Xperience.Contacts.Importer/Client"
-  ],
-
   "[aspnetcorerazor]": {
     "editor.defaultFormatter": "ms-dotnettools.csharp"
-  }
+  },
+
+  "biome.lspBin": "./src/Kentico.Xperience.Contacts.Importer/Admin/Client/node_modules/@biomejs/biome/bin/biome"
 }

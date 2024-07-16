@@ -1,4 +1,6 @@
 ﻿using CMS.ContactManagement;
+using CMS.DataEngine;
+
 using Kentico.Xperience.Admin.Base;
 using Kentico.Xperience.Contacts.Importer.Admin;
 
@@ -13,15 +15,12 @@ using Kentico.Xperience.Contacts.Importer.Admin;
 
 namespace Kentico.Xperience.Contacts.Importer.Admin;
 
-internal class ImportTemplate : Page<CustomLayoutProperties>
+internal class ImportTemplate(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider) : Page<CustomLayoutProperties>
 {
     public const string IDENTIFIER = "Kentico.Xperience.Contacts.Import.Web.Admin.ImportTemplate";
-    public const string TEMPLATE_NAME = "@kentico/contacts-import-web-admin/ImportLayout";
+    public const string TEMPLATE_NAME = "@kentico/xperience-integrations-contacts-importer/ImportLayout";
 
-    private readonly IContactGroupInfoProvider contactGroupInfoProvider;
-
-    public ImportTemplate(IContactGroupInfoProvider contactGroupInfoProvider) =>
-        this.contactGroupInfoProvider = contactGroupInfoProvider;
+    private readonly IInfoProvider<ContactGroupInfo> contactGroupInfoProvider = contactGroupInfoProvider;
 
     public override async Task<CustomLayoutProperties> ConfigureTemplateProperties(CustomLayoutProperties properties)
     {
@@ -44,5 +43,5 @@ public record ContactGroupSimplified(Guid Guid, string DisplayName);
 internal class CustomLayoutProperties : TemplateClientProperties
 {
     public string Label { get; set; } = "";
-    public List<ContactGroupSimplified> ContactGroups { get; set; } = new();
+    public List<ContactGroupSimplified> ContactGroups { get; set; } = [];
 }

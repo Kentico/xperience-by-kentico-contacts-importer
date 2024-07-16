@@ -1,20 +1,20 @@
 ﻿using CMS.ContactManagement;
+using CMS.DataEngine;
+
 using Kentico.Xperience.Admin.Base.FormAnnotations;
 
 namespace Kentico.Xperience.Contacts.Importer;
 
-public class ContactGroupDataProvider : IDropDownOptionsProvider
+public class ContactGroupDataProvider(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider) : IDropDownOptionsProvider
 {
-    private readonly IContactGroupInfoProvider contactGroupInfoProvider;
+    private readonly IInfoProvider<ContactGroupInfo> contactGroupInfoProvider = contactGroupInfoProvider;
 
-    public ContactGroupDataProvider(IContactGroupInfoProvider contactGroupInfoProvider) => this.contactGroupInfoProvider = contactGroupInfoProvider;
-
-    public Task<IEnumerable<DropDownOptionItem>> GetOptionItems()
+    public async Task<IEnumerable<DropDownOptionItem>> GetOptionItems()
     {
-        var groups = contactGroupInfoProvider.Get().ToList();
+        var groups = await contactGroupInfoProvider.Get().GetEnumerableTypedResultAsync();
 
         var options = groups.Select(i => new DropDownOptionItem { Text = i.ContactGroupName, Value = i.ContactGroupGUID.ToString() });
 
-        return Task.FromResult(options);
+        return options;
     }
 }

@@ -1,13 +1,11 @@
 {
-  "recommendations": [
-    "ms-dotnettools.csdevkit",
-    "k--kato.docomment",
-    "editorconfig.editorconfig",
-    "davidanson.vscode-markdownlint",
-    "tintoy.msbuild-project-tools",
-    "esbenp.prettier-vscode",
-    "dotjoshjohnson.xml",
-    "dbaeumer.vscode-eslint"
-  ],
-  "unwantedRecommendations": []
+	"recommendations": [
+		"ms-dotnettools.csdevkit",
+		"editorconfig.editorconfig",
+		"davidanson.vscode-markdownlint",
+		"tintoy.msbuild-project-tools",
+		"dotjoshjohnson.xml",
+		"ms-azure-devops.azure-pipelines",
+		"biomejs.biome"
+	]
 }
