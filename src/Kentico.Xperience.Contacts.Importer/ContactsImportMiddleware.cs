@@ -1,19 +1,16 @@
+using System.Net.Sockets;
+using System.Net.WebSockets;
+using System.Text;
+
 using CMS.Core;
 
 using Kentico.Xperience.Contacts.Importer.Auxiliary;
-
 using Kentico.Xperience.Contacts.Importer.Services;
 
 using Microsoft.AspNetCore.Http;
 
 using Newtonsoft.Json;
-
 using Newtonsoft.Json.Linq;
-
-using System.Net.Sockets;
-
-using System.Net.WebSockets;
-using System.Text;
 
 namespace Kentico.Xperience.Contacts.Importer;
 
