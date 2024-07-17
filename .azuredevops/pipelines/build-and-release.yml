@@ -59,7 +59,7 @@ stages:
             inputs:
               targetType: inline
               script: |
-                $fileContent = Get-Content -Path './${{ variables.ProjectFolder }}/Client/package.json' -Raw
+                $fileContent = Get-Content -Path './${{ variables.ProjectFolder }}/Admin/Client/package.json' -Raw
                 $jsonObject = ConvertFrom-Json -InputObject $fileContent
 
                 # Get the value of engines.node
@@ -94,7 +94,7 @@ stages:
               command: build
               projects: ${{ variables.ProjectFilePath }}
               configuration: ${{ variables.Configuration }}
-              arguments: --no-restore
+              arguments: --no-restore --verbosity Detailed
             env:
               AuthenticodeClientSecret: $(AuthenticodeClientSecret)
               # Roll-forward behavior set for AzureSignTool dotnet tool (see .config\dotnet-tools.json) which requires .Net 6.0 runtime
@@ -132,6 +132,8 @@ stages:
             container: Windows
 
             environment: integrations-release-nuget
+            workspace:
+              clean: all
             strategy:
               runOnce:
                 deploy:
