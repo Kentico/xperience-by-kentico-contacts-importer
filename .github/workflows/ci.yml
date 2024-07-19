@@ -1,56 +1,55 @@
 name: "CI: Build and Test"
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "**.cs"
-      - "**.tsx"
-      - "**.js"
-      - "**.csproj"
-      - "**.props"
-      - "**.targets"
-      - "**.sln"
-      - "**/Client/**/*.json"
   pull_request:
     branches: [main]
     paths:
       - "**.cs"
+      - "**.cshtml"
       - "**.tsx"
       - "**.js"
+      - "**.json"
       - "**.csproj"
       - "**.props"
       - "**.targets"
       - "**.sln"
-      - "**/Client/**/*.json"
 
 jobs:
-  build:
-    name: build
+  build_and_test:
+    name: Build and Test
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: pwsh
 
     env:
+      ASPNETCORE_ENVIRONMENT: CI
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
       DOTNET_NOLOGO: 1
-      SIGN_FILE: false
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
 
       - name: Install dependencies
-        run: dotnet restore --locked-mode
+        run: |
+          dotnet restore `
+            --locked-mode
 
       - name: Build Solution
-        run: dotnet build --configuration Release --no-restore
+        run: |
+          dotnet build `
+            --configuration Release `
+            --no-restore
 
       - name: Test Solution
-        run: dotnet test --configuration Release --no-build --no-restore
+        run: |
+          dotnet test `
+            --configuration Release `
+            --no-build `
+            --no-restore

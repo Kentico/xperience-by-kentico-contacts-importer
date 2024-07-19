@@ -1,0 +1,24 @@
+{
+	"$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
+	"organizeImports": { "enabled": true },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": false,
+			"correctness": { "noUnusedVariables": "error" },
+			"style": {
+				"noDefaultExport": "error",
+				"noNonNullAssertion": "error",
+				"noVar": "error",
+				"useEnumInitializers": "error"
+			},
+			"suspicious": {
+				"noConfusingVoidType": "off",
+				"noDebugger": "error",
+				"noDoubleEquals": "error",
+				"noExplicitAny": "error"
+			}
+		},
+		"ignore": ["**/webpack.config.js"]
+	}
+}

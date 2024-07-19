@@ -1,22 +1,26 @@
 ﻿
 using System.Data;
 using System.Globalization;
+
 using CMS.Base;
 using CMS.ContactManagement;
 using CMS.DataEngine;
+
 using CsvHelper;
 using CsvHelper.Configuration;
+
 using Microsoft.Data.SqlClient;
+
 using Newtonsoft.Json;
 
 namespace Kentico.Xperience.Contacts.Importer.Services;
 /// <inheritdoc />
 public class ImportService : IImportService
 {
-    private readonly IContactGroupInfoProvider contactGroupInfoProvider;
+    private readonly IInfoProvider<ContactGroupInfo> contactGroupInfoProvider;
 
     /// <param name="contactGroupInfoProvider"></param>
-    public ImportService(IContactGroupInfoProvider contactGroupInfoProvider) => this.contactGroupInfoProvider = contactGroupInfoProvider;
+    public ImportService(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider) => this.contactGroupInfoProvider = contactGroupInfoProvider;
 
     /// <summary>
     /// Defined how ContactInfo columns will be mapped from CSV
@@ -119,7 +123,7 @@ public class ImportService : IImportService
                         // we are no concerned here that totalProcessed is captured from foreign closure
                         // we do not await this task, it doesn't concern import routine 
 #pragma warning disable CS4014
-                        Task.Run(async () => await onResultCallbackAsync.Invoke(new List<ImportResult>(), totalProcessed));
+                        Task.Run(async () => await onResultCallbackAsync.Invoke([], totalProcessed));
 #pragma warning restore CS4014
                     }
                 }
@@ -127,7 +131,7 @@ public class ImportService : IImportService
                 if (currentBatch.Count >= context.BatchSize)
                 {
                     yield return currentBatch;
-                    currentBatch = new List<Guid>();
+                    currentBatch = [];
                 }
             }
 
@@ -158,11 +162,11 @@ public class ImportService : IImportService
             group = await contactGroupInfoProvider.GetAsync(assignToContactGroupGuid);
             if (group == null)
             {
-                throw new("Contact group not found");
+                throw new ArgumentException("Contact group not found", nameof(context));
             }
         }
 
-        var contactGuids = ConnectionHelper.ExecuteQuery(@"SELECT ContactGUID FROM OM_Contact", new QueryDataParameters(), QueryTypeEnum.SQLQuery)
+        var contactGuids = ConnectionHelper.ExecuteQuery(@"SELECT ContactGUID FROM OM_Contact", [], QueryTypeEnum.SQLQuery)
             .Tables[0].AsEnumerable().Select(x => (Guid)x[nameof(ContactInfo.ContactGUID)]).ToHashSet();
 
         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
@@ -200,14 +204,14 @@ public class ImportService : IImportService
 
                     if (totalProcessed % context.BatchSize == 0)
                     {
-                        Task.Run(async () => await onResultCallbackAsync.Invoke(new List<ImportResult>(), totalProcessed));
+                        Task.Run(async () => await onResultCallbackAsync.Invoke([], totalProcessed));
                     }
                 }
 
                 if (currentBatch.Count >= context.BatchSize)
                 {
                     yield return currentBatch;
-                    currentBatch = new List<(ContactInfo info, bool insert)>();
+                    currentBatch = [];
                 }
             }
 
@@ -258,12 +262,12 @@ WHERE EXISTS (SELECT 1
 
             string jsonGuidArray = JsonConvert.SerializeObject(contactGuids);
 
-            ConnectionHelper.ExecuteNonQuery(query, new QueryDataParameters
-            {
+            ConnectionHelper.ExecuteNonQuery(query,
+            [
                 new("contactGroupId", group.ContactGroupID),
                 new("jsonGuidArray", jsonGuidArray),
                 new("contactGroupMemberType", (int)ContactGroupMemberTypeEnum.Contact),
-            }, QueryTypeEnum.SQLQuery);
+            ], QueryTypeEnum.SQLQuery);
         });
 
     private static Task DeletedContactsAsync(List<Guid> contactGuids, int batchLimit)
