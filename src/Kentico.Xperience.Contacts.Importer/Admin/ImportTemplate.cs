@@ -9,18 +9,19 @@ using Kentico.Xperience.Contacts.Importer.Admin;
    name: "Upload",
    slug: "upload",
    uiPageType: typeof(ImportTemplate),
-   icon: Icons.PersonalisationVariants,
    templateName: ImportTemplate.TEMPLATE_NAME,
    order: 100)]
 
 namespace Kentico.Xperience.Contacts.Importer.Admin;
 
-internal class ImportTemplate(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider) : Page<CustomLayoutProperties>
+internal class ImportTemplate : Page<CustomLayoutProperties>
 {
-    public const string IDENTIFIER = "Kentico.Xperience.Contacts.Import.Web.Admin.ImportTemplate";
     public const string TEMPLATE_NAME = "@kentico/xperience-integrations-contacts-importer/ImportLayout";
 
-    private readonly IInfoProvider<ContactGroupInfo> contactGroupInfoProvider = contactGroupInfoProvider;
+
+    private readonly IInfoProvider<ContactGroupInfo> contactGroupInfoProvider;
+
+    public ImportTemplate(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider) => this.contactGroupInfoProvider = contactGroupInfoProvider;
 
     public override async Task<CustomLayoutProperties> ConfigureTemplateProperties(CustomLayoutProperties properties)
     {
