@@ -109,7 +109,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
             {
                 consumerIsRunning = false;
             }
-        });
+        }, cancellationToken);
 
         var producerTask = Task.Run(async () =>
         {
@@ -126,6 +126,17 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
                 byte[] buffer = new byte[bufferSize];
                 receiveResult = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
 
+                if (receiveResult.MessageType == WebSocketMessageType.Text)
+                {
+                    string messageText = Encoding.UTF8.GetString(buffer, 0, receiveResult.Count);
+                    var message = JsonConvert.DeserializeObject<Message>(messageText);
+
+                    if (message is not null && message.Type == "done")
+                    {
+                        break; //End of communication, close socket
+                    }
+                }
+
                 if (!receiveResult.CloseStatus.HasValue)
                 {
                     var data = new ArraySegment<byte>(buffer);
@@ -133,7 +144,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
                     if (data.Array != null)
                     {
                         await ms.WriteAsync(data, cancellationToken);
-                        await ms.FlushAsync();
+                        await ms.FlushAsync(cancellationToken);
                     }
 
                     int count = receiveResult.Count;
@@ -144,7 +155,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
                     {
                         await SendTooFastReport();
                         await SendProgressReport($"Too fast, waiting 3s CachedBlocks: {ms.CachedBlocks}");
-                        await Task.Delay(3000);
+                        await Task.Delay(3000, cancellationToken);
                     }
                 }
                 else
@@ -220,7 +231,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
                 if (data.Array != null)
                 {
                     await ms.WriteAsync(data, cancellationToken);
-                    await ms.FlushAsync();
+                    await ms.FlushAsync(cancellationToken);
                 }
             }
             else

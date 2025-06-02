@@ -19,7 +19,7 @@ csv.Context.RegisterClassMap<ContactInfoMap>();
 csv.WriteHeader<ContactInfo>();
 await csv.NextRecordAsync();
 
-foreach (var contact in ContactsGenerator.Generate(2500))
+foreach (var contact in ContactsGenerator.Generate(150000))
 {
     csv.WriteRecord(contact);
     await csv.NextRecordAsync();
