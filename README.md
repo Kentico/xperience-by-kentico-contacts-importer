@@ -73,7 +73,6 @@ Notes:
 | ContactFirstName  | string    | no       |
 | ContactLastName   | string    | no       |
 | ContactEmail      | string    | no       |
-| ContactAge        | Int32     | no       |
 | ContactMiddleName | string    | no       |
 
 In the CSV file, define the first row as a header containing the names of the individual columns.

@@ -47,7 +47,6 @@ public class ImportService : IImportService
             Map(m => m.ContactLastName);
             Map(m => m.ContactEmail);
             Map(m => m.ContactAddress1);
-            Map(m => m.ContactAge);
             Map(m => m.ContactMiddleName).Convert(args =>
             {
                 string? raw = args.Row.GetField("ContactMiddleName");

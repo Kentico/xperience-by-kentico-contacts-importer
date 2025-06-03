@@ -13,7 +13,6 @@ public static class ContactsGenerator
             .RuleFor(c => c.ContactEmail, f => f.Internet.Email())
             .RuleFor(c => c.ContactLastName, f => f.Person.LastName)
             .RuleFor(c => c.ContactMiddleName, f => f.Person.FirstName)
-            .RuleFor(c => c.ContactAge, f => f.Random.Number(18, 64))
             .RuleFor(c => c.ContactAddress1, f => f.Address.StreetAddress());
 
         foreach (int _ in Enumerable.Range(0, count))
@@ -32,6 +31,5 @@ public class ContactInfoDto
     public string? ContactLastName { get; set; }
     public string? ContactEmail { get; set; }
     public string? ContactAddress1 { get; set; }
-    public int ContactAge { get; set; }
     public string? ContactMiddleName { get; set; }
 }
