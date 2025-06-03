@@ -285,6 +285,10 @@ export const ImportLayoutTemplate = ({
 								Use the options below to upload a CSV file containing your
 								Contact records.
 							</p>
+							<p>
+								In the CSV file, define the first row as a header containing the names of the individual columns.
+								Header validation is performed during the file upload. See example file <a href="https://github.com/Kentico/xperience-by-kentico-contacts-importer/blob/main/data/contact_sample.csv">Contact Sample</a>.
+							</p>
 						</Callout>
 					</Box>
 					<Box spacingBottom={Spacing.M}>
