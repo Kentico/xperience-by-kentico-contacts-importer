@@ -137,3 +137,5 @@ segments_2i
 **/Client/dist/*
 **/nuget-local/*.*pkg
 
+/examples/DancingGoat/Properties/PublishProfiles
+/data
