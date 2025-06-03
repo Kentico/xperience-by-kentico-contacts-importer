@@ -76,6 +76,9 @@ Notes:
 | ContactAge        | Int32     | no       |
 | ContactMiddleName | string    | no       |
 
+In the CSV file, define the first row as a header containing the names of the individual columns.
+Header validation is performed during the file upload.
+
 ## Contributing
 
 To see the guidelines for Contributing to Kentico open source software, please see [Kentico's `CONTRIBUTING.md`](https://github.com/Kentico/.github/blob/main/CONTRIBUTING.md) for more information and follow the [Kentico's `CODE_OF_CONDUCT`](https://github.com/Kentico/.github/blob/main/CODE_OF_CONDUCT.md).

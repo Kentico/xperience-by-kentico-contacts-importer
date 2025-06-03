@@ -325,26 +325,28 @@ export const ImportLayoutTemplate = ({
 										</RadioButton>
 									))}
 								</RadioGroup>
+								{importKind === "insert" &&
+									(<div style={{ maxWidth: "400px" }}>
+										<Select
+											label="Assign to Contact Group"
+											clearable={true}
+											placeholder="Select Group"
+											onChange={setContactGroup}
+											value={contactGroup}
+											disabled={contactGroups.length === 0}
+											explanationText="Select a Contact Group that all Contacts will be associated with"
+										>
+											{contactGroups.map((c) => (
+												<MenuItem
+													primaryLabel={c.displayName}
+													key={c.guid}
+													value={c.guid}
+												/>
+											))}
+										</Select>
+									</div>)
+								}
 
-								<div style={{ maxWidth: "400px" }}>
-									<Select
-										label="Assign to Contact Group"
-										clearable={true}
-										placeholder="Select Group"
-										onChange={setContactGroup}
-										value={contactGroup}
-										disabled={contactGroups.length === 0}
-										explanationText="Select a Contact Group that all Contacts will be associated with"
-									>
-										{contactGroups.map((c) => (
-											<MenuItem
-												primaryLabel={c.displayName}
-												key={c.guid}
-												value={c.guid}
-											/>
-										))}
-									</Select>
-								</div>
 								<Box spacingY={Spacing.M}>
 									<style>{`.dropzone___rGl2g { padding: 10px; }`}</style>
 									<UploadTile
