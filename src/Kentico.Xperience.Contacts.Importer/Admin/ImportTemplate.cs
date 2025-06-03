@@ -6,7 +6,7 @@ using Kentico.Xperience.Contacts.Importer.Admin;
 
 [assembly: UIPage(
    parentType: typeof(ContactsImporterApplication),
-   name: "Upload",
+   name: "Upload-Delete",
    slug: "upload",
    uiPageType: typeof(ImportTemplate),
    templateName: ImportTemplate.TEMPLATE_NAME,
@@ -25,7 +25,7 @@ internal class ImportTemplate : Page<CustomLayoutProperties>
 
     public override async Task<CustomLayoutProperties> ConfigureTemplateProperties(CustomLayoutProperties properties)
     {
-        properties.Label = "Upload Contacts";
+        properties.Label = "Upload/Delete Contacts";
 
         var contactGroups = await contactGroupInfoProvider.Get()
             .Columns(nameof(ContactGroupInfo.ContactGroupGUID), nameof(ContactGroupInfo.ContactGroupDisplayName))

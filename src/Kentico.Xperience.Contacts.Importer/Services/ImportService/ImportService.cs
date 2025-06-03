@@ -149,6 +149,11 @@ public class ImportService : IImportService
                 }
             }
 
+            if (currentBatch.Count < context.BatchSize && currentBatch.Count != 0)
+            {
+                Task.Run(async () => await onResultCallbackAsync.Invoke([], totalProcessed));
+            }
+
             yield return currentBatch;
         }
 
@@ -221,6 +226,11 @@ public class ImportService : IImportService
                     yield return currentBatch;
                     currentBatch = [];
                 }
+            }
+
+            if (currentBatch.Count < context.BatchSize && currentBatch.Count != 0)
+            {
+                Task.Run(async () => await onResultCallbackAsync.Invoke([], totalProcessed));
             }
 
             yield return currentBatch;

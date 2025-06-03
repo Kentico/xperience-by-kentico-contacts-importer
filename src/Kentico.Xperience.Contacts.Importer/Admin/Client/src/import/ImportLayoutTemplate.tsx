@@ -345,8 +345,8 @@ export const ImportLayoutTemplate = ({
 										))}
 									</Select>
 								</div>
-
 								<Box spacingY={Spacing.M}>
+									<style>{`.dropzone___rGl2g { padding: 10px; }`}</style>
 									<UploadTile
 										acceptFiles=".csv"
 										firstLineLabel="Drag&Drop .csv here"
@@ -418,7 +418,7 @@ export const ImportLayoutTemplate = ({
 									<Shelf>
 										<Box spacing={Spacing.M}>
 											<Headline size={HeadlineSize.S}>Upload Log</Headline>
-											<pre style={{ color: "var(--color-text-default-on-light)" }}>
+											<pre style={{ color: "var(--color-text-default-on-light)", overflowX: "scroll" }}>
 												{[...state].reverse().join("\r\n")}
 											</pre>
 										</Box>
