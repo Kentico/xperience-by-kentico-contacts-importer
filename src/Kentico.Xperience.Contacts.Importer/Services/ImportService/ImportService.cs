@@ -54,10 +54,13 @@ public class ImportService : IImportService
     private sealed class ContactDeleteArgument
     {
         // Pragma disable reason: used implicitly
-#pragma warning (disable: S3459 S1144)
+#pragma warning disable S3459
+#pragma warning disable S1144
         // ReSharper disable once InconsistentNaming // kentico naming convention
         public Guid ContactGUID { get; set; }
-#pragma warning (restore: S3459 S1144)
+#pragma warning restore S3459
+#pragma warning restore S1144
+
     };
 
     private sealed class SimplifiedMap : ClassMap<ContactDeleteArgument>
