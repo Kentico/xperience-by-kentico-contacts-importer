@@ -28,6 +28,7 @@ import {
 	Paper,
 } from "@kentico/xperience-admin-components";
 import React, { useState } from "react";
+import Localization from '../localization/localization.json';
 
 /*
 * This file demonstrates a custom UI page template.
@@ -38,7 +39,6 @@ import React, { useState } from "react";
 */
 
 interface CustomLayoutProps {
-	readonly label: string;
 	readonly contactGroups: Array<{ guid: string; displayName: string }>;
 }
 
@@ -46,7 +46,6 @@ let canContinue = true;
 let toofast = false;
 
 export const ImportLayoutTemplate = ({
-	label,
 	contactGroups,
 }: CustomLayoutProps): JSX.Element => {
 	const [error, setError] = useState<string | null>(null);
@@ -214,7 +213,6 @@ export const ImportLayoutTemplate = ({
 				case "progress": {
 					const len = Number.parseInt(p.payload, 10);
 
-					console.log("Progress", len, currentFile.total);
 					if (len === currentFile.total % (32 * 1024)) {
 						canContinue = false;
 						setState((prev) => [...prev, "Upload file completed."]);
@@ -264,7 +262,7 @@ export const ImportLayoutTemplate = ({
 	return (
 		<Box spacing={Spacing.M}>
 			<Headline size={HeadlineSize.L} spacingBottom={Spacing.M}>
-				{label}
+				{Localization.integrations.contactsimporter.content.headlines.main}
 			</Headline>
 			<Row spacing={Spacing.XL}>
 				<Column

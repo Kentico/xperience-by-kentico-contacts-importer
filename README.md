@@ -16,9 +16,9 @@ Enables bulk importing of Contacts into an Xperience by Kentico solution using a
 
 ### Prerequisites
 
-- Xperience by Kentico >= 29.2.2
+- Xperience by Kentico >= 30.5.1
 
-  - <https://docs.kentico.com/changelog#hotfix-july-11-2024>
+  - <https://docs.kentico.com/documentation/changelog#hotfix-may-22-2025> 
 
 ### Installation
 
@@ -73,10 +73,14 @@ Notes:
 | ContactFirstName  | string    | no       |
 | ContactLastName   | string    | no       |
 | ContactEmail      | string    | no       |
+| ContactAddress1	| string	| no	   |
 | ContactMiddleName | string    | no       |
 
 In the CSV file, define the first row as a header containing the names of the individual columns.
 Header validation is performed during the file upload. See example file [Contact Sample](https://github.com/Kentico/xperience-by-kentico-contacts-importer/blob/main/data/contact_sample.csv).
+
+> [!IMPORTANT]  
+> For correct functionality, please make sure to add a newline at the end of the CSV file.
 
 ## Contributing
 

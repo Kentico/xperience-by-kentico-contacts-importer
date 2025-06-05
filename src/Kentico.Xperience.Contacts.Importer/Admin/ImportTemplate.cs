@@ -25,8 +25,6 @@ internal class ImportTemplate : Page<CustomLayoutProperties>
 
     public override async Task<CustomLayoutProperties> ConfigureTemplateProperties(CustomLayoutProperties properties)
     {
-        properties.Label = "Upload/Delete Contacts";
-
         var contactGroups = await contactGroupInfoProvider.Get()
             .Columns(nameof(ContactGroupInfo.ContactGroupGUID), nameof(ContactGroupInfo.ContactGroupDisplayName))
             .GetEnumerableTypedResultAsync();
@@ -43,6 +41,5 @@ public record ContactGroupSimplified(Guid Guid, string DisplayName);
 
 internal class CustomLayoutProperties : TemplateClientProperties
 {
-    public string Label { get; set; } = "";
     public List<ContactGroupSimplified> ContactGroups { get; set; } = [];
 }

@@ -47,21 +47,17 @@ public class ImportService : IImportService
             Map(m => m.ContactLastName);
             Map(m => m.ContactEmail);
             Map(m => m.ContactAddress1);
-            Map(m => m.ContactMiddleName).Convert(args =>
-            {
-                string? raw = args.Row.GetField("ContactMiddleName");
-                return raw?.TrimEnd('\0', ' ', '\r', '\n', '\t');
-            });
+            Map(m => m.ContactMiddleName);
         }
     }
 
     private sealed class ContactDeleteArgument
     {
         // Pragma disable reason: used implicitly
-#pragma warning disable S3459
+#pragma warning disable S3459 S1144
         // ReSharper disable once InconsistentNaming // kentico naming convention
         public Guid ContactGUID { get; set; }
-#pragma warning restore S3459
+#pragma warning restore S3459 S1144
     };
 
     private sealed class SimplifiedMap : ClassMap<ContactDeleteArgument>

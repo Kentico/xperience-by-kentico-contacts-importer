@@ -1,0 +1,11 @@
+{
+    "integrations": {
+        "contactsimporter": {
+            "content": {
+                "headlines": {
+                    "main": "Upload/Delete Contacts"
+                }
+            }
+        }
+    }
+}
