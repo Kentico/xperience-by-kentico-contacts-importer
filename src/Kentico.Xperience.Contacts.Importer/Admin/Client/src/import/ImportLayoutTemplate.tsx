@@ -25,8 +25,10 @@ import {
 	Stack,
 	UploadTile,
 	UploadTileSize,
+	Paper,
 } from "@kentico/xperience-admin-components";
 import React, { useState } from "react";
+import Localization from '../localization/localization.json';
 
 /*
 * This file demonstrates a custom UI page template.
@@ -37,7 +39,6 @@ import React, { useState } from "react";
 */
 
 interface CustomLayoutProps {
-	readonly label: string;
 	readonly contactGroups: Array<{ guid: string; displayName: string }>;
 }
 
@@ -45,7 +46,6 @@ let canContinue = true;
 let toofast = false;
 
 export const ImportLayoutTemplate = ({
-	label,
 	contactGroups,
 }: CustomLayoutProps): JSX.Element => {
 	const [error, setError] = useState<string | null>(null);
@@ -98,18 +98,30 @@ export const ImportLayoutTemplate = ({
 					// offset += (evt.target.result as any).length;
 					offset += chunkSize;
 
-					if (
-						evt.target.result instanceof ArrayBuffer &&
-						!callback(evt.target.result)
-					) {
+					let chunkBuffer: ArrayBuffer;
+
+					if (evt.target.result instanceof ArrayBuffer) {
+						chunkBuffer = evt.target.result;
+					} else if (typeof evt.target.result === "string") {
+						const encoder = new TextEncoder();
+						chunkBuffer = encoder.encode(evt.target.result).buffer;
+					} else {
+						setError("Unexpected file read result type.");
+						return;
+					}
+
+
+					if (!callback(chunkBuffer)) {
 						// callback for handling read chunk
+						canContinue = false;
+						setError("Unexpected server error.");
 						return;
 					}
 				} else {
 					finishedCallback();
 					setError(
 						evt.target.error?.message ??
-							"An error occurred while reading the file.",
+						"An error occurred while reading the file.",
 					);
 
 					return;
@@ -184,9 +196,7 @@ export const ImportLayoutTemplate = ({
 							return false;
 						},
 						() => {
-							setTimeout(() => {
-								socket.close();
-							}, 2000);
+							socket.send(JSON.stringify({ type: "done" }));
 						},
 					);
 
@@ -203,13 +213,10 @@ export const ImportLayoutTemplate = ({
 				case "progress": {
 					const len = Number.parseInt(p.payload, 10);
 
-					if (len === currentFile.total) {
-						setState((prev) => [...prev, "Upload completed."]);
-						setFile(null);
+					if (len === currentFile.total % (32 * 1024)) {
 						canContinue = false;
-						if (socket.readyState < socket.CLOSING) {
-							socket.close();
-						}
+						setState((prev) => [...prev, "Upload file completed."]);
+						setFile(null);
 					}
 
 					setCurrentFile((prev) => ({
@@ -220,7 +227,7 @@ export const ImportLayoutTemplate = ({
 					break;
 				}
 				case "finished": {
-					setState((prev) => [...prev, "Upload completed."]);
+					setState((prev) => [...prev, "Import completed."]);
 					setFile(null);
 					canContinue = false;
 					if (socket.readyState < socket.CLOSING) {
@@ -231,7 +238,7 @@ export const ImportLayoutTemplate = ({
 			}
 		};
 		socket.onopen = (_event) => {
-			setError("");
+			setError(null);
 			setState((prev) => [
 				...prev,
 				`Sending file of length: ${getFileSize(file)}`,
@@ -255,7 +262,7 @@ export const ImportLayoutTemplate = ({
 	return (
 		<Box spacing={Spacing.M}>
 			<Headline size={HeadlineSize.L} spacingBottom={Spacing.M}>
-				{label}
+				{Localization.integrations.contactsimporter.content.headlines.main}
 			</Headline>
 			<Row spacing={Spacing.XL}>
 				<Column
@@ -265,10 +272,10 @@ export const ImportLayoutTemplate = ({
 					order={Cols.Col2}
 					orderLg={Cols.Col1}
 				>
-					<Stack spacing={Spacing.XL} fullHeight={true}>
+					<Box spacingBottom={Spacing.M}>
 						<Callout
 							type={CalloutType.QuickTip}
-							placement={CalloutPlacementType.OnPaper}
+							placement={CalloutPlacementType.OnDesk}
 							headline="Instructions"
 							subheadline="Note"
 						>
@@ -276,22 +283,32 @@ export const ImportLayoutTemplate = ({
 								Use the options below to upload a CSV file containing your
 								Contact records.
 							</p>
+							<p>
+								In the CSV file, define the first row as a header containing the names of the individual columns.
+								Header validation is performed during the file upload. See example file <a href="https://github.com/Kentico/xperience-by-kentico-contacts-importer/blob/main/data/contact_sample.csv">Contact Sample</a>.
+							</p>
 						</Callout>
-
+					</Box>
+					<Box spacingBottom={Spacing.M}>
 						{error !== null && (
-							<NotificationBarAlert onDismiss={() => {}}>
+							<NotificationBarAlert onDismiss={() => setError(null)}>
 								{error}
 							</NotificationBarAlert>
 						)}
+					</Box>
+					<Paper>
+						<Box spacing={Spacing.XL}>
+							<Stack spacing={Spacing.XL} fullHeight={true}>
 
-						<RadioGroup
-							label="Select Upload Mode"
-							name="uploadMode"
-							size={RadioGroupSize.Large}
-							markAsRequired={true}
-							value={importKind}
-							onChange={setImportKind}
-							explanationText={`<p>All Contacts in the import file will be processed.</p>
+
+								<RadioGroup
+									label="Select Upload Mode"
+									name="uploadMode"
+									size={RadioGroupSize.Large}
+									markAsRequired={true}
+									value={importKind}
+									onChange={setImportKind}
+									explanationText={`<p>All Contacts in the import file will be processed.</p>
               <ul>
                 <li>
                   Insert: Any existing Contacts (matched by ContactGUID)
@@ -302,105 +319,118 @@ export const ImportLayoutTemplate = ({
                   will be deleted from the database.
                 </li>
               </ul>`}
-							explanationTextAsHtml={true}
-						>
-							{uploadModeOptions.map((option, key) => (
-								<RadioButton key={option.value} {...option}>
-									{option.label}
-								</RadioButton>
-							))}
-						</RadioGroup>
-
-						<Select
-							label="Assign to Contact Group"
-							clearable={true}
-							placeholder="Select Group"
-							onChange={setContactGroup}
-							value={contactGroup}
-							disabled={contactGroups.length === 0}
-							explanationText="Select a Contact Group that all Contacts will be associated with"
-						>
-							{contactGroups.map((c) => (
-								<MenuItem
-									primaryLabel={c.displayName}
-									key={c.guid}
-									value={c.guid}
-								/>
-							))}
-						</Select>
-
-						<UploadTile
-							acceptFiles=".csv"
-							firstLineLabel="Drag&Drop .csv here"
-							secondLineLabel="or"
-							buttonLabel="Browse"
-							size={UploadTileSize.Compact}
-							onUpload={([f]) => {
-								if (f instanceof File) {
-									setFile(f);
-									setCurrentFile({ current: 0, total: f.size });
+									explanationTextAsHtml={true}
+								>
+									{uploadModeOptions.map((option, key) => (
+										<RadioButton key={option.value} {...option}>
+											{option.label}
+										</RadioButton>
+									))}
+								</RadioGroup>
+								{importKind === "insert" &&
+									(<div style={{ maxWidth: "400px" }}>
+										<Select
+											label="Assign to Contact Group"
+											clearable={true}
+											placeholder="Select Group"
+											onChange={setContactGroup}
+											value={contactGroup}
+											disabled={contactGroups.length === 0}
+											explanationText="Select a Contact Group that all Contacts will be associated with"
+										>
+											{contactGroups.map((c) => (
+												<MenuItem
+													primaryLabel={c.displayName}
+													key={c.guid}
+													value={c.guid}
+												/>
+											))}
+										</Select>
+									</div>)
 								}
-							}}
-						/>
 
-						{file !== null && (
-							<p style={{ color: "var(--color-text-default-on-light)" }}>
-								File Selected: {file.name}
-							</p>
-						)}
+								<Box spacingY={Spacing.M}>
+									<style>{`.dropzone___rGl2g { padding: 10px; }`}</style>
+									<UploadTile
+										acceptFiles=".csv"
+										firstLineLabel="Drag&Drop .csv here"
+										secondLineLabel="or"
+										buttonLabel="Browse"
+										size={UploadTileSize.Compact}
+										onUpload={([f]) => {
+											if (f instanceof File) {
+												setFile(f);
+												setCurrentFile({ current: 0, total: f.size });
+											}
+										}}
+									/>
 
-						<Input
-							label="CSV record delimiter"
-							type="text"
-							onChange={(v) => {
-								setDelimiter(v.target.value);
-							}}
-							value={delimiter}
-							explanationText="The delimiter for each CSV row data item."
-						/>
-						<Input
-							label="Batch size"
-							type="number"
-							onChange={(v) => {
-								setBatchSize(Number.parseInt(v.target.value, 10));
-							}}
-							value={batchSize}
-							min={1}
-							explanationText="The number of records that will be uploaded and processed at a time."
-						/>
-
-						{currentFile.total > 0 && (
-							<div>
-								<Headline size={HeadlineSize.S} spacingBottom={Spacing.M}>
-									Upload Progress
-								</Headline>
-								<ProgressBar
-									completed={Math.floor(
-										(currentFile.current / currentFile.total) * 100,
+									{file !== null && (
+										<p style={{ color: "var(--color-text-default-on-light)" }}>
+											File Selected: {file.name}
+										</p>
 									)}
-								/>
-							</div>
-						)}
-
-						<Button
-							label="Upload file"
-							size={ButtonSize.S}
-							onClick={onUpload}
-						/>
-
-						<Divider orientation={DividerOrientation.Horizontal} />
-
-						{state.length > 0 && (
-							<Shelf>
-								<Box spacing={Spacing.M}>
-									<Headline size={HeadlineSize.S}>Upload Log</Headline>
-									<pre style={{ color: "var(--color-text-default-on-light)" }}>
-										{[...state].reverse().join("\r\n")}
-									</pre>
 								</Box>
-							</Shelf>
-						)}
-					</Stack>
+
+								<div style={{ maxWidth: "400px" }}>
+									<Input
+										label="CSV record delimiter"
+										type="text"
+										onChange={(v) => {
+											setDelimiter(v.target.value);
+										}}
+										value={delimiter}
+										explanationText="The delimiter for each CSV row data item."
+									/>
+								</div>
+								<div style={{ maxWidth: "400px" }}>
+									<Input
+										label="Batch size"
+										type="number"
+										onChange={(v) => {
+											setBatchSize(Number.parseInt(v.target.value, 10));
+										}}
+										value={batchSize}
+										min={1}
+										explanationText="The number of records that will be uploaded and processed at a time."
+									/>
+
+								</div>
+
+								{currentFile.total > 0 && (
+									<div>
+										<Headline size={HeadlineSize.S} spacingBottom={Spacing.M}>
+											Upload Progress
+										</Headline>
+										<ProgressBar
+											completed={Math.floor(
+												(currentFile.current / currentFile.total) * 100,
+											)}
+										/>
+									</div>
+								)}
+
+								<Button
+									label="Upload file"
+									size={ButtonSize.S}
+									onClick={onUpload}
+								/>
+
+								<Divider orientation={DividerOrientation.Horizontal} />
+
+								{state.length > 0 && (
+									<Shelf>
+										<Box spacing={Spacing.M}>
+											<Headline size={HeadlineSize.S}>Upload Log</Headline>
+											<pre style={{ color: "var(--color-text-default-on-light)", overflowX: "scroll" }}>
+												{[...state].reverse().join("\r\n")}
+											</pre>
+										</Box>
+									</Shelf>
+								)}
+							</Stack>
+						</Box>
+					</Paper>
 				</Column>
 			</Row>
 		</Box>

@@ -18,9 +18,18 @@ namespace Kentico.Xperience.Contacts.Importer.Services;
 public class ImportService : IImportService
 {
     private readonly IInfoProvider<ContactGroupInfo> contactGroupInfoProvider;
+    private readonly IInfoProvider<ContactInfo> contactInfoProvider;
+    private readonly IContactsDeleteService contactsDeleteService;
 
     /// <param name="contactGroupInfoProvider"></param>
-    public ImportService(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider) => this.contactGroupInfoProvider = contactGroupInfoProvider;
+    /// <param name="contactInfoProvider"></param>
+    /// <param name="contactsDeleteService"></param>
+    public ImportService(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider, IInfoProvider<ContactInfo> contactInfoProvider, IContactsDeleteService contactsDeleteService)
+    {
+        this.contactGroupInfoProvider = contactGroupInfoProvider;
+        this.contactInfoProvider = contactInfoProvider;
+        this.contactsDeleteService = contactsDeleteService;
+    }
 
     /// <summary>
     /// Defined how ContactInfo columns will be mapped from CSV
@@ -38,7 +47,6 @@ public class ImportService : IImportService
             Map(m => m.ContactLastName);
             Map(m => m.ContactEmail);
             Map(m => m.ContactAddress1);
-            Map(m => m.ContactAge);
             Map(m => m.ContactMiddleName);
         }
     }
@@ -47,9 +55,12 @@ public class ImportService : IImportService
     {
         // Pragma disable reason: used implicitly
 #pragma warning disable S3459
+#pragma warning disable S1144
         // ReSharper disable once InconsistentNaming // kentico naming convention
-        public Guid ContactGUID { get; }
+        public Guid ContactGUID { get; set; }
 #pragma warning restore S3459
+#pragma warning restore S1144
+
     };
 
     private sealed class SimplifiedMap : ClassMap<ContactDeleteArgument>
@@ -88,6 +99,7 @@ public class ImportService : IImportService
         {
             Delimiter = context.Delimiter,
             PrepareHeaderForMatch = args => args.Header.ToLower(),
+            IgnoreBlankLines = true,
         };
 
         using var reader = new StreamReader(csvStream);
@@ -95,15 +107,15 @@ public class ImportService : IImportService
 
         csv.Context.RegisterClassMap<SimplifiedMap>();
 
-        var records = csv.GetRecordsAsync<ContactDeleteArgument>();
+        var records = CsvReadRecords<ContactDeleteArgument>(csv);
 
         int totalProcessed = 0;
 
-        async IAsyncEnumerable<List<Guid>> Pipe2TransformBatches(IAsyncEnumerable<ContactDeleteArgument> models)
+        IEnumerable<List<Guid>> Pipe2TransformBatches(IEnumerable<ContactDeleteArgument> models)
         {
             var currentBatch = new List<Guid>(context.BatchSize);
 
-            await foreach (var item in models)
+            foreach (var item in models)
             {
                 try
                 {
@@ -135,21 +147,19 @@ public class ImportService : IImportService
                 }
             }
 
+            if (currentBatch.Count < context.BatchSize && currentBatch.Count != 0)
+            {
+                Task.Run(async () => await onResultCallbackAsync.Invoke([], totalProcessed));
+            }
+
             yield return currentBatch;
         }
 
-        Task? previousDeleteBatch = null;
-
-        await foreach (var deleteArg in Pipe2TransformBatches(records))
+        foreach (var deleteArg in Pipe2TransformBatches(records))
         {
-            if (previousDeleteBatch != null)
-            {
-                // await previous
-                await previousDeleteBatch;
-            }
 
             // assign existing task and continue with preparation of next
-            previousDeleteBatch = DeletedContactsAsync(deleteArg, context.BatchSize);
+            await DeletedContactsAsync(deleteArg, context.BatchSize);
         }
     }
 
@@ -173,6 +183,7 @@ public class ImportService : IImportService
         {
             Delimiter = context.Delimiter,
             PrepareHeaderForMatch = args => args.Header.ToLower(),
+            IgnoreBlankLines = true,
         };
 
         using var reader = new StreamReader(csvStream);
@@ -180,7 +191,7 @@ public class ImportService : IImportService
 
         csv.Context.RegisterClassMap<ContactInfoMap>();
 
-        var records = csv.GetRecords<ContactInfo>();
+        var records = CsvReadRecords<ContactInfo>(csv);
         int totalProcessed = 0;
 
         IEnumerable<List<(ContactInfo info, bool insert)>> Pipe2TransformBatches(IEnumerable<ContactInfo> models)
@@ -215,6 +226,11 @@ public class ImportService : IImportService
                 }
             }
 
+            if (currentBatch.Count < context.BatchSize && currentBatch.Count != 0)
+            {
+                Task.Run(async () => await onResultCallbackAsync.Invoke([], totalProcessed));
+            }
+
             yield return currentBatch;
         }
 
@@ -227,7 +243,7 @@ public class ImportService : IImportService
 
             foreach (var contactBatch in Pipe2TransformBatches(records))
             {
-                ContactInfoProvider.ProviderObject.BulkInsertInfos(contactBatch.Where(x => x.insert).Select(x => x.info), new BulkInsertSettings
+                contactInfoProvider.BulkInsert(contactBatch.Where(x => x.insert).Select(x => x.info), new BulkInsertSettings
                 {
                     // BatchSize = context.BatchSize,
                     Options = SqlBulkCopyOptions.Default,
@@ -241,6 +257,22 @@ public class ImportService : IImportService
             }
         }
     }
+
+    private IEnumerable<T> CsvReadRecords<T>(CsvReader csv)
+    {
+        while (csv.Read())
+        {
+            string? rawLine = csv.Context.Parser?.RawRecord;
+
+            if (string.IsNullOrWhiteSpace(rawLine) || rawLine.Trim('\0', ' ', '\r', '\n', '\t') == string.Empty)
+            {
+                yield break;
+            }
+
+            yield return csv.GetRecord<T>();
+        }
+    }
+
 
     private static Task InsertGroupMembersAsync(IEnumerable<Guid> contactGuids, ContactGroupInfo group) =>
         Task.Run(() =>
@@ -270,7 +302,7 @@ WHERE EXISTS (SELECT 1
             ], QueryTypeEnum.SQLQuery);
         });
 
-    private static Task DeletedContactsAsync(List<Guid> contactGuids, int batchLimit)
+    private Task DeletedContactsAsync(List<Guid> contactGuids, int batchLimit)
     {
         // for future implementation of bulk delete
 #pragma warning disable S125
@@ -296,7 +328,7 @@ EXISTS (SELECT 1 FROM OPENJSON('{jsonGuidArray}', '$') [l] WHERE CAST([l].[value
 """;
 
             // if results are needed we can run SP ([dbo].[Proc_OM_Contact_MassDelete]) manually, it returns list of deleted contacts
-            ContactInfoProvider.DeleteContactInfos(whereCondition, batchLimit);
+            contactsDeleteService.BulkDelete(whereCondition, batchLimit);
         });
     }
 }

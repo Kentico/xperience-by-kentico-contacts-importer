@@ -70,6 +70,7 @@ app.UseCookiePolicy();
 
 app.UseAuthentication();
 
+app.UseContactsImport();
 
 app.UseKentico();
 

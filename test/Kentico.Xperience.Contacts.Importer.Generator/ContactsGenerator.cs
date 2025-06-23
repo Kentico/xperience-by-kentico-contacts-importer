@@ -1,12 +1,10 @@
-using CMS.ContactManagement;
-
 namespace Kentico.Xperience.Contacts.Importer.Generator;
 
 public static class ContactsGenerator
 {
-    public static IEnumerable<ContactInfo> Generate(int count)
+    public static IEnumerable<ContactInfoDto> Generate(int count)
     {
-        var faker = new Bogus.Faker<ContactInfo>();
+        var faker = new Bogus.Faker<ContactInfoDto>();
 
         faker.RuleFor(c => c.ContactGUID, f => f.Random.Guid())
             .RuleFor(c => c.ContactCreated, f => f.Date.Between(
@@ -15,7 +13,6 @@ public static class ContactsGenerator
             .RuleFor(c => c.ContactEmail, f => f.Internet.Email())
             .RuleFor(c => c.ContactLastName, f => f.Person.LastName)
             .RuleFor(c => c.ContactMiddleName, f => f.Person.FirstName)
-            .RuleFor(c => c.ContactAge, f => f.Random.Number(18, 64))
             .RuleFor(c => c.ContactAddress1, f => f.Address.StreetAddress());
 
         foreach (int _ in Enumerable.Range(0, count))
@@ -23,4 +20,16 @@ public static class ContactsGenerator
             yield return faker.Generate();
         }
     }
+}
+
+
+public class ContactInfoDto
+{
+    public Guid ContactGUID { get; set; }
+    public DateTime ContactCreated { get; set; }
+    public string? ContactFirstName { get; set; }
+    public string? ContactLastName { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? ContactAddress1 { get; set; }
+    public string? ContactMiddleName { get; set; }
 }

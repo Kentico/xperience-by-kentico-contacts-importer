@@ -107,7 +107,7 @@ namespace Samples.DancingGoat
                 accountContactInfoProvider, accountInfoProvider, bizFormInfoProvider));
             PersonalDataCollectorRegister.Instance.Add(new SampleMemberDataCollector());
 
-            PersonalDataEraserRegister.Instance.Add(new SampleContactPersonalDataEraser(consentAgreementInfoProvider, bizFormInfoProvider, accountContactInfoProvider, contactInfoProvider));
+            PersonalDataEraserRegister.Instance.Add(new SampleContactPersonalDataEraser(consentAgreementInfoProvider, bizFormInfoProvider, accountContactInfoProvider, contactInfoProvider, activityInfoProvider));
             PersonalDataEraserRegister.Instance.Add(new SampleMemberPersonalDataEraser(memberInfoProvider));
 
             RegisterConsentRevokeHandler();
@@ -121,7 +121,7 @@ namespace Samples.DancingGoat
                 { "deleteActivities", true }
             };
 
-            new SampleContactPersonalDataEraser(consentAgreementInfoProvider, bizFormInfoProvider, accountContactInfoProvider, contactInfoProvider)
+            new SampleContactPersonalDataEraser(consentAgreementInfoProvider, bizFormInfoProvider, accountContactInfoProvider, contactInfoProvider, activityInfoProvider)
                     .Erase(new[] { contact }, configuration);
         }
 

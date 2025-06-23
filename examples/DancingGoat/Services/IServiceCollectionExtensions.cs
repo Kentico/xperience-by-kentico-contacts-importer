@@ -14,6 +14,7 @@ namespace DancingGoat
         {
             AddViewComponentServices(services);
             AddRepositories(services);
+            services.AddContactsImport();
 
             services.AddSingleton<ICurrentWebsiteChannelPrimaryLanguageRetriever, CurrentWebsiteChannelPrimaryLanguageRetriever>();
         }
