@@ -10,7 +10,7 @@
 
 Enables bulk importing of Contacts into an Xperience by Kentico solution using a `.csv` file.
 
-![View of the Import Upload dashboard](https://raw.githubusercontent.com/Kentico/xperience-by-kentico-contacts-importer/main/images/screenshot-upload.jpg)
+![View of the Import Upload dashboard](https://github.com/user-attachments/assets/ae48f836-db00-4bae-8b43-e39482d73a3a)
 
 ## Getting Started
 
