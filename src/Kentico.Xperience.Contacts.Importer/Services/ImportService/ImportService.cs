@@ -13,31 +13,21 @@ using Microsoft.Data.SqlClient;
 
 using Newtonsoft.Json;
 
-namespace Kentico.Xperience.Contacts.Importer.Services;
+namespace Kentico.Xperience.Contacts.Importer.Services.ImportService;
+
 /// <inheritdoc />
-public class ImportService : IImportService
+public class ImportService(
+    IInfoProvider<ContactGroupInfo> contactGroupInfoProvider,
+    IInfoProvider<ContactInfo> contactInfoProvider,
+    IContactsDeleteService contactsDeleteService) : IImportService
 {
-    private readonly IInfoProvider<ContactGroupInfo> contactGroupInfoProvider;
-    private readonly IInfoProvider<ContactInfo> contactInfoProvider;
-    private readonly IContactsDeleteService contactsDeleteService;
-
-    /// <param name="contactGroupInfoProvider"></param>
-    /// <param name="contactInfoProvider"></param>
-    /// <param name="contactsDeleteService"></param>
-    public ImportService(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider, IInfoProvider<ContactInfo> contactInfoProvider, IContactsDeleteService contactsDeleteService)
-    {
-        this.contactGroupInfoProvider = contactGroupInfoProvider;
-        this.contactInfoProvider = contactInfoProvider;
-        this.contactsDeleteService = contactsDeleteService;
-    }
-
     /// <summary>
-    /// Defined how ContactInfo columns will be mapped from CSV
+    /// Defines how ContactInfo columns will be mapped from CSV.
     /// </summary>
     public sealed class ContactInfoMap : ClassMap<ContactInfo>
     {
         /// <summary>
-        /// Defines import map for ContactInfo.TYPEINFO.ColumnNames
+        /// Defines import map for <c>ContactInfo.TYPEINFO.ColumnNames</c>.
         /// </summary>
         public ContactInfoMap()
         {
@@ -51,6 +41,7 @@ public class ImportService : IImportService
         }
     }
 
+
     private sealed class ContactDeleteArgument
     {
         // Pragma disable reason: used implicitly
@@ -60,8 +51,8 @@ public class ImportService : IImportService
         public Guid ContactGUID { get; set; }
 #pragma warning restore S3459
 #pragma warning restore S1144
+    }
 
-    };
 
     private sealed class SimplifiedMap : ClassMap<ContactDeleteArgument>
     {
@@ -70,9 +61,14 @@ public class ImportService : IImportService
 #pragma warning restore S1144
     }
 
-    /// <exception cref="Exception">Thrown when contact group is missing</exception>
+
     /// <inheritdoc />
-    public async Task RunImport(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync)
+    /// <exception cref="Exception">Thrown when contact group is missing.</exception>
+    public async Task RunImport(
+        Stream csvStream,
+        ImportContext context,
+        Func<List<ImportResult>, int, Task> onResultCallbackAsync,
+        Func<Exception, Task> onErrorCallbackAsync)
     {
         switch (context.ImportKind)
         {
@@ -93,7 +89,12 @@ public class ImportService : IImportService
         }
     }
 
-    private async Task BulkDeleteContactFromCsvAsync(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync)
+
+    private async Task BulkDeleteContactFromCsvAsync(
+        Stream csvStream,
+        ImportContext context,
+        Func<List<ImportResult>, int, Task> onResultCallbackAsync,
+        Func<Exception, Task> onErrorCallbackAsync)
     {
         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
@@ -132,7 +133,7 @@ public class ImportService : IImportService
 
                     if (totalProcessed % context.BatchSize == 0)
                     {
-                        // we are no concerned here that totalProcessed is captured from foreign closure
+                        // we are not concerned here that totalProcessed is captured from foreign closure
                         // we do not await this task, it doesn't concern import routine 
 #pragma warning disable CS4014
                         Task.Run(async () => await onResultCallbackAsync.Invoke([], totalProcessed));
@@ -157,13 +158,17 @@ public class ImportService : IImportService
 
         foreach (var deleteArg in Pipe2TransformBatches(records))
         {
-
             // assign existing task and continue with preparation of next
             await DeletedContactsAsync(deleteArg, context.BatchSize);
         }
     }
 
-    private async Task InsertContactsFromCsvAsync(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync)
+
+    private async Task InsertContactsFromCsvAsync(
+        Stream csvStream,
+        ImportContext context,
+        Func<List<ImportResult>, int, Task> onResultCallbackAsync,
+        Func<Exception, Task> onErrorCallbackAsync)
     {
         ContactGroupInfo? group = null;
 
@@ -239,8 +244,8 @@ public class ImportService : IImportService
             LogEvents = false,
         })
         {
-            // we cannot use ContactInfoProvider.ProviderObject.BulkInsertInfos - insert is not immediate (all items stored in memory before insert) so direct piping is not possible 
-
+            // we cannot use ContactInfoProvider.ProviderObject.BulkInsertInfos - insert is not immediate (all items stored in memory
+            // before insert) so direct piping is not possible
             foreach (var contactBatch in Pipe2TransformBatches(records))
             {
                 contactInfoProvider.BulkInsert(contactBatch.Where(x => x.insert).Select(x => x.info), new BulkInsertSettings
@@ -258,7 +263,8 @@ public class ImportService : IImportService
         }
     }
 
-    private IEnumerable<T> CsvReadRecords<T>(CsvReader csv)
+
+    private static IEnumerable<T> CsvReadRecords<T>(CsvReader csv)
     {
         while (csv.Read())
         {
@@ -302,19 +308,9 @@ WHERE EXISTS (SELECT 1
             ], QueryTypeEnum.SQLQuery);
         });
 
+
     private Task DeletedContactsAsync(List<Guid> contactGuids, int batchLimit)
     {
-        // for future implementation of bulk delete
-#pragma warning disable S125
-        // var query = @"WITH [CTE]([Guid])
-        //  AS
-        //  (SELECT CAST([l].[value] AS UNIQUEIDENTIFIER) [Guid]
-        //   FROM OPENJSON('@jsonGuidArray', '$') [l])
-        // DELETE
-        // FROM [dbo].[OM_Contact]
-        // OUTPUT [deleted].[ContactID]
-        // WHERE EXISTS (SELECT 1 FROM [CTE] WHERE [CTE].[Guid] = [ContactGUID])";
-#pragma warning restore S125
         if (contactGuids.Count == 0)
         {
             return Task.CompletedTask;

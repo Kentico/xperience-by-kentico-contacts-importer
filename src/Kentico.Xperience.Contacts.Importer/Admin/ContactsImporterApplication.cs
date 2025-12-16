@@ -4,6 +4,12 @@ using Kentico.Xperience.Admin.Base;
 using Kentico.Xperience.Admin.Base.UIPages;
 using Kentico.Xperience.Contacts.Importer.Admin;
 
+[assembly: UICategory(
+   codeName: "Kentico.Xperience.Contacts.Import.Web.Admin.Category",
+   name: "Contacts Import",
+   icon: Icons.PersonalisationVariants,
+   order: 100)]
+
 [assembly: UIApplication(
     identifier: ContactsImporterApplication.IDENTIFIER,
     type: typeof(ContactsImporterApplication),
@@ -12,6 +18,14 @@ using Kentico.Xperience.Contacts.Importer.Admin;
     category: BaseApplicationCategories.DIGITAL_MARKETING,
     icon: Icons.RectangleParagraph,
     templateName: TemplateNames.SECTION_LAYOUT)]
+
+[assembly: UIPage(
+   parentType: typeof(ContactsImporterApplication),
+   name: "Upload-Delete",
+   slug: "upload",
+   uiPageType: typeof(ImportTemplate),
+   templateName: ImportTemplate.TEMPLATE_NAME,
+   order: 100)]
 
 namespace Kentico.Xperience.Contacts.Importer.Admin;
 
