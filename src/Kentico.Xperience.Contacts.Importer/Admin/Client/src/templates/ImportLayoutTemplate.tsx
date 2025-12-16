@@ -4,9 +4,6 @@ import {
 	Box,
 	Button,
 	ButtonSize,
-	Callout,
-	CalloutPlacementType,
-	CalloutType,
 	Cols,
 	Column,
 	Divider,
@@ -50,11 +47,11 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 
 	const uploadModeOptions = [
 		{
-			label: 'Insert (skip existing)',
+			label: Localization.integrations.contactsimporter.content.labels.insert,
 			value: 'insert',
 		},
 		{
-			label: 'Delete (delete existing)',
+			label: Localization.integrations.contactsimporter.content.labels.delete,
 			value: 'delete',
 		},
 	];
@@ -105,7 +102,7 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 				}
 
 				if (evt.target === null) {
-					setError('An error occurred while reading the file.');
+					setError(Localization.integrations.contactsimporter.messages.errorReading);
 
 					return;
 				}
@@ -120,7 +117,8 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 						const encoder = new TextEncoder();
 						chunkBuffer = encoder.encode(evt.target.result).buffer;
 					} else {
-						setError('Unexpected file read result type.');
+						setError(Localization.integrations.contactsimporter.messages.unexpectedFile);
+
 						return;
 					}
 
@@ -128,21 +126,21 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 					if (!callback(chunkBuffer)) {
 						// callback for handling read chunk
 						canContinue = false;
-						setError('Unexpected server error.');
+						setError(Localization.integrations.contactsimporter.messages.serverError);
 						return;
 					}
 				} else {
 					finishedCallback();
 					setError(
 						evt.target.error?.message ??
-						'An error occurred while reading the file.',
+						Localization.integrations.contactsimporter.messages.errorReading,
 					);
 
 					return;
 				}
 				if (offset >= fileSize) {
 					finishedCallback();
-					setState((prev) => [...prev, 'Completed reading file.']);
+					setState((prev) => [...prev, Localization.integrations.contactsimporter.messages.readComplete]);
 					return;
 				}
 
@@ -157,7 +155,7 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 				}, 3000);
 				setState((prev) => [
 					...prev,
-					'Pausing upload while contacts are imported.',
+					Localization.integrations.contactsimporter.messages.uploadPaused,
 				]);
 				toofast = false;
 			} else {
@@ -171,7 +169,7 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 
 	const onUpload = (): void => {
 		if (file === null) {
-			setError('No file was selected');
+			setError(Localization.integrations.contactsimporter.messages.noFile);
 
 			return;
 		}
@@ -183,7 +181,7 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 		const socket = new WebSocket(`${scheme}://${location.hostname}${port}/contactsimport/ws`);
 		socket.binaryType = 'blob';
 		socket.onerror = (e) => {
-			setError('An error occurred while uploading the file.');
+			setError(Localization.integrations.contactsimporter.messages.errorUploading);
 			console.error(e);
 			canContinue = false;
 			socket.close();
@@ -194,7 +192,7 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 				case 'headerConfirmed': {
 					setState((prev) => [
 						...prev,
-						'CSV header validated. Starting import.',
+						Localization.integrations.contactsimporter.messages.headersValidated,
 					]);
 
 					parseFile(
@@ -226,7 +224,7 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 
 					if (len === currentFile.total % (32 * 1024)) {
 						canContinue = false;
-						setState((prev) => [...prev, 'Upload file completed.']);
+						setState((prev) => [...prev, Localization.integrations.contactsimporter.messages.uploadComplete]);
 						setFile(null);
 					}
 
@@ -238,7 +236,7 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 					break;
 				}
 				case 'finished': {
-					setState((prev) => [...prev, 'Import completed.']);
+					setState((prev) => [...prev, Localization.integrations.contactsimporter.messages.importComplete]);
 					setFile(null);
 					canContinue = false;
 					if (socket.readyState < socket.CLOSING) {
@@ -252,7 +250,7 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 			setError(null);
 			setState((prev) => [
 				...prev,
-				`Sending file of length: ${getFileSize(file)}`,
+				`${Localization.integrations.contactsimporter.messages.sendingFile}: ${getFileSize(file)}`,
 			]);
 			canContinue = true;
 
@@ -281,25 +279,7 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 					colsMd={Cols.Col10}
 					colsLg={Cols.Col8}
 					order={Cols.Col2}
-					orderLg={Cols.Col1}
-				>
-					<Box spacingBottom={Spacing.M}>
-						<Callout
-							type={CalloutType.QuickTip}
-							placement={CalloutPlacementType.OnDesk}
-							headline='Instructions'
-							subheadline='Note'
-						>
-							<p>
-								Use the options below to upload a CSV file containing your
-								Contact records.
-							</p>
-							<p>
-								In the CSV file, define the first row as a header containing the names of the individual columns.
-								Header validation is performed during the file upload. See example file <a href="https://github.com/Kentico/xperience-by-kentico-contacts-importer/blob/main/data/contact_sample.csv">Contact Sample</a>.
-							</p>
-						</Callout>
-					</Box>
+					orderLg={Cols.Col1}>
 					<Box spacingBottom={Spacing.M}>
 						{error !== null && (
 							<NotificationBarAlert onDismiss={() => setError(null)}>
@@ -310,69 +290,20 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 					<Paper>
 						<Box spacing={Spacing.XL}>
 							<Stack spacing={Spacing.XL} fullHeight={true}>
-								<RadioGroup
-									label='Select Upload Mode'
-									name='uploadMode'
-									size={RadioGroupSize.Large}
-									markAsRequired={true}
-									value={importKind}
-									onChange={setImportKind}
-									explanationText={`<p>All Contacts in the import file will be processed.</p>
-									  <ul>
-										<li>
-										  Insert: Any existing Contacts (matched by ContactGUID)
-										  will be skipped for import.
-										</li>
-										<li>
-										  Delete: Any existing Contacts (matched by ContactGUID)
-										  will be deleted from the database.
-										</li>
-									  </ul>`}
-									explanationTextAsHtml={true}
-								>
-									{uploadModeOptions.map((option, key) => (
-										<RadioButton key={option.value} {...option}>
-											{option.label}
-										</RadioButton>
-									))}
-								</RadioGroup>
-								{importKind === 'insert' &&
-									(<div style={{ maxWidth: '400px' }}>
-										<Select
-											label='Assign to Contact Group'
-											clearable={true}
-											placeholder='Select Group'
-											onChange={setContactGroup}
-											value={contactGroup}
-											disabled={props.contactGroups.length === 0}
-											explanationText='Select a Contact Group that all Contacts will be associated with'
-										>
-											{props.contactGroups.map((c) => (
-												<MenuItem
-													primaryLabel={c.displayName}
-													key={c.guid}
-													value={c.guid}
-												/>
-											))}
-										</Select>
-									</div>)
-								}
-
 								<Box spacingY={Spacing.M}>
 									<style>{`.dropzone___rGl2g { padding: 10px; }`}</style>
 									<UploadTile
 										acceptFiles='.csv'
-										firstLineLabel='Drag&Drop .csv here'
-										secondLineLabel='or'
-										buttonLabel='Browse'
+										firstLineLabel={Localization.integrations.contactsimporter.content.labels.uploadFileLine1}
+										secondLineLabel={Localization.integrations.contactsimporter.content.labels.uploadFileLine2}
+										buttonLabel={Localization.integrations.contactsimporter.content.labels.uploadButton}
 										size={UploadTileSize.Compact}
 										onUpload={([f]) => {
 											if (f instanceof File) {
 												setFile(f);
 												setCurrentFile({ current: 0, total: f.size });
 											}
-										}}
-									/>
+										}} />
 
 									{file !== null && (
 										<p style={{ color: 'var(--color-text-default-on-light)' }}>
@@ -381,29 +312,58 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 									)}
 								</Box>
 
+								<RadioGroup
+									label={Localization.integrations.contactsimporter.content.labels.importMode}
+									name='uploadMode'
+									size={RadioGroupSize.Large}
+									value={importKind}
+									onChange={setImportKind}>
+									{uploadModeOptions.map((option, key) => (
+										<RadioButton key={option.value} {...option}>
+											{option.label}
+										</RadioButton>
+									))}
+								</RadioGroup>
+								{importKind === 'insert' &&
+									(<div style={{ maxWidth: '400px' }}>
+									<Select
+										label={Localization.integrations.contactsimporter.content.labels.contactGroup}
+										clearable={true}
+										placeholder='(none)'
+										onChange={setContactGroup}
+										value={contactGroup}
+										disabled={props.contactGroups.length === 0}
+										explanationText={Localization.integrations.contactsimporter.content.explanations.contactGroup}>
+											{props.contactGroups.map((c) => (
+												<MenuItem
+													primaryLabel={c.displayName}
+													key={c.guid}
+													value={c.guid}/>
+											))}
+										</Select>
+									</div>)
+								}
+
 								<div style={{ maxWidth: '400px' }}>
 									<Input
-										label='CSV record delimiter'
+										label={Localization.integrations.contactsimporter.content.labels.delimiter}
 										type='text'
 										onChange={(v) => {
 											setDelimiter(v.target.value);
 										}}
 										value={delimiter}
-										explanationText='The delimiter for each CSV row data item.'
-									/>
+										explanationText={Localization.integrations.contactsimporter.content.explanations.delimiter}/>
 								</div>
 								<div style={{ maxWidth: '400px' }}>
 									<Input
-										label='Batch size'
+										label={Localization.integrations.contactsimporter.content.labels.batchSize}
 										type='number'
 										onChange={(v) => {
 											setBatchSize(Number.parseInt(v.target.value, 10));
 										}}
 										value={batchSize}
 										min={1}
-										explanationText='The number of records that will be uploaded and processed at a time.'
-									/>
-
+										explanationText={Localization.integrations.contactsimporter.content.explanations.batchSize}/>
 								</div>
 
 								{currentFile.total > 0 && (
@@ -420,7 +380,7 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 								)}
 
 								<Button
-									label='Upload file'
+									label={Localization.integrations.contactsimporter.content.labels.run}
 									size={ButtonSize.S}
 									onClick={onUpload}
 								/>
