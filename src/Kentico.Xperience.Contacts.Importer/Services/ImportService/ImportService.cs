@@ -12,41 +12,23 @@ using CsvHelper.Configuration;
 using Microsoft.Data.SqlClient;
 
 
-namespace Kentico.Xperience.Contacts.Importer.Services;
+namespace Kentico.Xperience.Contacts.Importer.Services.ImportService;
+
 /// <inheritdoc />
-public class ImportService : IImportService
+public class ImportService(
+    IInfoProvider<ContactGroupInfo> contactGroupInfoProvider,
+    IInfoProvider<ContactInfo> contactInfoProvider,
+    IInfoProvider<ContactGroupMemberInfo> contactGroupMemberInfoProvider,
+    IInfoProvider<EmailSubscriptionConfirmationInfo> emailSubscriptionConfirmationInfoProvider,
+    IContactsDeleteService contactsDeleteService) : IImportService
 {
-    private readonly IInfoProvider<ContactGroupInfo> contactGroupInfoProvider;
-    private readonly IInfoProvider<ContactInfo> contactInfoProvider;
-    private readonly IInfoProvider<ContactGroupMemberInfo> contactGroupMemberInfoProvider;
-    private readonly IInfoProvider<EmailSubscriptionConfirmationInfo> emailSubscriptionConfirmationInfoProvider;
-    private readonly IContactsDeleteService contactsDeleteService;
-
-    /// <param name="contactGroupInfoProvider"></param>
-    /// <param name="contactInfoProvider"></param>
-    /// <param name="contactGroupMemberInfoProvider"></param>
-    /// <param name="emailSubscriptionConfirmationInfoProvider"></param>
-    /// <param name="contactsDeleteService"></param>
-    public ImportService(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider,
-        IInfoProvider<ContactInfo> contactInfoProvider,
-        IInfoProvider<ContactGroupMemberInfo> contactGroupMemberInfoProvider,
-        IInfoProvider<EmailSubscriptionConfirmationInfo> emailSubscriptionConfirmationInfoProvider,
-        IContactsDeleteService contactsDeleteService)
-    {
-        this.contactGroupInfoProvider = contactGroupInfoProvider;
-        this.contactInfoProvider = contactInfoProvider;
-        this.contactGroupMemberInfoProvider = contactGroupMemberInfoProvider;
-        this.emailSubscriptionConfirmationInfoProvider = emailSubscriptionConfirmationInfoProvider;
-        this.contactsDeleteService = contactsDeleteService;
-    }
-
     /// <summary>
-    /// Defined how ContactInfo columns will be mapped from CSV
+    /// Defines how ContactInfo columns will be mapped from CSV.
     /// </summary>
     public sealed class ContactInfoMap : ClassMap<ContactInfo>
     {
         /// <summary>
-        /// Defines import map for ContactInfo.TYPEINFO.ColumnNames
+        /// Defines import map for <c>ContactInfo.TYPEINFO.ColumnNames</c>.
         /// </summary>
         public ContactInfoMap()
         {
@@ -60,6 +42,7 @@ public class ImportService : IImportService
         }
     }
 
+
     private sealed class ContactDeleteArgument
     {
         // Pragma disable reason: used implicitly
@@ -69,8 +52,8 @@ public class ImportService : IImportService
         public Guid ContactGUID { get; set; }
 #pragma warning restore S3459
 #pragma warning restore S1144
+    }
 
-    };
 
     private sealed class SimplifiedMap : ClassMap<ContactDeleteArgument>
     {
@@ -79,9 +62,14 @@ public class ImportService : IImportService
 #pragma warning restore S1144
     }
 
-    /// <exception cref="Exception">Thrown when contact group is missing</exception>
+
     /// <inheritdoc />
-    public async Task RunImport(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync)
+    /// <exception cref="Exception">Thrown when contact group is missing.</exception>
+    public async Task RunImport(
+        Stream csvStream,
+        ImportContext context,
+        Func<List<ImportResult>, int, Task> onResultCallbackAsync,
+        Func<Exception, Task> onErrorCallbackAsync)
     {
         switch (context.ImportKind)
         {
@@ -102,7 +90,12 @@ public class ImportService : IImportService
         }
     }
 
-    private async Task BulkDeleteContactFromCsvAsync(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync)
+
+    private async Task BulkDeleteContactFromCsvAsync(
+        Stream csvStream,
+        ImportContext context,
+        Func<List<ImportResult>, int, Task> onResultCallbackAsync,
+        Func<Exception, Task> onErrorCallbackAsync)
     {
         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
@@ -141,7 +134,7 @@ public class ImportService : IImportService
 
                     if (totalProcessed % context.BatchSize == 0)
                     {
-                        // we are no concerned here that totalProcessed is captured from foreign closure
+                        // we are not concerned here that totalProcessed is captured from foreign closure
                         // we do not await this task, it doesn't concern import routine 
 #pragma warning disable CS4014
                         Task.Run(async () => await onResultCallbackAsync.Invoke([], totalProcessed));
@@ -166,11 +159,11 @@ public class ImportService : IImportService
 
         foreach (var deleteArg in Pipe2TransformBatches(records))
         {
-
             // assign existing task and continue with preparation of next
             await DeletedContactsAsync(deleteArg, context.BatchSize);
         }
     }
+
 
     private void InsertContactGroupBindings(ContactGroupInfo group, IEnumerable<ContactInfo> importedContacts)
     {
@@ -221,7 +214,12 @@ public class ImportService : IImportService
         }
     }
 
-    private async Task InsertContactsFromCsvAsync(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync)
+
+    private async Task InsertContactsFromCsvAsync(
+        Stream csvStream,
+        ImportContext context,
+        Func<List<ImportResult>, int, Task> onResultCallbackAsync,
+        Func<Exception, Task> onErrorCallbackAsync)
     {
         ContactGroupInfo? group = null;
         ContactGroupInfo? recipientList = null;
@@ -330,7 +328,8 @@ public class ImportService : IImportService
         }
     }
 
-    private IEnumerable<T> CsvReadRecords<T>(CsvReader csv)
+
+    private static IEnumerable<T> CsvReadRecords<T>(CsvReader csv)
     {
         while (csv.Read())
         {
@@ -344,6 +343,7 @@ public class ImportService : IImportService
             yield return csv.GetRecord<T>();
         }
     }
+
 
     private Task DeletedContactsAsync(List<Guid> contactGuids, int batchLimit)
     {

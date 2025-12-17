@@ -1,62 +1,77 @@
-﻿
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 
 namespace Kentico.Xperience.Contacts.Importer.Auxiliary;
+
 /// <summary>
-/// single purpose stream - consumer (read) waits for promised data, implementation of stream abstract class is not complete and is not needed (internal class) 
+/// Single purpose stream - consumer (read) waits for promised data, implementation of stream abstract class is not complete and is not
+/// needed (internal class).
 /// </summary>
 /// <inheritdoc />
 internal sealed class AsynchronousStream(int streamWriteCountCache) : Stream
 {
-    private readonly BlockingCollection<byte[]> blocks = new(streamWriteCountCache);
     private byte[]? currentBlock;
     private int currentBlockIndex;
-
-    public int CachedBlocks => blocks.Count;
+    private readonly bool canRead = true;
+    private readonly BlockingCollection<byte[]> blocks = new(streamWriteCountCache);
 
 
     /// <inheritdoc />
     public override bool CanTimeout => false;
 
-    private readonly bool canRead = true;
 
     /// <inheritdoc />
     public override bool CanRead => canRead;
 
+
     /// <inheritdoc />
     public override bool CanSeek => false;
+
 
     /// <inheritdoc />
     public override bool CanWrite => true;
 
+
     /// <inheritdoc />
     public override long Length => throw new NotSupportedException();
 
+
     /// <inheritdoc />
-    public override void Flush()
-    {
-    }
-
-    public long TotalBytesWritten { get; private set; }
-
-    public int WriteCount { get; private set; }
-
     public override long Position
     {
         get => throw new NotSupportedException();
         set => throw new NotSupportedException();
     }
 
+
+    public long TotalBytesWritten { get; private set; }
+
+
+    public int WriteCount { get; private set; }
+
+
+    public int CachedBlocks => blocks.Count;
+
+
+    /// <inheritdoc />
+    public override void Flush()
+    {
+    }
+
+
+    /// <inheritdoc />
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
 
+
+    /// <inheritdoc />
     public override void SetLength(long value) => throw new NotSupportedException();
 
+
+    /// <inheritdoc />
     public override int Read(byte[] buffer, int offset, int count)
     {
         ValidateBufferArgs(buffer, offset, count);
 
         int bytesRead = 0;
-
         while (true)
         {
             if (currentBlock != null)
@@ -85,6 +100,8 @@ internal sealed class AsynchronousStream(int streamWriteCountCache) : Stream
         }
     }
 
+
+    /// <inheritdoc />
     public override void Write(byte[] buffer, int offset, int count)
     {
         ValidateBufferArgs(buffer, offset, count);
@@ -96,6 +113,8 @@ internal sealed class AsynchronousStream(int streamWriteCountCache) : Stream
         WriteCount++;
     }
 
+
+    /// <inheritdoc />
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
@@ -106,13 +125,18 @@ internal sealed class AsynchronousStream(int streamWriteCountCache) : Stream
         }
     }
 
+
+    /// <inheritdoc />
     public override void Close()
     {
         CompleteWriting();
+
         base.Close();
     }
 
+
     public void CompleteWriting() => blocks.CompleteAdding();
+
 
     public bool TryCompleteWriting()
     {
@@ -130,24 +154,12 @@ internal sealed class AsynchronousStream(int streamWriteCountCache) : Stream
 
     private static void ValidateBufferArgs(byte[] buffer, int offset, int count)
     {
-        if (buffer == null)
-        {
-            throw new ArgumentNullException("buffer");
-        }
-
-        if (offset < 0)
-        {
-            throw new ArgumentOutOfRangeException("offset");
-        }
-
-        if (count < 0)
-        {
-            throw new ArgumentOutOfRangeException("count");
-        }
-
+        ArgumentNullException.ThrowIfNull(buffer);
+        ArgumentOutOfRangeException.ThrowIfNegative(offset);
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
         if (buffer.Length - offset < count)
         {
-            throw new ArgumentException("buffer.Length - offset < count");
+            throw new ArgumentException("Buffer length minus offset cannot be less than count.");
         }
     }
 }

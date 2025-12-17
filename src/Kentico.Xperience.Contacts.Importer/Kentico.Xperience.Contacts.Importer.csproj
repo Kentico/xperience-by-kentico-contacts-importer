@@ -44,14 +44,8 @@
 		</ItemGroup>
 	</Target>
 
-
 	<ItemGroup>
 		<PackageReference Include="CsvHelper" />
 		<PackageReference Include="Kentico.Xperience.Admin" />
 	</ItemGroup>
-
-	<!--<ItemGroup>
-      <EmbeddedResource Include="Resources\ContactsImporterResources.resx" />
-    </ItemGroup>-->
-
 </Project>

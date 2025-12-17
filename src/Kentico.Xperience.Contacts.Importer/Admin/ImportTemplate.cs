@@ -2,38 +2,28 @@
 using CMS.DataEngine;
 
 using Kentico.Xperience.Admin.Base;
-using Kentico.Xperience.Contacts.Importer.Admin;
-
-[assembly: UIPage(
-   parentType: typeof(ContactsImporterApplication),
-   name: "Upload-Delete",
-   slug: "upload",
-   uiPageType: typeof(ImportTemplate),
-   templateName: ImportTemplate.TEMPLATE_NAME,
-   order: 100)]
 
 namespace Kentico.Xperience.Contacts.Importer.Admin;
 
-internal class ImportTemplate : Page<CustomLayoutProperties>
+/// <summary>
+/// UI page for contact import.
+/// </summary>
+internal class ImportTemplate(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider) : Page<ImportTemplateClientProperties>
 {
     public const string TEMPLATE_NAME = "@kentico/xperience-integrations-contacts-importer/ImportLayout";
 
 
-    private readonly IInfoProvider<ContactGroupInfo> contactGroupInfoProvider;
-
-    public ImportTemplate(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider) => this.contactGroupInfoProvider = contactGroupInfoProvider;
-
-    public override async Task<CustomLayoutProperties> ConfigureTemplateProperties(CustomLayoutProperties properties)
+    public override Task<ImportTemplateClientProperties> ConfigureTemplateProperties(ImportTemplateClientProperties properties)
     {
-        var contactGroups = await contactGroupInfoProvider.Get()
+        var contactGroups = contactGroupInfoProvider.Get()
             .Columns(nameof(ContactGroupInfo.ContactGroupGUID), nameof(ContactGroupInfo.ContactGroupDisplayName))
             .WhereFalse(nameof(ContactGroupInfo.ContactGroupIsRecipientList))
-            .GetEnumerableTypedResultAsync();
+            .ToList();
 
-        var recipientLists = await contactGroupInfoProvider.Get()
+        var recipientLists = contactGroupInfoProvider.Get()
             .Columns(nameof(ContactGroupInfo.ContactGroupGUID), nameof(ContactGroupInfo.ContactGroupDisplayName))
             .WhereTrue(nameof(ContactGroupInfo.ContactGroupIsRecipientList))
-            .GetEnumerableTypedResultAsync();
+            .ToList();
 
         properties.ContactGroups = contactGroups
             .Select(x => new ContactGroupSimplified(x.ContactGroupGUID, x.ContactGroupDisplayName))
@@ -43,14 +33,27 @@ internal class ImportTemplate : Page<CustomLayoutProperties>
             .Select(x => new ContactGroupSimplified(x.ContactGroupGUID, x.ContactGroupDisplayName))
             .ToList();
 
-        return properties;
+        return Task.FromResult(properties);
     }
 }
 
+
+/// <summary>
+/// Represents an Xperience by Kentico contact group.
+/// </summary>
+/// <param name="Guid">The <see cref="ContactGroupInfo.ContactGroupGUID"/>.</param>
+/// <param name="DisplayName">The <see cref="ContactGroupInfo.ContactGroupDisplayName"/>.</param>
 public record ContactGroupSimplified(Guid Guid, string DisplayName);
 
-internal class CustomLayoutProperties : TemplateClientProperties
+
+/// <summary>
+/// Client template properties for contact import page.
+/// </summary>
+internal class ImportTemplateClientProperties : TemplateClientProperties
 {
+    /// <summary>
+    /// List of contact groups available for selection during the import process.
+    /// </summary>
     public List<ContactGroupSimplified> ContactGroups { get; set; } = [];
 
     public List<ContactGroupSimplified> RecipientLists { get; set; } = [];

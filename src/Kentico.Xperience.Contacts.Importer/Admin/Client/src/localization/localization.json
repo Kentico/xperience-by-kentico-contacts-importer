@@ -1,11 +1,43 @@
 {
     "integrations": {
-        "contactsimporter": {
-            "content": {
-                "headlines": {
-                    "main": "Upload/Delete Contacts"
-                }
-            }
+      "contactsimporter": {
+        "messages": {
+          "noFile": "No file was selected.",
+          "errorUploading": "An error occurred while uploading the file.",
+          "headersValidated": "CSV headers validated. Starting import.",
+          "uploadComplete": "File upload complete.",
+          "importComplete": "Import complete.",
+          "sendingFile": "Sending file of length",
+          "errorReading": "An error occurred while reading the file.",
+          "unexpectedFile": "Unexpected file read result type.",
+          "serverError": "Unexpected server error.",
+          "readComplete": "Completed reading file.",
+          "uploadPaused": "Pausing upload while contacts are imported."
+        },
+        "content": {
+          "headlines": {
+            "main": "Import contacts"
+          },
+          "labels": {
+            "importMode": "Import mode",
+            "insert": "Insert",
+            "delete": "Delete",
+            "contactGroup": "Assign to contact group",
+            "recipientList": "Assign to recipient list",
+            "uploadFileLine1": "Drag & drop CSV",
+            "uploadFileLine2": "or",
+            "uploadButton": "Browse",
+            "delimiter": "Delimiter",
+            "batchSize": "Batch size",
+            "run": "Run import"
+          },
+          "explanations": {
+            "contactGroup": "Assigns all contacts in CSV file to the selected group. Leave empty to skip assignment.",
+            "recipientList": "Assigns all contacts in CSV file to the selected recipient list. Leave empty to skip assignment.",
+            "delimiter": "The delimiter for CSV row data items.",
+            "batchSize": "The number of records that will be uploaded and processed at a time."
+          }
         }
+      }
     }
 }
