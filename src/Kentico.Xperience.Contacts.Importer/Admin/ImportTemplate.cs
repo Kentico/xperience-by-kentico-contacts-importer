@@ -27,9 +27,19 @@ internal class ImportTemplate : Page<CustomLayoutProperties>
     {
         var contactGroups = await contactGroupInfoProvider.Get()
             .Columns(nameof(ContactGroupInfo.ContactGroupGUID), nameof(ContactGroupInfo.ContactGroupDisplayName))
+            .WhereFalse(nameof(ContactGroupInfo.ContactGroupIsRecipientList))
+            .GetEnumerableTypedResultAsync();
+
+        var recipientLists = await contactGroupInfoProvider.Get()
+            .Columns(nameof(ContactGroupInfo.ContactGroupGUID), nameof(ContactGroupInfo.ContactGroupDisplayName))
+            .WhereTrue(nameof(ContactGroupInfo.ContactGroupIsRecipientList))
             .GetEnumerableTypedResultAsync();
 
         properties.ContactGroups = contactGroups
+            .Select(x => new ContactGroupSimplified(x.ContactGroupGUID, x.ContactGroupDisplayName))
+            .ToList();
+
+        properties.RecipientLists = recipientLists
             .Select(x => new ContactGroupSimplified(x.ContactGroupGUID, x.ContactGroupDisplayName))
             .ToList();
 
@@ -42,4 +52,6 @@ public record ContactGroupSimplified(Guid Guid, string DisplayName);
 internal class CustomLayoutProperties : TemplateClientProperties
 {
     public List<ContactGroupSimplified> ContactGroups { get; set; } = [];
+
+    public List<ContactGroupSimplified> RecipientLists { get; set; } = [];
 }

@@ -44,7 +44,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
 
     private sealed record Message(string Type, HeaderPayload? Payload);
 
-    private sealed record HeaderPayload(string ImportKind, Guid? ContactGroup, int? BatchSize, string Delimiter);
+    private sealed record HeaderPayload(string ImportKind, Guid? ContactGroup, Guid? RecipientList, int? BatchSize, string Delimiter);
 
     private static async Task DownloadAndImport(WebSocket webSocket, IImportService importService, IEventLogService logService, CancellationToken cancellationToken)
     {
@@ -87,6 +87,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
         var header = (await ReceiveHeader(webSocket, default))?.ToObject<Message>()?.Payload;
         var context = new ImportContext(
             header?.ContactGroup,
+            header?.RecipientList,
             header?.BatchSize ?? 50000,
             header?.Delimiter ?? ",",
             header?.ImportKind ?? ImportKind.InsertAndSkipExisting

@@ -40,6 +40,7 @@ import Localization from '../localization/localization.json';
 
 interface CustomLayoutProps {
 	readonly contactGroups: Array<{ guid: string; displayName: string }>;
+	readonly recipientLists: Array<{ guid: string; displayName: string }>;
 }
 
 let canContinue = true;
@@ -47,6 +48,7 @@ let toofast = false;
 
 export const ImportLayoutTemplate = ({
 	contactGroups,
+	recipientLists,
 }: CustomLayoutProps): JSX.Element => {
 	const [error, setError] = useState<string | null>(null);
 	const [file, setFile] = useState<File | null>(null);
@@ -55,6 +57,7 @@ export const ImportLayoutTemplate = ({
 
 	const [importKind, setImportKind] = useState("insert");
 	const [contactGroup, setContactGroup] = useState<string | undefined>("");
+	const [ recipientList, setRecipientList ] = useState<string | undefined>("");
 	const [delimiter, setDelimiter] = useState<string>(",");
 	const [batchSize, setBatchSize] = useState<number>(5000);
 
@@ -251,6 +254,7 @@ export const ImportLayoutTemplate = ({
 					payload: {
 						importKind,
 						contactGroup: contactGroup === null ? null : contactGroup,
+						recipientList: recipientList === null ? null : recipientList,
 						delimiter,
 						batchSize,
 					},
@@ -328,25 +332,47 @@ export const ImportLayoutTemplate = ({
 									))}
 								</RadioGroup>
 								{importKind === "insert" &&
-									(<div style={{ maxWidth: "400px" }}>
-										<Select
-											label="Assign to Contact Group"
-											clearable={true}
-											placeholder="Select Group"
-											onChange={setContactGroup}
-											value={contactGroup}
-											disabled={contactGroups.length === 0}
-											explanationText="Select a Contact Group that all Contacts will be associated with"
-										>
-											{contactGroups.map((c) => (
-												<MenuItem
-													primaryLabel={c.displayName}
-													key={c.guid}
-													value={c.guid}
-												/>
-											))}
-										</Select>
+									(<div>
+										<div style={{ maxWidth: "400px", paddingBottom: "20px" }}>
+											<Select
+												label="Assign to Contact Group"
+												clearable={true}
+												placeholder="Select Group"
+												onChange={setContactGroup}
+												value={contactGroup}
+												disabled={contactGroups.length === 0}
+												explanationText="Select a Contact Group that all Contacts will be associated with"
+											>
+												{contactGroups.map((c) => (
+													<MenuItem
+														primaryLabel={c.displayName}
+														key={c.guid}
+														value={c.guid}
+													/>
+												))}
+											</Select>
+										</div>
+										<div style={{ maxWidth: "400px" }}>
+											<Select
+												label="Assign to Recipient List"
+												clearable={true}
+												placeholder="Select Recipient List"
+												onChange={setRecipientList}
+												value={recipientList}
+												disabled={recipientLists.length === 0}
+												explanationText="Select a Recipient List that all Contacts will be associated with"
+											>
+												{recipientLists.map((c) => (
+													<MenuItem
+														primaryLabel={c.displayName}
+														key={c.guid}
+														value={c.guid}
+													/>
+												))}
+											</Select>
+										</div>
 									</div>)
+									
 								}
 
 								<Box spacingY={Spacing.M}>

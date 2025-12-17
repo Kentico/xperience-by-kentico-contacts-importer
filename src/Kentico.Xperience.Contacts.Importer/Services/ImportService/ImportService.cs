@@ -1,17 +1,16 @@
-﻿
-using System.Data;
+﻿using System.Data;
 using System.Globalization;
 
 using CMS.Base;
 using CMS.ContactManagement;
 using CMS.DataEngine;
+using CMS.EmailMarketing;
 
 using CsvHelper;
 using CsvHelper.Configuration;
 
 using Microsoft.Data.SqlClient;
 
-using Newtonsoft.Json;
 
 namespace Kentico.Xperience.Contacts.Importer.Services;
 /// <inheritdoc />
@@ -19,15 +18,25 @@ public class ImportService : IImportService
 {
     private readonly IInfoProvider<ContactGroupInfo> contactGroupInfoProvider;
     private readonly IInfoProvider<ContactInfo> contactInfoProvider;
+    private readonly IInfoProvider<ContactGroupMemberInfo> contactGroupMemberInfoProvider;
+    private readonly IInfoProvider<EmailSubscriptionConfirmationInfo> emailSubscriptionConfirmationInfoProvider;
     private readonly IContactsDeleteService contactsDeleteService;
 
     /// <param name="contactGroupInfoProvider"></param>
     /// <param name="contactInfoProvider"></param>
+    /// <param name="contactGroupMemberInfoProvider"></param>
+    /// <param name="emailSubscriptionConfirmationInfoProvider"></param>
     /// <param name="contactsDeleteService"></param>
-    public ImportService(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider, IInfoProvider<ContactInfo> contactInfoProvider, IContactsDeleteService contactsDeleteService)
+    public ImportService(IInfoProvider<ContactGroupInfo> contactGroupInfoProvider,
+        IInfoProvider<ContactInfo> contactInfoProvider,
+        IInfoProvider<ContactGroupMemberInfo> contactGroupMemberInfoProvider,
+        IInfoProvider<EmailSubscriptionConfirmationInfo> emailSubscriptionConfirmationInfoProvider,
+        IContactsDeleteService contactsDeleteService)
     {
         this.contactGroupInfoProvider = contactGroupInfoProvider;
         this.contactInfoProvider = contactInfoProvider;
+        this.contactGroupMemberInfoProvider = contactGroupMemberInfoProvider;
+        this.emailSubscriptionConfirmationInfoProvider = emailSubscriptionConfirmationInfoProvider;
         this.contactsDeleteService = contactsDeleteService;
     }
 
@@ -163,21 +172,82 @@ public class ImportService : IImportService
         }
     }
 
+    private void InsertContactGroupBindings(ContactGroupInfo group, IEnumerable<ContactInfo> importedContacts)
+    {
+        var currentDateTime = DateTime.Now;
+
+        List<ContactGroupMemberInfo> groupMemberList = [];
+        List<EmailSubscriptionConfirmationInfo> subscriptionConfirmationList = [];
+
+        var existingGroupMemberIdSubquery = contactGroupMemberInfoProvider.Get()
+            .WhereEquals(nameof(ContactGroupMemberInfo.ContactGroupMemberType), ContactGroupMemberTypeEnum.Contact)
+            .WhereEquals(nameof(ContactGroupMemberInfo.ContactGroupMemberContactGroupID), group.ContactGroupID)
+            .Column(nameof(ContactGroupMemberInfo.ContactGroupMemberRelatedID));
+
+        var contactIDs = contactInfoProvider.Get()
+            .WhereNotIn(nameof(ContactInfo.ContactID), existingGroupMemberIdSubquery)
+            .WhereIn(nameof(ContactInfo.ContactGUID), importedContacts.Select(x => x.ContactGUID))
+            .Column(nameof(ContactInfo.ContactID))
+            .GetListResult<int>();
+
+        foreach (int contactID in contactIDs)
+        {
+            groupMemberList.Add(new ContactGroupMemberInfo
+            {
+                ContactGroupMemberContactGroupID = group.ContactGroupID,
+                ContactGroupMemberType = ContactGroupMemberTypeEnum.Contact,
+                ContactGroupMemberRelatedID = contactID,
+                ContactGroupMemberFromManual = true,
+                ContactGroupMemberFromCondition = false,
+            });
+
+            if (group.ContactGroupIsRecipientList)
+            {
+                subscriptionConfirmationList.Add(new EmailSubscriptionConfirmationInfo
+                {
+                    EmailSubscriptionConfirmationContactID = contactID,
+                    EmailSubscriptionConfirmationRecipientListID = group.ContactGroupID,
+                    EmailSubscriptionConfirmationIsApproved = true,
+                    EmailSubscriptionConfirmationDate = currentDateTime,
+                });
+            }
+        }
+
+        contactGroupMemberInfoProvider.BulkInsert(groupMemberList);
+
+        if (group.ContactGroupIsRecipientList)
+        {
+            emailSubscriptionConfirmationInfoProvider.BulkInsert(subscriptionConfirmationList);
+        }
+    }
+
     private async Task InsertContactsFromCsvAsync(Stream csvStream, ImportContext context, Func<List<ImportResult>, int, Task> onResultCallbackAsync, Func<Exception, Task> onErrorCallbackAsync)
     {
         ContactGroupInfo? group = null;
+        ContactGroupInfo? recipientList = null;
 
         if (context.AssignToContactGroupGuid is { } assignToContactGroupGuid)
         {
             group = await contactGroupInfoProvider.GetAsync(assignToContactGroupGuid);
-            if (group == null)
+            if (group is null)
             {
                 throw new ArgumentException("Contact group not found", nameof(context));
             }
         }
+        if (context.AssignToRecipientListGuid is { } assignToRecipientListGuid)
+        {
+            recipientList = await contactGroupInfoProvider.GetAsync(assignToRecipientListGuid);
 
-        var contactGuids = ConnectionHelper.ExecuteQuery(@"SELECT ContactGUID FROM OM_Contact", [], QueryTypeEnum.SQLQuery)
-            .Tables[0].AsEnumerable().Select(x => (Guid)x[nameof(ContactInfo.ContactGUID)]).ToHashSet();
+            if (recipientList is null)
+            {
+                throw new ArgumentException("Recipient list not found", nameof(context));
+            }
+        }
+
+        var contactGuids = contactInfoProvider.Get()
+            .Column(nameof(ContactInfo.ContactGUID))
+            .GetListResult<Guid>()
+            .ToHashSet();
 
         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
@@ -239,8 +309,6 @@ public class ImportService : IImportService
             LogEvents = false,
         })
         {
-            // we cannot use ContactInfoProvider.ProviderObject.BulkInsertInfos - insert is not immediate (all items stored in memory before insert) so direct piping is not possible 
-
             foreach (var contactBatch in Pipe2TransformBatches(records))
             {
                 contactInfoProvider.BulkInsert(contactBatch.Where(x => x.insert).Select(x => x.info), new BulkInsertSettings
@@ -249,10 +317,14 @@ public class ImportService : IImportService
                     Options = SqlBulkCopyOptions.Default,
                 });
 
-                if (group != null)
+                if (group is not null)
                 {
-                    // cannot employ async insert, it is not stable (bricks bulk contact sql connection)
-                    await InsertGroupMembersAsync(contactBatch.Select(x => x.info.ContactGUID), group);
+                    InsertContactGroupBindings(group, contactBatch.Where(x => x.insert).Select(x => x.info));
+                }
+
+                if (recipientList is not null)
+                {
+                    InsertContactGroupBindings(recipientList, contactBatch.Where(x => x.insert).Select(x => x.info));
                 }
             }
         }
@@ -273,48 +345,8 @@ public class ImportService : IImportService
         }
     }
 
-
-    private static Task InsertGroupMembersAsync(IEnumerable<Guid> contactGuids, ContactGroupInfo group) =>
-        Task.Run(() =>
-        {
-            string query = @"
-INSERT INTO [dbo].[OM_ContactGroupMember] ([ContactGroupMemberContactGroupID], [ContactGroupMemberType], [ContactGroupMemberRelatedID],
-                                           [ContactGroupMemberFromCondition], [ContactGroupMemberFromAccount], [ContactGroupMemberFromManual])
--- OUTPUT [inserted].[ContactGroupMemberContactGroupID]
-SELECT @contactGroupId [ContactGroup], @contactGroupMemberType AS [ContactGroupMemberType], [C].[ContactID], NULL, NULL, 1 [ContactGroupMemberFromManual]
-FROM [dbo].[OM_Contact] [C]
-WHERE EXISTS (SELECT 1
-              FROM OPENJSON(@jsonGuidArray, '$')
-              WHERE CAST([value] AS UNIQUEIDENTIFIER) = [C].[ContactGUID])
-      AND NOT EXISTS (SELECT 1
-          FROM [dbo].[OM_ContactGroupMember] [CGM]
-          WHERE [CGM].[ContactGroupMemberContactGroupID] = @contactGroupId
-            AND [CGM].[ContactGroupMemberRelatedID] = [C].[ContactID])
-";
-
-            string jsonGuidArray = JsonConvert.SerializeObject(contactGuids);
-
-            ConnectionHelper.ExecuteNonQuery(query,
-            [
-                new("contactGroupId", group.ContactGroupID),
-                new("jsonGuidArray", jsonGuidArray),
-                new("contactGroupMemberType", (int)ContactGroupMemberTypeEnum.Contact),
-            ], QueryTypeEnum.SQLQuery);
-        });
-
     private Task DeletedContactsAsync(List<Guid> contactGuids, int batchLimit)
     {
-        // for future implementation of bulk delete
-#pragma warning disable S125
-        // var query = @"WITH [CTE]([Guid])
-        //  AS
-        //  (SELECT CAST([l].[value] AS UNIQUEIDENTIFIER) [Guid]
-        //   FROM OPENJSON('@jsonGuidArray', '$') [l])
-        // DELETE
-        // FROM [dbo].[OM_Contact]
-        // OUTPUT [deleted].[ContactID]
-        // WHERE EXISTS (SELECT 1 FROM [CTE] WHERE [CTE].[Guid] = [ContactGUID])";
-#pragma warning restore S125
         if (contactGuids.Count == 0)
         {
             return Task.CompletedTask;
@@ -322,13 +354,10 @@ WHERE EXISTS (SELECT 1
 
         return Task.Run(() =>
         {
-            string jsonGuidArray = JsonConvert.SerializeObject(contactGuids);
-            string whereCondition = $"""
-EXISTS (SELECT 1 FROM OPENJSON('{jsonGuidArray}', '$') [l] WHERE CAST([l].[value] AS UNIQUEIDENTIFIER) = [ContactGUID])
-""";
-
+            var whereCondition = new WhereCondition()
+                .WhereIn(nameof(ContactInfo.ContactGUID), contactGuids);
             // if results are needed we can run SP ([dbo].[Proc_OM_Contact_MassDelete]) manually, it returns list of deleted contacts
-            contactsDeleteService.BulkDelete(whereCondition, batchLimit);
+            contactsDeleteService.BulkDelete(whereCondition.ToString(), batchLimit);
         });
     }
 }

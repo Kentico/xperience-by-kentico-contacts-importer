@@ -4,10 +4,11 @@
 /// 
 /// </summary>
 /// <param name="AssignToContactGroupGuid">null if no assignment is requested</param>
+/// <param name="AssignToRecipientListGuid">null if no assignment is requested</param>
 /// <param name="BatchSize"></param>
 /// <param name="Delimiter"></param>
 /// <param name="ImportKind"><see cref="Services.ImportKind"/></param>
-public record ImportContext(Guid? AssignToContactGroupGuid, int BatchSize, string Delimiter, string ImportKind);
+public record ImportContext(Guid? AssignToContactGroupGuid, Guid? AssignToRecipientListGuid, int BatchSize, string Delimiter, string ImportKind);
 
 /// <summary>
 /// String enumeration of supported import kind
