@@ -6,7 +6,7 @@
 
 ## Description
 
-Enables bulk import and deletion of contacts in an Xperience by Kentico solution using a `.csv` file. Imported contacts can be automatically assigned to a contact group during the import process.
+Enables bulk import and deletion of contacts in an Xperience by Kentico solution using a `.csv` file. Imported contacts can be automatically assigned to a contact group or recipient list during the import process.
 
 ## Requirements
 
@@ -26,7 +26,7 @@ Enables bulk import and deletion of contacts in an Xperience by Kentico solution
 Add the package to your application using the .NET CLI
 
 ```powershell
-dotnet add package Kentico.Xperience.Contacts.Importer
+dotnet add package --prerelease Kentico.Xperience.Contacts.Importer
 ```
 
 ## Quick Start
@@ -50,11 +50,11 @@ View the [Usage Guide](./docs/Usage-Guide.md) for more detailed instructions.
 
 To see the guidelines for Contributing to Kentico open source software, please see [Kentico's `CONTRIBUTING.md`](https://github.com/Kentico/.github/blob/main/CONTRIBUTING.md) for more information and follow the [Kentico's `CODE_OF_CONDUCT`](https://github.com/Kentico/.github/blob/main/CODE_OF_CONDUCT.md).
 
-Instructions and technical details for contributing to **this** project can be found in [Contributing Setup](./docs/Contributing-Setup.md).
+Instructions and technical details for contributing to **this** project can be found in [Contributing Setup](./docs/Contributing.md).
 
 ## License
 
-Distributed under the MIT License. See [`LICENSE.md`](./LICENSE.md) for more information.
+Distributed under the MIT License. See [`LICENSE.md`](./LICENSE) for more information.
 
 ## Support
 

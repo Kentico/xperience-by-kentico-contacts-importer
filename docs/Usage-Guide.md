@@ -14,7 +14,8 @@
 1. In the **Import mode** field, choose the import mode:
     - Insert: Imports new contacts while skipping existing contacts with matching ContactGUIDs from the CSV file
     - Delete: Deletes existing contacts using the ContactGUIDs from the CSV file
-1. If you would like to assign newly-imported contacts _and_ existing contacts to a contact group, select the group from the **Assign to contact group** dropdown. You may leave this option empty if you don't wish to assign the contacts to a group
+1. If you would like to assign newly-imported contacts _and_ existing contacts from your CSV to a contact group, select the group from the **Assign to contact group** dropdown. You may leave this option empty if you don't wish to assign the contacts to a group
+1. If you would like to assign newly-imported contacts _and_ existing contacts from your CSV to a recipient list, select the group from the **Assign to recipient list** dropdown. You may leave this option empty if you don't wish to assign the contacts to a recipient list
 1. The **Delimiter** field can generally be skipped as the default character `,` is most common. Change this value if your CSV file uses a different character- common examples are `;` or `\\t`
 1. Customize the **Batch size** as needed. For instances with limited resources this value should not exeed 5000. A batch size lower than 100 is not recommended
 1. Click **Run import** to begin the process. Degraded application performance is expected during import
