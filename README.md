@@ -14,7 +14,7 @@ Enables bulk import and deletion of contacts in an Xperience by Kentico solution
 
 | Xperience Version | Library Version    |
 | ----------------- | ---------------    |
-| >= 30.5.1         | 1.0.0-prerelease-2 |
+| >= 30.5.1         | 1.0.0              |
 
 ### Dependencies
 
@@ -26,7 +26,7 @@ Enables bulk import and deletion of contacts in an Xperience by Kentico solution
 Add the package to your application using the .NET CLI
 
 ```powershell
-dotnet add package --prerelease Kentico.Xperience.Contacts.Importer
+dotnet add package Kentico.Xperience.Contacts.Importer
 ```
 
 ## Quick Start
