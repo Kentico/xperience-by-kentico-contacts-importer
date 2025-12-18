@@ -16,20 +16,16 @@ internal class ImportTemplate(IInfoProvider<ContactGroupInfo> contactGroupInfoPr
     public override Task<ImportTemplateClientProperties> ConfigureTemplateProperties(ImportTemplateClientProperties properties)
     {
         var contactGroups = contactGroupInfoProvider.Get()
-            .Columns(nameof(ContactGroupInfo.ContactGroupGUID), nameof(ContactGroupInfo.ContactGroupDisplayName))
-            .WhereFalse(nameof(ContactGroupInfo.ContactGroupIsRecipientList))
-            .ToList();
-
-        var recipientLists = contactGroupInfoProvider.Get()
-            .Columns(nameof(ContactGroupInfo.ContactGroupGUID), nameof(ContactGroupInfo.ContactGroupDisplayName))
-            .WhereTrue(nameof(ContactGroupInfo.ContactGroupIsRecipientList))
+            .Columns(nameof(ContactGroupInfo.ContactGroupGUID), nameof(ContactGroupInfo.ContactGroupDisplayName), nameof(ContactGroupInfo.ContactGroupIsRecipientList))
             .ToList();
 
         properties.ContactGroups = contactGroups
+            .Where(group => !group.ContactGroupIsRecipientList)
             .Select(x => new ContactGroupSimplified(x.ContactGroupGUID, x.ContactGroupDisplayName))
             .ToList();
 
-        properties.RecipientLists = recipientLists
+        properties.RecipientLists = contactGroups
+            .Where(group => group.ContactGroupIsRecipientList)
             .Select(x => new ContactGroupSimplified(x.ContactGroupGUID, x.ContactGroupDisplayName))
             .ToList();
 
@@ -56,5 +52,8 @@ internal class ImportTemplateClientProperties : TemplateClientProperties
     /// </summary>
     public List<ContactGroupSimplified> ContactGroups { get; set; } = [];
 
+    /// <summary>
+    /// List of recipient lists available for selection during the import process.
+    /// </summary>
     public List<ContactGroupSimplified> RecipientLists { get; set; } = [];
 }

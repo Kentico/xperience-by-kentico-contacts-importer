@@ -317,12 +317,12 @@ public class ImportService(
 
                 if (group is not null)
                 {
-                    InsertContactGroupBindings(group, contactBatch.Where(x => x.insert).Select(x => x.info));
+                    InsertContactGroupBindings(group, contactBatch.Select(x => x.info));
                 }
 
                 if (recipientList is not null)
                 {
-                    InsertContactGroupBindings(recipientList, contactBatch.Where(x => x.insert).Select(x => x.info));
+                    InsertContactGroupBindings(recipientList, contactBatch.Select(x => x.info));
                 }
             }
         }
