@@ -6,10 +6,10 @@
     <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Kentico.Xperience.Admin" Version="30.5.1" />
-    <PackageVersion Include="kentico.xperience.azurestorage" Version="30.5.1" />
-    <PackageVersion Include="kentico.xperience.imageprocessing" Version="30.5.1" />
-    <PackageVersion Include="kentico.xperience.webapp" Version="30.5.1" />
+    <PackageVersion Include="Kentico.Xperience.Admin" Version="31.0.1" />
+    <PackageVersion Include="kentico.xperience.azurestorage" Version="31.0.1" />
+    <PackageVersion Include="kentico.xperience.imageprocessing" Version="31.0.1" />
+    <PackageVersion Include="kentico.xperience.webapp" Version="31.0.1" />
     <PackageVersion Include="CsvHelper" Version="33.0.1" />
     <PackageVersion Include="Kentico.Xperience.ContactsImporter" Version="" Condition="'$(LOCAL_NUGET)' == 'true'" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.0" />
