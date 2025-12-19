@@ -20,7 +20,7 @@ public class ImportService(
     IInfoProvider<ContactInfo> contactInfoProvider,
     IInfoProvider<ContactGroupMemberInfo> contactGroupMemberInfoProvider,
     IInfoProvider<EmailSubscriptionConfirmationInfo> emailSubscriptionConfirmationInfoProvider,
-    IContactsDeleteService contactsDeleteService) : IImportService
+    IContactsBulkDeletionService contactsBulkDeletionService) : IImportService
 {
     /// <summary>
     /// Defines how ContactInfo columns will be mapped from CSV.
@@ -352,12 +352,12 @@ public class ImportService(
             return Task.CompletedTask;
         }
 
-        return Task.Run(() =>
+        return Task.Run(async () =>
         {
             var whereCondition = new WhereCondition()
                 .WhereIn(nameof(ContactInfo.ContactGUID), contactGuids);
             // if results are needed we can run SP ([dbo].[Proc_OM_Contact_MassDelete]) manually, it returns list of deleted contacts
-            contactsDeleteService.BulkDelete(whereCondition.ToString(), batchLimit);
+            await contactsBulkDeletionService.BulkDelete(whereCondition, batchLimit);
         });
     }
 }
