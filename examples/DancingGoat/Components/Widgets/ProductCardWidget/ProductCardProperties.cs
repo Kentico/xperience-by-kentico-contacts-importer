@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-using CMS.ContentEngine;
+﻿using CMS.ContentEngine;
 
 using Kentico.PageBuilder.Web.Mvc;
 using Kentico.Xperience.Admin.Base.FormAnnotations;

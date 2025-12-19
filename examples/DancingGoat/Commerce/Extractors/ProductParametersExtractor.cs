@@ -1,8 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-
-using DancingGoat.Models;
+﻿using DancingGoat.Models;
 
 namespace DancingGoat.Commerce
 {

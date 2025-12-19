@@ -1,17 +1,12 @@
-﻿using System;
-using System.Threading.Tasks;
-
-using CMS.Websites;
+﻿using CMS.Websites;
 
 using Kentico.Content.Web.Mvc;
 using Kentico.Content.Web.Mvc.Routing;
 
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Razor.TagHelpers;
-using Microsoft.AspNetCore.Routing;
 
 namespace DancingGoat.Helpers
 {

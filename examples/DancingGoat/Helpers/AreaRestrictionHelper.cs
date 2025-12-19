@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-using Kentico.PageBuilder.Web.Mvc;
+﻿using Kentico.PageBuilder.Web.Mvc;
 
 namespace DancingGoat.Helpers
 {

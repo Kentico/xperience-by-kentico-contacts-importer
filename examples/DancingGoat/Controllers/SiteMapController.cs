@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net.Mime;
+﻿using System.Net.Mime;
 using System.Text;
-using System.Threading.Tasks;
 using System.Xml;
 
 using CMS.ContentEngine;
@@ -12,7 +9,6 @@ using CMS.Websites.Routing;
 
 using DancingGoat.Models;
 
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DancingGoat.Controllers

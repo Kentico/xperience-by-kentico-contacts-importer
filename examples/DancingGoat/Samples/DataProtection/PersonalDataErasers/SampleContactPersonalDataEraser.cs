@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-using CMS.Activities;
+﻿using CMS.Activities;
 using CMS.ContactManagement;
 using CMS.DataEngine;
 using CMS.DataProtection;

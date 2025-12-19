@@ -1,6 +1,5 @@
 ﻿using System.Globalization;
 
-using CMS;
 using CMS.Commerce;
 
 namespace DancingGoat.Commerce;

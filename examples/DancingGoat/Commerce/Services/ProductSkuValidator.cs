@@ -1,7 +1,4 @@
-﻿using System.Linq;
-using System.Threading.Tasks;
-
-using CMS.ContentEngine;
+﻿using CMS.ContentEngine;
 
 using DancingGoat.Models;
 

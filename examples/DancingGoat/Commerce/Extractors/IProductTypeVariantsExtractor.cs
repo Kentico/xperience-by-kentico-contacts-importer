@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace DancingGoat.Commerce
+﻿namespace DancingGoat.Commerce
 {
     /// <summary>
     /// Extractor of product variants based on the product type.

@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-using CMS.Activities;
+﻿using CMS.Activities;
 using CMS.DataEngine;
 using CMS.DataProtection;
 using CMS.Globalization;

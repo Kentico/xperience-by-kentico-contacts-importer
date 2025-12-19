@@ -1,6 +1,4 @@
-﻿using System.Linq;
-
-using DancingGoat.Models;
+﻿using DancingGoat.Models;
 
 namespace DancingGoat.Widgets
 {

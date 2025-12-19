@@ -1,7 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-
-namespace DancingGoat.Helpers.Generators
+﻿namespace DancingGoat.Helpers.Generators
 {
     /// <summary>
     /// Contains methods for generating forbidden passwords.

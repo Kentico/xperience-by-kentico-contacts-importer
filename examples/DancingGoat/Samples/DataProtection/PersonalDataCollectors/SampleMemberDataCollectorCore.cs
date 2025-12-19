@@ -1,7 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-
-using CMS.DataEngine;
+﻿using CMS.DataEngine;
 using CMS.Membership;
 
 namespace Samples.DancingGoat

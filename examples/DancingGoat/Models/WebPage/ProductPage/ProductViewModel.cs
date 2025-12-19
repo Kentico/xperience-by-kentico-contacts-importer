@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-using DancingGoat.Commerce;
+﻿using DancingGoat.Commerce;
 
 namespace DancingGoat.Models
 {

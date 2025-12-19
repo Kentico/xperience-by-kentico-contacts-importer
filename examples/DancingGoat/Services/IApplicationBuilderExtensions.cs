@@ -1,8 +1,5 @@
 ﻿using DancingGoat.Commerce;
 
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-
 namespace DancingGoat;
 
 public static class IApplicationBuilderExtensions

@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-using DancingGoat.Models;
+﻿using DancingGoat.Models;
 
 namespace DancingGoat.ViewComponents
 {

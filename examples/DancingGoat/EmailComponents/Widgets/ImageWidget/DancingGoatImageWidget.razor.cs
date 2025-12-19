@@ -1,8 +1,4 @@
-﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
-
-using DancingGoat.EmailComponents;
+﻿using DancingGoat.EmailComponents;
 using DancingGoat.Models;
 
 using Kentico.Content.Web.Mvc;

@@ -1,6 +1,4 @@
-﻿using System.Threading.Tasks;
-
-using Kentico.Content.Web.Mvc.Routing;
+﻿using Kentico.Content.Web.Mvc.Routing;
 
 using Microsoft.AspNetCore.Mvc;
 

@@ -6,8 +6,6 @@ using DancingGoat.Models;
 using DancingGoat.Services;
 using DancingGoat.ViewComponents;
 
-using Microsoft.Extensions.DependencyInjection;
-
 namespace DancingGoat
 {
     public static class IServiceCollectionExtensions

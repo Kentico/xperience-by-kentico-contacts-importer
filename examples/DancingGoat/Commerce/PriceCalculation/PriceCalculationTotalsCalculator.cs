@@ -1,6 +1,4 @@
-﻿using System.Linq;
-
-namespace DancingGoat.Commerce;
+﻿namespace DancingGoat.Commerce;
 
 /// <summary>
 /// Calculator for getting totals from <see cref="DancingGoatPriceCalculationResult"/>.

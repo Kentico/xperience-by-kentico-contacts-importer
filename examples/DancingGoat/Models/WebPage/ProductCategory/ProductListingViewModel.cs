@@ -1,7 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-
-using CMS.ContentEngine;
+﻿using CMS.ContentEngine;
 using CMS.Websites;
 
 using DancingGoat.Commerce;
