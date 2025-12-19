@@ -40,6 +40,17 @@
           "SkiaSharp.NativeAssets.Linux.NoDependencies": "3.119.1"
         }
       },
+      "Kentico.Xperience.Mjml": {
+        "type": "Direct",
+        "requested": "[31.0.1, )",
+        "resolved": "31.0.1",
+        "contentHash": "PcSlpj4TdBjx8+mdPZKcV0F8CDGLra7HWg2B4OWUQjrEWGXBnXaeaGsg8iErAtw6J2xkZowkfXcQresjBpDLBA==",
+        "dependencies": {
+          "Kentico.Xperience.Core": "31.0.1",
+          "Kentico.Xperience.WebApp": "31.0.1",
+          "Mjml.Net": "4.11.0"
+        }
+      },
       "Kentico.Xperience.WebApp": {
         "type": "Direct",
         "requested": "[31.0.1, )",
@@ -483,6 +494,14 @@
           "Microsoft.Extensions.Options": "8.0.0"
         }
       },
+      "HtmlPerformanceKit": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "BHePdNNOkAhDIzFh0LmrbRpmbp/2mSn4SyJggqeLmKSQJo++8mC9zFvzUo/cb/hkOwY0HYAFFWWauViVycHM9Q==",
+        "dependencies": {
+          "System.Memory": "4.5.5"
+        }
+      },
       "HtmlSanitizer": {
         "type": "Transitive",
         "resolved": "9.0.889",
@@ -825,8 +844,8 @@
       },
       "Microsoft.Extensions.ObjectPool": {
         "type": "Transitive",
-        "resolved": "8.0.0",
-        "contentHash": "4pm+XgxSukskwjzDDfSjG4KNUIOdFF2VaqZZDtTzoyQMOVSnlV6ZM8a9aVu5dg9LVZTB//utzSc8fOi0b0Mb2Q=="
+        "resolved": "8.0.11",
+        "contentHash": "6ApKcHNJigXBfZa6XlDQ8feJpq7SG1ogZXg6M4FiNzgd6irs3LUAzo0Pfn4F2ZI9liGnH1XIBR/OtSbZmJAV5w=="
       },
       "Microsoft.Extensions.Options": {
         "type": "Transitive",
@@ -1010,6 +1029,15 @@
           "System.Security.Cryptography.Pkcs": "8.0.1"
         }
       },
+      "Mjml.Net": {
+        "type": "Transitive",
+        "resolved": "4.11.0",
+        "contentHash": "DCKiojf/UOZ48d7Z6vD9gfXOlT81NMZqqpraDUQJZ1Ykcop/D8BmPhCYY6vWYI8rZbDd4Vepy0bb1EmoSvbEGA==",
+        "dependencies": {
+          "HtmlPerformanceKit": "1.0.0",
+          "Microsoft.Extensions.ObjectPool": "8.0.11"
+        }
+      },
       "Mono.Cecil": {
         "type": "Transitive",
         "resolved": "0.11.6",
@@ -1116,8 +1144,8 @@
       },
       "System.Memory": {
         "type": "Transitive",
-        "resolved": "4.5.4",
-        "contentHash": "1MbJTHS1lZ4bS4FmsJjnuGJOu88ZzTT2rLvrhW7Ygic+pC0NWA+3hgAen0HRdsocuQXCkUTdFn9yHJJhsijDXw=="
+        "resolved": "4.5.5",
+        "contentHash": "XIWiDvKPXaTveaB7HVganDlOCRoj03l+jrwNvcge/t8vhGYKvqV+dMv6G4SAX2NoNmN0wZfVPTAlFwZcZvVOUw=="
       },
       "System.Memory.Data": {
         "type": "Transitive",

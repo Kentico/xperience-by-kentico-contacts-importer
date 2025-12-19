@@ -2,10 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-using Kentico.Builder.Web.Mvc;
-
-using WidgetDefinition = Kentico.PageBuilder.Web.Mvc.WidgetDefinition;
-
+using Kentico.PageBuilder.Web.Mvc;
 
 namespace DancingGoat.Helpers
 {
@@ -27,8 +24,11 @@ namespace DancingGoat.Helpers
         }
 
 
-        private static IEnumerable<string> GetWidgetsIdentifiers() => new ComponentDefinitionProvider<WidgetDefinition>()
+        private static IEnumerable<string> GetWidgetsIdentifiers()
+        {
+            return new Kentico.Builder.Web.Mvc.ComponentDefinitionProvider<WidgetDefinition>()
                    .GetAll()
                    .Select(definition => definition.Identifier);
+        }
     }
 }
