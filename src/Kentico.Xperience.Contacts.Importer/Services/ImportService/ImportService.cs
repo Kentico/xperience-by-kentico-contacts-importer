@@ -165,7 +165,7 @@ public class ImportService(
     }
 
 
-    private void InsertContactGroupBindings(ContactGroupInfo group, IEnumerable<ContactInfo> importedContacts)
+    private async Task InsertContactGroupBindings(ContactGroupInfo group, IEnumerable<ContactInfo> importedContacts)
     {
         var currentDateTime = DateTime.Now;
 
@@ -177,11 +177,11 @@ public class ImportService(
             .WhereEquals(nameof(ContactGroupMemberInfo.ContactGroupMemberContactGroupID), group.ContactGroupID)
             .Column(nameof(ContactGroupMemberInfo.ContactGroupMemberRelatedID));
 
-        var contactIDs = contactInfoProvider.Get()
+        var contactIDs = await contactInfoProvider.Get()
             .WhereNotIn(nameof(ContactInfo.ContactID), existingGroupMemberIdSubquery)
             .WhereIn(nameof(ContactInfo.ContactGUID), importedContacts.Select(x => x.ContactGUID))
             .Column(nameof(ContactInfo.ContactID))
-            .GetListResult<int>();
+            .GetListResultAsync<int>();
 
         foreach (int contactID in contactIDs)
         {
@@ -242,9 +242,9 @@ public class ImportService(
             }
         }
 
-        var contactGuids = contactInfoProvider.Get()
+        var contactGuids = (await contactInfoProvider.Get()
             .Column(nameof(ContactInfo.ContactGUID))
-            .GetListResult<Guid>()
+            .GetListResultAsync<Guid>())
             .ToHashSet();
 
         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
