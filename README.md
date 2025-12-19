@@ -14,7 +14,7 @@ Enables bulk import and deletion of contacts in an Xperience by Kentico solution
 
 | Xperience Version | Library Version    |
 | ----------------- | ---------------    |
-| 30.5.1-31.0.0     | 1.0.0              |
+| 30.5.1-31.0.0     | 1.0.0-prerelease-3 |
 | >= 31.0.1         | 1.0.0-prerelease-4 |
 
 ### Dependencies
