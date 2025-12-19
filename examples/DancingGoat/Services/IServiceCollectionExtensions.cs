@@ -1,7 +1,10 @@
-﻿using DancingGoat.Models;
-using DancingGoat.ViewComponents;
+﻿
+using CMS.Commerce;
 
-using Microsoft.Extensions.DependencyInjection;
+using DancingGoat.Commerce;
+using DancingGoat.Models;
+using DancingGoat.Services;
+using DancingGoat.ViewComponents;
 
 namespace DancingGoat
 {
@@ -13,30 +16,43 @@ namespace DancingGoat
         public static void AddDancingGoatServices(this IServiceCollection services)
         {
             AddViewComponentServices(services);
-            AddRepositories(services);
-            services.AddContactsImport();
+            AddCommerceServices(services);
 
-            services.AddSingleton<ICurrentWebsiteChannelPrimaryLanguageRetriever, CurrentWebsiteChannelPrimaryLanguageRetriever>();
+            services.AddSingleton<CurrentWebsiteChannelPrimaryLanguageRetriever>();
+            services.AddSingleton<TagTitleRetriever>();
+            services.AddSingleton<WebPageUrlProvider>();
         }
 
 
-        private static void AddRepositories(IServiceCollection services)
+        private static void AddCommerceServices(IServiceCollection services)
         {
-            services.AddSingleton<SocialLinkRepository>();
-            services.AddSingleton<ContactRepository>();
-            services.AddSingleton<HomePageRepository>();
-            services.AddSingleton<ArticlePageRepository>();
-            services.AddSingleton<ArticlesSectionRepository>();
-            services.AddSingleton<ConfirmationPageRepository>();
-            services.AddSingleton<ImageRepository>();
-            services.AddSingleton<CafeRepository>();
-            services.AddSingleton<NavigationItemRepository>();
-            services.AddSingleton<ContactsPageRepository>();
-            services.AddSingleton<PrivacyPageRepository>();
-            services.AddSingleton<LandingPageRepository>();
-            services.AddSingleton<ProductSectionRepository>();
-            services.AddSingleton<ProductPageRepository>();
+            services.AddSingleton<ProductSkuValidationEventHandler>();
+
+            services.AddSingleton<OrderService>();
+            services.AddSingleton<CalculationService>();
+            services.AddSingleton<CustomerDataRetriever>();
+            services.AddSingleton<ProductNameProvider>();
+            services.AddSingleton<OrderNumberGenerator>();
+            services.AddSingleton<ProductSkuValidator>();
+            services.AddSingleton<ProductParametersExtractor>();
+            services.AddSingleton<ProductVariantsExtractor>();
+            services.AddSingleton<CountryStateRepository>();
             services.AddSingleton<ProductRepository>();
+            services.AddSingleton<PaymentRepository>();
+            services.AddSingleton<ShippingRepository>();
+            services.AddTransient<IPriceFormatter, PriceFormatter>();
+
+            // Register extractors for product types
+            services.AddSingleton<IProductTypeParametersExtractor, ProductManufacturerExtractor>();
+            services.AddSingleton<IProductTypeParametersExtractor, CoffeeParametersExtractor>();
+            services.AddSingleton<IProductTypeParametersExtractor, GrinderParametersExtractor>();
+            services.AddSingleton<IProductTypeParametersExtractor, ProductTemplateAlphaSizeParametersExtractor>();
+
+            services.AddTransient(typeof(ITaxPriceCalculationStep<,>), typeof(DancingGoatTaxPriceCalculationStep<,>));
+            services.AddTransient(typeof(IProductDataRetriever<,>), typeof(ProductDataRetriever<,>));
+
+            // Register extractors for product type variants
+            services.AddSingleton<IProductTypeVariantsExtractor, ProductTemplateAlphaSizeVariantsExtractor>();
         }
 
 

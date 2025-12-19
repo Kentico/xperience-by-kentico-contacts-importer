@@ -5,7 +5,6 @@ using CMS.Helpers;
 
 using DancingGoat.Helpers.Generator;
 
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DancingGoat.Controllers

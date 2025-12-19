@@ -1,17 +1,12 @@
-﻿using System;
-using System.Threading.Tasks;
-
-using CMS.Websites;
+﻿using CMS.Websites;
 
 using Kentico.Content.Web.Mvc;
 using Kentico.Content.Web.Mvc.Routing;
 
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Razor.TagHelpers;
-using Microsoft.AspNetCore.Routing;
 
 namespace DancingGoat.Helpers
 {
@@ -22,7 +17,7 @@ namespace DancingGoat.Helpers
         private readonly IHtmlGenerator htmlGenerator;
         private readonly IWebPageUrlRetriever webPageUrlRetriever;
         private readonly IPreferredLanguageRetriever currentLanguageRetriever;
-        private readonly ICurrentWebsiteChannelPrimaryLanguageRetriever websiteChannelPrimaryLanguageRetriever;
+        private readonly CurrentWebsiteChannelPrimaryLanguageRetriever websiteChannelPrimaryLanguageRetriever;
 
 
         public string LinkText { get; set; }
@@ -42,7 +37,7 @@ namespace DancingGoat.Helpers
             IHtmlGenerator htmlGenerator,
             IWebPageUrlRetriever webPageUrlRetriever,
             IPreferredLanguageRetriever currentLanguageRetriever,
-            ICurrentWebsiteChannelPrimaryLanguageRetriever websiteChannelPrimaryLanguageRetriever)
+            CurrentWebsiteChannelPrimaryLanguageRetriever websiteChannelPrimaryLanguageRetriever)
         {
             this.httpContextAccessor = httpContextAccessor;
             this.pageDataContextRetriever = pageDataContextRetriever;

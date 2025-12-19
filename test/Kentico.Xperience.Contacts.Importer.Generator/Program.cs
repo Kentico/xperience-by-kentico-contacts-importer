@@ -6,7 +6,7 @@ using CsvHelper;
 
 using Kentico.Xperience.Contacts.Importer.Generator;
 
-using static Kentico.Xperience.Contacts.Importer.Services.ImportService;
+using static Kentico.Xperience.Contacts.Importer.Services.ImportService.ImportService;
 
 string? solutionFolder = FindSolutionFolder();
 

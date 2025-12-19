@@ -29,6 +29,7 @@
     <PackageReference Include="kentico.xperience.admin" Condition="'$(SeparatedAdmin)' == 'false'" />
     <PackageReference Include="kentico.xperience.azurestorage" />
     <PackageReference Include="kentico.xperience.imageprocessing" />
+    <PackageReference Include="kentico.xperience.mjml" />
     <PackageReference Include="kentico.xperience.webapp" />
   </ItemGroup>
 </Project>

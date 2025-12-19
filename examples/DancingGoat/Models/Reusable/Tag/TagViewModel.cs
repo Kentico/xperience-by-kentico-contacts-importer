@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-using CMS.ContentEngine;
+﻿using CMS.ContentEngine;
 
 namespace DancingGoat.Models
 {

@@ -5,7 +5,7 @@ using System.Text;
 using CMS.Core;
 
 using Kentico.Xperience.Contacts.Importer.Auxiliary;
-using Kentico.Xperience.Contacts.Importer.Services;
+using Kentico.Xperience.Contacts.Importer.Services.ImportService;
 
 using Microsoft.AspNetCore.Http;
 
@@ -21,6 +21,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
     private readonly RequestDelegate next = next;
     private readonly IImportService importService = importService;
     private readonly IEventLogService eventLogService = eventLogService;
+
 
     public async Task InvokeAsync(HttpContext context)
     {
@@ -42,18 +43,29 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
         }
     }
 
+
     private sealed record Message(string Type, HeaderPayload? Payload);
 
-    private sealed record HeaderPayload(string ImportKind, Guid? ContactGroup, int? BatchSize, string Delimiter);
 
-    private static async Task DownloadAndImport(WebSocket webSocket, IImportService importService, IEventLogService logService, CancellationToken cancellationToken)
+    private sealed record HeaderPayload(string ImportKind, Guid? ContactGroup, Guid? RecipientList, int? BatchSize, string Delimiter);
+
+
+    private static async Task DownloadAndImport(
+        WebSocket webSocket,
+        IImportService importService,
+        IEventLogService logService,
+        CancellationToken cancellationToken)
     {
         async Task SendProgressReport(string message)
         {
             if (webSocket.State == WebSocketState.Open)
             {
                 byte[] payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "msg", payload = $"{message}" }));
-                await webSocket.SendAsync(new ArraySegment<byte>(payload, 0, payload.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                await webSocket.SendAsync(
+                    new ArraySegment<byte>(payload, 0, payload.Length),
+                    WebSocketMessageType.Text,
+                    true,
+                    CancellationToken.None);
             }
         }
 
@@ -62,7 +74,11 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
             if (webSocket.State == WebSocketState.Open)
             {
                 byte[] payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "toofast", payload = $"" }));
-                await webSocket.SendAsync(new ArraySegment<byte>(payload, 0, payload.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                await webSocket.SendAsync(
+                    new ArraySegment<byte>(payload, 0, payload.Length),
+                    WebSocketMessageType.Text,
+                    true,
+                    CancellationToken.None);
             }
         }
 
@@ -71,7 +87,11 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
             if (webSocket.State == WebSocketState.Open)
             {
                 byte[] payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "finished", payload = $"" }));
-                await webSocket.SendAsync(new ArraySegment<byte>(payload, 0, payload.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                await webSocket.SendAsync(
+                    new ArraySegment<byte>(payload, 0, payload.Length),
+                    WebSocketMessageType.Text,
+                    true,
+                    CancellationToken.None);
             }
         }
 
@@ -80,13 +100,18 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
             if (webSocket.State == WebSocketState.Open)
             {
                 byte[] msg = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "headerConfirmed", payload = "" }));
-                await webSocket.SendAsync(new ArraySegment<byte>(msg, 0, msg.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                await webSocket.SendAsync(
+                    new ArraySegment<byte>(msg, 0, msg.Length),
+                    WebSocketMessageType.Text,
+                    true,
+                    CancellationToken.None);
             }
         }
 
         var header = (await ReceiveHeader(webSocket, default))?.ToObject<Message>()?.Payload;
         var context = new ImportContext(
             header?.ContactGroup,
+            header?.RecipientList,
             header?.BatchSize ?? 50000,
             header?.Delimiter ?? ",",
             header?.ImportKind ?? ImportKind.InsertAndSkipExisting
@@ -101,9 +126,10 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
         {
             try
             {
-                await importService.RunImport(ms, context, async (result, totalProcessed) => await SendProgressReport($"Total processed {totalProcessed} CachedBlocks: {ms.CachedBlocks}"),
+                await importService.RunImport(ms, context, async (result, totalProcessed) =>
+                    await SendProgressReport($"Total processed {totalProcessed} CachedBlocks: {ms.CachedBlocks}"),
                     async exception => await SendProgressReport($"{exception}"));
-                await SendProgressReport($"...finished");
+                await SendProgressReport("...finished");
             }
             finally
             {
@@ -133,7 +159,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
 
                     if (message is not null && message.Type == "done")
                     {
-                        break; //End of communication, close socket
+                        break; // End of communication, close socket
                     }
                 }
 
@@ -149,7 +175,11 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
 
                     int count = receiveResult.Count;
                     byte[] response = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "progress", payload = count }));
-                    await webSocket.SendAsync(new ArraySegment<byte>(response, 0, response.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                    await webSocket.SendAsync(
+                        new ArraySegment<byte>(response, 0, response.Length),
+                        WebSocketMessageType.Text,
+                        true,
+                        CancellationToken.None);
 
                     if (ms.CachedBlocks > 3500)
                     {
@@ -214,6 +244,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
 #pragma warning restore S2589 // Boolean expressions should not be gratuitous
     }
 
+
     private static async Task<JObject?> ReceiveHeader(WebSocket webSocket, CancellationToken cancellationToken)
     {
         var ms = new MemoryStream();
@@ -250,7 +281,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
         using var sr = new StreamReader(ms);
         string msg = await sr.ReadToEndAsync();
         var deserialized = JObject.Parse(msg);
+
         return deserialized;
     }
-
 }

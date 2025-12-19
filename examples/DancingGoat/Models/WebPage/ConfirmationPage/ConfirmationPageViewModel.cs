@@ -1,6 +1,4 @@
-﻿using System.Linq;
-
-using CMS.Websites;
+﻿using CMS.Websites;
 
 namespace DancingGoat.Models
 {

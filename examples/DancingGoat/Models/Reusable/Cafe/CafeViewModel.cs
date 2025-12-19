@@ -1,6 +1,4 @@
-﻿using System.Linq;
-
-namespace DancingGoat.Models
+﻿namespace DancingGoat.Models
 {
     public record CafeViewModel(string Name, string PhotoPath, string PhotoShortDescription, string Street, string City, string Country, string ZipCode, string Phone)
     {
