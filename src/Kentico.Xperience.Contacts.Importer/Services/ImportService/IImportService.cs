@@ -1,6 +1,6 @@
 ﻿using CMS.ContactManagement;
 
-namespace Kentico.Xperience.Contacts.Importer.Services.ImportService;
+namespace Kentico.Xperience.Contacts.Importer.Services;
 
 
 /// <summary>

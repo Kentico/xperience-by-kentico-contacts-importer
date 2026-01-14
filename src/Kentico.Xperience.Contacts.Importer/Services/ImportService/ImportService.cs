@@ -13,7 +13,7 @@ using Microsoft.Data.SqlClient;
 
 using Newtonsoft.Json;
 
-namespace Kentico.Xperience.Contacts.Importer.Services.ImportService;
+namespace Kentico.Xperience.Contacts.Importer.Services;
 
 /// <inheritdoc />
 public class ImportService(

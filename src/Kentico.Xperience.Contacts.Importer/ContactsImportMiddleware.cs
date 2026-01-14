@@ -5,7 +5,7 @@ using System.Text;
 using CMS.Core;
 
 using Kentico.Xperience.Contacts.Importer.Auxiliary;
-using Kentico.Xperience.Contacts.Importer.Services.ImportService;
+using Kentico.Xperience.Contacts.Importer.Services;
 
 using Microsoft.AspNetCore.Http;
 

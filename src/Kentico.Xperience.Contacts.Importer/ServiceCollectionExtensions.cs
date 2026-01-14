@@ -1,5 +1,5 @@
 ﻿using Kentico.Xperience.Contacts.Importer;
-using Kentico.Xperience.Contacts.Importer.Services.ImportService;
+using Kentico.Xperience.Contacts.Importer.Services;
 
 using Microsoft.AspNetCore.Builder;
 
