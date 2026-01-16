@@ -117,7 +117,13 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="contacts.importer.applicationname" xml:space="preserve">
-    <value>Contacts Importer</value>
+  <data name="contactimporter.applicationname" xml:space="preserve">
+    <value>Contact importer</value>
+  </data>
+  <data name="contactimporter.categoryname" xml:space="preserve">
+    <value>&#x8;Contact importer</value>
+  </data>
+  <data name="contactimporter.templates.import.name" xml:space="preserve">
+    <value>Import</value>
   </data>
 </root>
