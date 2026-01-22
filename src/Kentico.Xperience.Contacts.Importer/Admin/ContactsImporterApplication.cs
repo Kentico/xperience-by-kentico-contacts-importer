@@ -6,7 +6,7 @@ using Kentico.Xperience.Contacts.Importer.Admin;
 
 [assembly: UICategory(
    codeName: "Kentico.Xperience.Contacts.Import.Web.Admin.Category",
-   name: "Contact importer",
+   name: "{$contactimporter.categoryname$}",
    icon: Icons.PersonalisationVariants,
    order: 100)]
 
@@ -14,14 +14,14 @@ using Kentico.Xperience.Contacts.Importer.Admin;
     identifier: ContactsImporterApplication.IDENTIFIER,
     type: typeof(ContactsImporterApplication),
     slug: "contact-importer",
-    name: "Contact importer",
+    name: "{$contactimporter.applicationname$}",
     category: BaseApplicationCategories.DIGITAL_MARKETING,
     icon: Icons.RectangleParagraph,
     templateName: TemplateNames.SECTION_LAYOUT)]
 
 [assembly: UIPage(
    parentType: typeof(ContactsImporterApplication),
-   name: "Import",
+   name: "{$contactimporter.templates.import.name$}",
    slug: "import",
    uiPageType: typeof(ImportTemplate),
    templateName: ImportTemplate.TEMPLATE_NAME,

@@ -1,4 +1,4 @@
-﻿namespace Kentico.Xperience.Contacts.Importer.Services.ImportService;
+﻿namespace Kentico.Xperience.Contacts.Importer.Services;
 
 /// <summary>
 /// User-defined import variables.
@@ -9,7 +9,7 @@
 /// requested.</param>
 /// <param name="BatchSize">The import process batch size.</param>
 /// <param name="Delimiter">The CSV delimiter character.</param>
-/// <param name="ImportKind">The <see cref="Services.ImportService.ImportKind"/> to perform.</param>
+/// <param name="ImportKind">The <see cref="Services.ImportKind"/> to perform.</param>
 public record ImportContext(Guid? AssignToContactGroupGuid, Guid? AssignToRecipientListGuid, int BatchSize, string Delimiter, string ImportKind);
 
 

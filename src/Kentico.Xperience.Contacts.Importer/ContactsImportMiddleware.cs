@@ -5,7 +5,7 @@ using System.Text;
 using CMS.Core;
 
 using Kentico.Xperience.Contacts.Importer.Auxiliary;
-using Kentico.Xperience.Contacts.Importer.Services.ImportService;
+using Kentico.Xperience.Contacts.Importer.Services;
 
 using Microsoft.AspNetCore.Http;
 
@@ -65,7 +65,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
                     new ArraySegment<byte>(payload, 0, payload.Length),
                     WebSocketMessageType.Text,
                     true,
-                    CancellationToken.None);
+                    cancellationToken);
             }
         }
 
@@ -78,7 +78,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
                     new ArraySegment<byte>(payload, 0, payload.Length),
                     WebSocketMessageType.Text,
                     true,
-                    CancellationToken.None);
+                    cancellationToken);
             }
         }
 
@@ -91,7 +91,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
                     new ArraySegment<byte>(payload, 0, payload.Length),
                     WebSocketMessageType.Text,
                     true,
-                    CancellationToken.None);
+                    cancellationToken);
             }
         }
 
@@ -104,7 +104,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
                     new ArraySegment<byte>(msg, 0, msg.Length),
                     WebSocketMessageType.Text,
                     true,
-                    CancellationToken.None);
+                    cancellationToken);
             }
         }
 
@@ -179,7 +179,7 @@ public class ContactsImportMiddleware(RequestDelegate next, IImportService impor
                         new ArraySegment<byte>(response, 0, response.Length),
                         WebSocketMessageType.Text,
                         true,
-                        CancellationToken.None);
+                        cancellationToken);
 
                     if (ms.CachedBlocks > 3500)
                     {
