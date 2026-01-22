@@ -1,7 +1,8 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using CMS.Websites;
 
 using DancingGoat.Models;
+
+using Kentico.Content.Web.Mvc;
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ViewComponents;
@@ -13,9 +14,35 @@ namespace DancingGoat.ViewComponents
     /// </summary>
     public class CafeCardSectionViewComponent : ViewComponent
     {
-        public ViewViewComponentResult Invoke(IEnumerable<CafeViewModel> cafes)
+        private readonly IContentRetriever contentRetriever;
+
+        public CafeCardSectionViewComponent(IContentRetriever contentRetriever)
         {
-            return View("~/Components/ViewComponents/CafeCardSection/Default.cshtml", cafes.Take(3));
+            this.contentRetriever = contentRetriever;
+        }
+
+
+        public async Task<ViewViewComponentResult> InvokeAsync(IEnumerable<CafeViewModel> cafes)
+        {
+            string contactsPagePath = await GetContactsPagePath(HttpContext.RequestAborted);
+            var model = new CafeCardSectionViewModel(cafes, contactsPagePath);
+
+            return View("~/Components/ViewComponents/CafeCardSection/Default.cshtml", model);
+        }
+
+
+        private async Task<string> GetContactsPagePath(CancellationToken cancellationToken)
+        {
+            var contactsPage = (await contentRetriever.RetrievePages<ContactsPage>(
+                RetrievePagesParameters.Default,
+                query => query.UrlPathColumns(),
+                new RetrievalCacheSettings("UrlPathColumns"),
+                cancellationToken
+            )).FirstOrDefault();
+
+            var url = contactsPage.GetUrl();
+
+            return url.RelativePath;
         }
     }
 }

@@ -1,6 +1,4 @@
-﻿using System.Linq;
-
-namespace DancingGoat.Models
+﻿namespace DancingGoat.Models
 {
     public record BannerViewModel(string BackgroundImageUrl, string HeaderText, string Text)
     {

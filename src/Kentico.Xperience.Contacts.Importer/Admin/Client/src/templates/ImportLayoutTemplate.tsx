@@ -29,6 +29,7 @@ import {
 
 interface ImportTemplateClientProperties {
 	readonly contactGroups: Array<{ guid: string; displayName: string }>;
+	readonly recipientLists: Array<{ guid: string; displayName: string }>;
 }
 
 let canContinue = true;
@@ -42,6 +43,7 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 
 	const [importKind, setImportKind] = useState('insert');
 	const [contactGroup, setContactGroup] = useState<string | undefined>('');
+	const [ recipientList, setRecipientList ] = useState<string | undefined>('');
 	const [delimiter, setDelimiter] = useState<string>(',');
 	const [batchSize, setBatchSize] = useState<number>(5000);
 
@@ -260,6 +262,7 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 					payload: {
 						importKind,
 						contactGroup: contactGroup === null ? null : contactGroup,
+						recipientList: recipientList === null ? null : recipientList,
 						delimiter,
 						batchSize,
 					},
@@ -325,22 +328,45 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 									))}
 								</RadioGroup>
 								{importKind === 'insert' &&
-									(<div style={{ maxWidth: '400px' }}>
-									<Select
-										label={Localization.integrations.contactsimporter.content.labels.contactGroup}
-										clearable={true}
-										placeholder='(none)'
-										onChange={setContactGroup}
-										value={contactGroup}
-										disabled={props.contactGroups.length === 0}
-										explanationText={Localization.integrations.contactsimporter.content.explanations.contactGroup}>
-											{props.contactGroups.map((c) => (
-												<MenuItem
-													primaryLabel={c.displayName}
-													key={c.guid}
-													value={c.guid}/>
-											))}
-										</Select>
+									(<div>
+										<div style={{ maxWidth: '400px', paddingBottom: '20px' }}>
+											<Select
+												label={Localization.integrations.contactsimporter.content.labels.contactGroup}
+												clearable={true}
+												placeholder='(none)'
+												onChange={setContactGroup}
+												value={contactGroup}
+												disabled={props.contactGroups.length === 0}
+												explanationText={Localization.integrations.contactsimporter.content.explanations.contactGroup}>
+
+												{props.contactGroups.map((c) => (
+													<MenuItem
+														primaryLabel={c.displayName}
+														key={c.guid}
+														value={c.guid}
+													/>
+												))}
+											</Select>
+										</div>
+										<div style={{ maxWidth: '400px' }}>
+											<Select
+												label={Localization.integrations.contactsimporter.content.labels.recipientList}
+												clearable={true}
+												placeholder='(none)'
+												onChange={setRecipientList}
+												value={recipientList}
+												disabled={props.recipientLists.length === 0}
+												explanationText={Localization.integrations.contactsimporter.content.explanations.recipientList}
+											>
+												{props.recipientLists.map((c) => (
+													<MenuItem
+														primaryLabel={c.displayName}
+														key={c.guid}
+														value={c.guid}
+													/>
+												))}
+											</Select>
+										</div>
 									</div>)
 								}
 

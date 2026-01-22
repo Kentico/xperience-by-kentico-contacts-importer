@@ -5,10 +5,12 @@
 /// </summary>
 /// <param name="AssignToContactGroupGuid">The contact group GUID to assign contacts to, or <c>null</c> if no assignment is
 /// requested.</param>
+/// /// <param name="AssignToRecipientListGuid">The recipient list GUID to assign contacts to, or <c>null</c> if no assignment is
+/// requested.</param>
 /// <param name="BatchSize">The import process batch size.</param>
 /// <param name="Delimiter">The CSV delimiter character.</param>
 /// <param name="ImportKind">The <see cref="Services.ImportKind"/> to perform.</param>
-public record ImportContext(Guid? AssignToContactGroupGuid, int BatchSize, string Delimiter, string ImportKind);
+public record ImportContext(Guid? AssignToContactGroupGuid, Guid? AssignToRecipientListGuid, int BatchSize, string Delimiter, string ImportKind);
 
 
 /// <summary>

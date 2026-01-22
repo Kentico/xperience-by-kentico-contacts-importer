@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace DancingGoat.Models
+﻿namespace DancingGoat.Models
 {
     public record EventViewModel(string Title, string HeroBannerImageUrl, string HeroBannerShortDescription, string PromoText, DateTime Date, string Location, IEnumerable<string> Coffees)
     {
@@ -26,7 +22,7 @@ namespace DancingGoat.Models
                 eventContentItem.EventPromoText,
                 eventContentItem.EventDate,
                 cafe?.CafeName,
-                cafe?.CafeCuppingOffer.Select(coffee => coffee.ProductFieldsName)
+                cafe?.CafeCuppingOffer.Select(coffee => coffee.ProductFieldName)
             );
         }
     }

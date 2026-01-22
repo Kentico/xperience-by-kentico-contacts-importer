@@ -1,0 +1,37 @@
+﻿@using CMS.Commerce
+@using DancingGoat.Commerce
+@using DancingGoat.Models
+
+@model ShoppingCartViewModel
+
+<div class="cart-total">
+    <div class="cart-total-viewer">
+        @if (Model.TotalDiscount > 0)
+        {
+            <div class="cart-item-viewer">
+                <div class="label">
+                    <span>@HtmlLocalizer["Subtotal"]</span>
+                </div>
+                <div class="value">
+                    <price>@Model.SubtotalPrice</price>
+                </div>
+            </div>
+            <div class="cart-totals-summary">
+                <div class="label">
+                    <span>@HtmlLocalizer["Discount"]</span>
+                </div>
+                <div class="value">
+                    <price>-@Model.TotalDiscount</price>
+                </div>
+            </div>
+        }
+        <div class="cart-grand-total">
+            <div class="label">
+                <span>@HtmlLocalizer["Total price"]</span>
+            </div>
+            <div class="value">
+                <price>@Model.TotalPrice</price>
+            </div>
+        </div>
+    </div>
+</div>

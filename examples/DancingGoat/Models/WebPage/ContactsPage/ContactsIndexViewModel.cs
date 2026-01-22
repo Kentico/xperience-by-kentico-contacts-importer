@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-using CMS.Websites;
+﻿using CMS.Websites;
 
 namespace DancingGoat.Models
 {
@@ -16,6 +14,12 @@ namespace DancingGoat.Models
         /// The company cafes data.
         /// </summary>
         public List<CafeViewModel> CompanyCafes { get; set; }
+
+
+        /// <summary>
+        /// The partner cafes data.
+        /// </summary>
+        public List<CafeViewModel> PartnerCafes { get; set; }
 
 
         /// <inheritdoc/>

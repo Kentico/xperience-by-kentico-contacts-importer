@@ -1,6 +1,4 @@
-﻿using System.Linq;
-
-using DancingGoat.Models;
+﻿using DancingGoat.Models;
 
 namespace DancingGoat.Widgets
 {
@@ -41,9 +39,9 @@ namespace DancingGoat.Widgets
 
             return new ProductCardViewModel
             {
-                Heading = product.ProductFieldsName,
-                ImagePath = product.ProductFieldsImage.FirstOrDefault()?.ImageFile.Url,
-                Text = product.ProductFieldsShortDescription
+                Heading = product.ProductFieldName,
+                ImagePath = product.ProductFieldImage.FirstOrDefault()?.ImageFile.Url,
+                Text = product.ProductFieldDescription
             };
         }
     }
