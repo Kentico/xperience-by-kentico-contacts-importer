@@ -1,6 +1,4 @@
-﻿using System.Threading.Tasks;
-
-using CMS.ContactManagement;
+﻿using CMS.ContactManagement;
 using CMS.DataEngine;
 using CMS.DataProtection;
 using CMS.Websites;
@@ -54,7 +52,7 @@ namespace DancingGoat.ViewComponents
                 {
                     ConsentShortText = (await consent.GetConsentTextAsync(currentLanguage)).ShortText,
                     ReturnPageUrl = webPageDataContextRetriever.TryRetrieve(out var currentWebPageContext)
-                        ? (await urlRetriever.Retrieve(currentWebPageContext.WebPage.WebPageItemID, currentLanguage)).RelativePath
+                        ? (await urlRetriever.Retrieve(currentWebPageContext.WebPage.WebPageItemID, currentLanguage, cancellationToken: HttpContext.RequestAborted)).RelativePath
                         : (HttpContext.Request.PathBase + HttpContext.Request.Path).Value
                 };
 
@@ -62,7 +60,7 @@ namespace DancingGoat.ViewComponents
                 if ((contact != null) && consentAgreementService.IsAgreed(contact, consent))
                 {
                     consentModel.IsConsentAgreed = true;
-                    consentModel.PrivacyPageUrl = Url.Content((await urlRetriever.Retrieve(PrivacyPageConstants.PRIVACY_PAGE_TREE_PATH, websiteChannelContext.WebsiteChannelName, currentLanguage)).RelativePath);
+                    consentModel.PrivacyPageUrl = Url.Content((await urlRetriever.Retrieve(PrivacyPageConstants.PRIVACY_PAGE_TREE_PATH, websiteChannelContext.WebsiteChannelName, currentLanguage, cancellationToken: HttpContext.RequestAborted)).RelativePath);
                 }
 
                 return View("~/Components/ViewComponents/TrackingConsent/Default.cshtml", consentModel);

@@ -23,6 +23,7 @@
             "insert": "Insert",
             "delete": "Delete",
             "contactGroup": "Assign to contact group",
+            "recipientList": "Assign to recipient list",
             "uploadFileLine1": "Drag & drop CSV",
             "uploadFileLine2": "or",
             "uploadButton": "Browse",
@@ -32,6 +33,7 @@
           },
           "explanations": {
             "contactGroup": "Assigns all contacts in CSV file to the selected group. Leave empty to skip assignment.",
+            "recipientList": "Assigns all contacts in CSV file to the selected recipient list. Leave empty to skip assignment.",
             "delimiter": "The delimiter for CSV row data items.",
             "batchSize": "The number of records that will be uploaded and processed at a time."
           }

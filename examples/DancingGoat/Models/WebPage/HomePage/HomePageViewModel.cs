@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-using CMS.Websites;
+﻿using CMS.Websites;
 
 namespace DancingGoat.Models
 {
@@ -16,7 +12,7 @@ namespace DancingGoat.Models
         /// <summary>
         /// Validates and maps <see cref="HomePage"/> to a <see cref="HomePageViewModel"/>.
         /// </summary>
-        public static HomePageViewModel GetViewModel(HomePage home)
+        public static HomePageViewModel GetViewModel(HomePage home, IEnumerable<Cafe> cafes)
         {
             if (home == null)
             {
@@ -28,7 +24,7 @@ namespace DancingGoat.Models
                 EventViewModel.GetViewModel(home.HomePageEvent.OrderBy(o => Math.Abs((o.EventDate - DateTime.Today).TotalDays)).FirstOrDefault()),
                 home.HomePageOurStory,
                 ReferenceViewModel.GetViewModel(home.HomePageReference.FirstOrDefault()),
-                home.HomePageCafes.Select(CafeViewModel.GetViewModel),
+                cafes.Select(CafeViewModel.GetViewModel),
                 home.HomePageArticlesSection.FirstOrDefault())
             {
                 WebPage = home
