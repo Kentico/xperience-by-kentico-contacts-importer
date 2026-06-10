@@ -33,12 +33,12 @@ public class ImportService(
         public ContactInfoMap()
         {
             Map(m => m.ContactGUID).Optional().Default(Guid.Empty);
-            Map(m => m.ContactCreated);
-            Map(m => m.ContactFirstName);
-            Map(m => m.ContactLastName);
+            Map(m => m.ContactCreated).Optional().Default(DateTime.Now);
+            Map(m => m.ContactFirstName).Optional();
+            Map(m => m.ContactLastName).Optional();
             Map(m => m.ContactEmail);
-            Map(m => m.ContactAddress1);
-            Map(m => m.ContactMiddleName);
+            Map(m => m.ContactAddress1).Optional();
+            Map(m => m.ContactMiddleName).Optional();
         }
     }
 
@@ -242,7 +242,7 @@ public class ImportService(
             }
         }
 
-        var contactEmails = (await contactInfoProvider.Get()
+        var contactGuids = (await contactInfoProvider.Get()
             .Column(nameof(ContactInfo.ContactEmail))
             .GetListResultAsync<string>())
             .ToHashSet();
@@ -270,7 +270,7 @@ public class ImportService(
             {
                 try
                 {
-                    currentBatch.Add((item, !contactEmails.Contains(item.ContactEmail)));
+                    currentBatch.Add((item, !contactGuids.Contains(item.ContactEmail)));
                 }
                 catch (Exception ex)
                 {
