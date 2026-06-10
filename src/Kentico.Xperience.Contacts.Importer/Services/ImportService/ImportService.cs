@@ -32,7 +32,7 @@ public class ImportService(
         /// </summary>
         public ContactInfoMap()
         {
-            Map(m => m.ContactGUID);
+            Map(m => m.ContactGUID).Optional().Default(Guid.Empty);
             Map(m => m.ContactCreated);
             Map(m => m.ContactFirstName);
             Map(m => m.ContactLastName);
@@ -49,7 +49,7 @@ public class ImportService(
 #pragma warning disable S3459
 #pragma warning disable S1144
         // ReSharper disable once InconsistentNaming // kentico naming convention
-        public Guid ContactGUID { get; set; }
+        public string ContactEmail { get; set; } = "";
 #pragma warning restore S3459
 #pragma warning restore S1144
     }
@@ -58,7 +58,7 @@ public class ImportService(
     private sealed class SimplifiedMap : ClassMap<ContactDeleteArgument>
     {
 #pragma warning disable S1144
-        public SimplifiedMap() => Map(m => m.ContactGUID);
+        public SimplifiedMap() => Map(m => m.ContactEmail);
 #pragma warning restore S1144
     }
 
@@ -113,15 +113,15 @@ public class ImportService(
 
         int totalProcessed = 0;
 
-        IEnumerable<List<Guid>> Pipe2TransformBatches(IEnumerable<ContactDeleteArgument> models)
+        IEnumerable<List<string>> Pipe2TransformBatches(IEnumerable<ContactDeleteArgument> models)
         {
-            var currentBatch = new List<Guid>(context.BatchSize);
+            var currentBatch = new List<string>(context.BatchSize);
 
             foreach (var item in models)
             {
                 try
                 {
-                    currentBatch.Add(item.ContactGUID);
+                    currentBatch.Add(item.ContactEmail);
                 }
                 catch (Exception ex)
                 {
@@ -242,9 +242,9 @@ public class ImportService(
             }
         }
 
-        var contactGuids = (await contactInfoProvider.Get()
-            .Column(nameof(ContactInfo.ContactGUID))
-            .GetListResultAsync<Guid>())
+        var contactEmails = (await contactInfoProvider.Get()
+            .Column(nameof(ContactInfo.ContactEmail))
+            .GetListResultAsync<string>())
             .ToHashSet();
 
         var config = new CsvConfiguration(CultureInfo.InvariantCulture)
@@ -270,7 +270,7 @@ public class ImportService(
             {
                 try
                 {
-                    currentBatch.Add((item, !contactGuids.Contains(item.ContactGUID)));
+                    currentBatch.Add((item, !contactEmails.Contains(item.ContactEmail)));
                 }
                 catch (Exception ex)
                 {
@@ -345,9 +345,9 @@ public class ImportService(
     }
 
 
-    private Task DeletedContactsAsync(List<Guid> contactGuids, int batchLimit)
+    private Task DeletedContactsAsync(List<string> contactEmails, int batchLimit)
     {
-        if (contactGuids.Count == 0)
+        if (contactEmails.Count == 0)
         {
             return Task.CompletedTask;
         }
@@ -355,7 +355,7 @@ public class ImportService(
         return Task.Run(async () =>
         {
             var whereCondition = new WhereCondition()
-                .WhereIn(nameof(ContactInfo.ContactGUID), contactGuids);
+                .WhereIn(nameof(ContactInfo.ContactEmail), contactEmails);
             // if results are needed we can run SP ([dbo].[Proc_OM_Contact_MassDelete]) manually, it returns list of deleted contacts
             await contactsBulkDeletionService.BulkDelete(whereCondition, batchLimit);
         });
