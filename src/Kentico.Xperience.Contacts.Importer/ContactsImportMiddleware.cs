@@ -1,287 +1,184 @@
-using System.Net.Sockets;
-using System.Net.WebSockets;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text;
 
 using CMS.Core;
 
-using Kentico.Xperience.Contacts.Importer.Auxiliary;
 using Kentico.Xperience.Contacts.Importer.Services;
 
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Primitives;
 
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace Kentico.Xperience.Contacts.Importer;
 
 public class ContactsImportMiddleware(RequestDelegate next, IImportService importService, IEventLogService eventLogService)
 {
     private const string SOURCE = "Contact.Importer";
-
-    private readonly RequestDelegate next = next;
-    private readonly IImportService importService = importService;
-    private readonly IEventLogService eventLogService = eventLogService;
-
+    private const string UPLOAD_PATH = "/contactsimport/upload";
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (context.Request.Path == "/contactsimport/ws")
-        {
-            if (context.WebSockets.IsWebSocketRequest)
-            {
-                using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-                await DownloadAndImport(webSocket, importService, eventLogService, default);
-            }
-            else
-            {
-                context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            }
-        }
-        else
+        if (context.Request.Path != UPLOAD_PATH)
         {
             await next(context);
+            return;
         }
+
+        if (!HttpMethods.IsPost(context.Request.Method))
+        {
+            context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
+            context.Response.Headers.Allow = HttpMethods.Post;
+            return;
+        }
+
+        if (!TryCreateImportContext(context.Request.Query, out var importContext, out string? error))
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsync(error, context.RequestAborted);
+            return;
+        }
+
+        await UploadAndImport(context, importContext);
     }
 
-
-    private sealed record Message(string Type, HeaderPayload? Payload);
-
-
-    private sealed record HeaderPayload(string ImportKind, Guid? ContactGroup, Guid? RecipientList, int? BatchSize, string Delimiter);
-
-
-    private static async Task DownloadAndImport(
-        WebSocket webSocket,
-        IImportService importService,
-        IEventLogService logService,
-        CancellationToken cancellationToken)
+    private async Task UploadAndImport(HttpContext context, ImportContext importContext)
     {
-        async Task SendProgressReport(string message)
-        {
-            if (webSocket.State == WebSocketState.Open)
-            {
-                byte[] payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "msg", payload = $"{message}" }));
-                await webSocket.SendAsync(
-                    new ArraySegment<byte>(payload, 0, payload.Length),
-                    WebSocketMessageType.Text,
-                    true,
-                    cancellationToken);
-            }
-        }
+        context.Response.ContentType = "application/x-ndjson";
+        context.Response.Headers.CacheControl = "no-cache";
+        context.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+        
+        var progress = new ProgressWriter(context.Response, context.RequestAborted);
 
-        async Task SendTooFastReport()
-        {
-            if (webSocket.State == WebSocketState.Open)
-            {
-                byte[] payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "toofast", payload = $"" }));
-                await webSocket.SendAsync(
-                    new ArraySegment<byte>(payload, 0, payload.Length),
-                    WebSocketMessageType.Text,
-                    true,
-                    cancellationToken);
-            }
-        }
+        await progress.Send("importStarted");
 
-        async Task SendProgressFinished()
-        {
-            if (webSocket.State == WebSocketState.Open)
-            {
-                byte[] payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "finished", payload = $"" }));
-                await webSocket.SendAsync(
-                    new ArraySegment<byte>(payload, 0, payload.Length),
-                    WebSocketMessageType.Text,
-                    true,
-                    cancellationToken);
-            }
-        }
-
-        async Task SendConfirmHeader()
-        {
-            if (webSocket.State == WebSocketState.Open)
-            {
-                byte[] msg = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "headerConfirmed", payload = "" }));
-                await webSocket.SendAsync(
-                    new ArraySegment<byte>(msg, 0, msg.Length),
-                    WebSocketMessageType.Text,
-                    true,
-                    cancellationToken);
-            }
-        }
-
-        var header = (await ReceiveHeader(webSocket, default))?.ToObject<Message>()?.Payload;
-        var context = new ImportContext(
-            header?.ContactGroup,
-            header?.RecipientList,
-            header?.BatchSize ?? 50000,
-            header?.Delimiter ?? ",",
-            header?.ImportKind ?? ImportKind.InsertAndSkipExisting
-        );
-
-        await SendConfirmHeader();
-
-        bool consumerIsRunning = true;
-        var ms = new AsynchronousStream(1024 * 32 * 500);
-
-        var consumerTask = Task.Run(async () =>
-        {
-            try
-            {
-                await importService.RunImport(ms, context, async (result, totalProcessed) =>
-                    await SendProgressReport($"Total processed {totalProcessed} CachedBlocks: {ms.CachedBlocks}"),
-                    async exception => await SendProgressReport($"{exception}"));
-                await SendProgressReport("...finished");
-            }
-            finally
-            {
-                consumerIsRunning = false;
-            }
-        }, cancellationToken);
-
-        var producerTask = Task.Run(async () =>
-        {
-            WebSocketReceiveResult? receiveResult = null;
-            int bufferSize = 1024 * 32;
-
-            while (true)
-            {
-                if (!consumerIsRunning)
-                {
-                    break;
-                }
-
-                byte[] buffer = new byte[bufferSize];
-                receiveResult = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-
-                if (receiveResult.MessageType == WebSocketMessageType.Text)
-                {
-                    string messageText = Encoding.UTF8.GetString(buffer, 0, receiveResult.Count);
-                    var message = JsonConvert.DeserializeObject<Message>(messageText);
-
-                    if (message is not null && message.Type == "done")
-                    {
-                        break; // End of communication, close socket
-                    }
-                }
-
-                if (!receiveResult.CloseStatus.HasValue)
-                {
-                    var data = new ArraySegment<byte>(buffer);
-
-                    if (data.Array != null)
-                    {
-                        await ms.WriteAsync(data, cancellationToken);
-                        await ms.FlushAsync(cancellationToken);
-                    }
-
-                    int count = receiveResult.Count;
-                    byte[] response = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type = "progress", payload = count }));
-                    await webSocket.SendAsync(
-                        new ArraySegment<byte>(response, 0, response.Length),
-                        WebSocketMessageType.Text,
-                        true,
-                        cancellationToken);
-
-                    if (ms.CachedBlocks > 3500)
-                    {
-                        await SendTooFastReport();
-                        await SendProgressReport($"Too fast, waiting 3s CachedBlocks: {ms.CachedBlocks}");
-                        await Task.Delay(3000, cancellationToken);
-                    }
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }, cancellationToken);
-
-        bool socketAvailable = true;
+        await using var csvFile = new FileStream(
+            Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()),
+            FileMode.CreateNew,
+            FileAccess.ReadWrite,
+            FileShare.None,
+            bufferSize: 81920,
+            FileOptions.DeleteOnClose);
 
         try
         {
-            await producerTask;
+            await context.Request.Body.CopyToAsync(csvFile, context.RequestAborted);
         }
-        catch (SocketException se)
+        catch (Exception e) when (e is IOException or OperationCanceledException)
         {
-            socketAvailable = false;
-            logService.LogException(SOURCE, "PRODUCER", se);
+            eventLogService.LogException(SOURCE, "UPLOAD", e);
+            await progress.Send("error", e.Message);
+        }
+
+        try
+        {
+            csvFile.Position = 0;
+            
+            await importService.RunImport(
+                csvFile,
+                importContext,
+                (_, totalProcessed) => progress.Send("msg", $"Total processed {totalProcessed}"),
+                exception => progress.Send("msg", $"{exception}"));
+
+            await progress.Send("finished");
         }
         catch (Exception e)
         {
-            logService.LogException(SOURCE, "PRODUCER", e);
-            await SendProgressReport($"{e}");
+            eventLogService.LogException(SOURCE, "IMPORT", e);
+            await progress.Send("error", e.Message);
         }
         finally
         {
-            ms.TryCompleteWriting();
+            await progress.Complete();
         }
-
-        try
-        {
-            await consumerTask;
-        }
-        catch (SocketException se)
-        {
-            logService.LogException(SOURCE, "CONSUMER", se);
-            socketAvailable = false;
-        }
-        catch (Exception e)
-        {
-            logService.LogException(SOURCE, "CONSUMER", e);
-            await SendProgressReport($"{e}");
-        }
-
-#pragma warning disable S2589 // Boolean expressions should not be gratuitous
-        if (socketAvailable)
-        {
-            await SendProgressFinished();
-            await Task.Delay(1000, cancellationToken);
-            await webSocket.CloseAsync(
-                WebSocketCloseStatus.NormalClosure,
-                "Standard closing",
-                CancellationToken.None);
-        }
-#pragma warning restore S2589 // Boolean expressions should not be gratuitous
     }
 
-
-    private static async Task<JObject?> ReceiveHeader(WebSocket webSocket, CancellationToken cancellationToken)
+    private static bool TryCreateImportContext(
+        IQueryCollection query,
+        [NotNullWhen(true)] out ImportContext? importContext,
+        [NotNullWhen(false)] out string? error)
     {
-        var ms = new MemoryStream();
-        const int bufferSize = 1024 * 32;
+        importContext = null;
 
-        while (true)
+        string? importKindQueryValue = query["importKind"];
+
+        string importKind = string.IsNullOrEmpty(importKindQueryValue)
+            ? ImportKind.InsertAndSkipExisting
+            : importKindQueryValue;
+
+        Guid? contactGroupGuid = null;
+        string? contactGroupQueryValue = query["contactGroup"];
+        if (!string.IsNullOrEmpty(contactGroupQueryValue))
         {
-            byte[] buffer = new byte[bufferSize];
-            var receiveResult = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+            contactGroupGuid = Guid.Parse(contactGroupQueryValue);;
+        }
 
-            if (!receiveResult.CloseStatus.HasValue)
+        Guid? recipientListGuid = null;
+        string? recipientListQueryValue = query["recipientList"];
+        if (!string.IsNullOrEmpty(recipientListQueryValue))
+        {
+            recipientListGuid = Guid.Parse(recipientListQueryValue);
+        }
+
+        string? batchSizeQueryValue = query["batchSize"];
+        if (!int.TryParse(batchSizeQueryValue, NumberStyles.None, CultureInfo.InvariantCulture, out int batchSize) ||
+            batchSize <= 0)
+        {
+            error = "The batch size must be a positive whole number.";
+            return false;
+        }
+
+        string delimiter = query["delimiter"].ToString();
+        if (string.IsNullOrEmpty(delimiter))
+        {
+            error = "Delimiter is empty.";
+            return false;
+        }
+
+        importContext = new ImportContext(contactGroupGuid, recipientListGuid, batchSize, delimiter, importKind);
+        error = null;
+
+        return true;
+    }
+
+    private sealed class ProgressWriter(HttpResponse response, CancellationToken cancellationToken)
+    {
+        private readonly SemaphoreSlim writeLock = new(1, 1);
+        private bool completed;
+
+        public async Task Send(string type, string payload = "")
+        {
+            await writeLock.WaitAsync(CancellationToken.None);
+
+            try
             {
-                var data = new ArraySegment<byte>(buffer);
-
-                if (data.Array != null)
+                if (completed)
                 {
-                    await ms.WriteAsync(data, cancellationToken);
-                    await ms.FlushAsync(cancellationToken);
+                    return;
                 }
-            }
-            else
-            {
-                break;
-            }
 
-            if (receiveResult.EndOfMessage)
+                byte[] line = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new { type, payload }) + "\n");
+                await response.Body.WriteAsync(line, cancellationToken);
+                await response.Body.FlushAsync(cancellationToken);
+            }
+            catch (Exception e) when (e is IOException or OperationCanceledException)
             {
-                break;
+                // client disconnected, the import carries on without reporting
+                completed = true;
+            }
+            finally
+            {
+                writeLock.Release();
             }
         }
 
-        ms.Seek(0, SeekOrigin.Begin);
-
-        using var sr = new StreamReader(ms);
-        string msg = await sr.ReadToEndAsync();
-        var deserialized = JObject.Parse(msg);
-
-        return deserialized;
+        public async Task Complete()
+        {
+            await writeLock.WaitAsync(CancellationToken.None);
+            completed = true;
+            writeLock.Release();
+        }
     }
 }

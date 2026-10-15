@@ -13,7 +13,6 @@ import {
 	Input,
 	MenuItem,
 	NotificationBarAlert,
-	ProgressBar,
 	RadioButton,
 	RadioGroup,
 	RadioGroupSize,
@@ -32,14 +31,10 @@ interface ImportTemplateClientProperties {
 	readonly recipientLists: Array<{ guid: string; displayName: string }>;
 }
 
-let canContinue = true;
-let toofast = false;
-
 export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX.Element => {
 	const [error, setError] = useState<string | null>(null);
 	const [file, setFile] = useState<File | null>(null);
 	const [state, setState] = useState<string[]>([]);
-	const [currentFile, setCurrentFile] = useState({ current: 0, total: 0 });
 
 	const [importKind, setImportKind] = useState('insert');
 	const [contactGroup, setContactGroup] = useState<string | undefined>('');
@@ -83,92 +78,6 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 		}
 	};
 
-	const parseFile = (
-		file: File,
-		callback: (buffer: ArrayBuffer) => boolean,
-		finishedCallback: () => void,
-	): void => {
-		const fileSize = file.size;
-		const chunkSize = 32 * 1024; // bytes
-		let offset = 0;
-		let chunkReaderBlock:
-			| null
-			| ((_offset: number, length: number, _file: File) => void) = null;
-
-		chunkReaderBlock = (_offset: number, length: number, _file: File) => {
-			const r = new FileReader();
-			const blob = _file.slice(_offset, length + _offset);
-			r.onload = (evt: ProgressEvent<FileReader>) => {
-				if (!canContinue) {
-					return;
-				}
-
-				if (evt.target === null) {
-					setError(Localization.integrations.contactsimporter.messages.errorReading);
-
-					return;
-				}
-				if (evt.target.error === null && evt.target.result !== null) {
-					offset += chunkSize;
-
-					let chunkBuffer: ArrayBuffer;
-
-					if (evt.target.result instanceof ArrayBuffer) {
-						chunkBuffer = evt.target.result;
-					} else if (typeof evt.target.result === 'string') {
-						const encoder = new TextEncoder();
-						chunkBuffer = encoder.encode(evt.target.result).buffer;
-					} else {
-						setError(Localization.integrations.contactsimporter.messages.unexpectedFile);
-
-						return;
-					}
-
-
-					if (!callback(chunkBuffer)) {
-						// callback for handling read chunk
-						canContinue = false;
-						setError(Localization.integrations.contactsimporter.messages.serverError);
-						return;
-					}
-				} else {
-					finishedCallback();
-					setError(
-						evt.target.error?.message ??
-						Localization.integrations.contactsimporter.messages.errorReading,
-					);
-
-					return;
-				}
-				if (offset >= fileSize) {
-					finishedCallback();
-					setState((prev) => [...prev, Localization.integrations.contactsimporter.messages.readComplete]);
-					return;
-				}
-
-				// off to the next chunk
-				if (chunkReaderBlock !== null && canContinue) {
-					chunkReaderBlock(offset, chunkSize, file);
-				}
-			};
-			if (toofast) {
-				setTimeout(() => {
-					r.readAsText(blob);
-				}, 3000);
-				setState((prev) => [
-					...prev,
-					Localization.integrations.contactsimporter.messages.uploadPaused,
-				]);
-				toofast = false;
-			} else {
-				r.readAsText(blob);
-			}
-		};
-
-		// now let's start the read with the first block
-		chunkReaderBlock(offset, chunkSize, file);
-	};
-
 	const onUpload = (): void => {
 		if (file === null) {
 			setError(Localization.integrations.contactsimporter.messages.noFile);
@@ -176,99 +85,97 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 			return;
 		}
 
-		setState([]);
+		setError(null);
+		setState([`${Localization.integrations.contactsimporter.messages.sendingFile}: ${getFileSize(file)}`]);
 
-		const port = location.port !== '' ? `:${location.port}` : '';
-		const scheme = window.location.protocol === 'http:' ? 'ws' : 'wss';
-		const socket = new WebSocket(`${scheme}://${location.hostname}${port}/contactsimport/ws`);
-		socket.binaryType = 'blob';
-		socket.onerror = (e) => {
-			setError(Localization.integrations.contactsimporter.messages.errorUploading);
-			console.error(e);
-			canContinue = false;
-			socket.close();
-		};
-		socket.onmessage = (event) => {
-			const p = JSON.parse(event.data);
-			switch (p.type) {
-				case 'headerConfirmed': {
-					setState((prev) => [
-						...prev,
-						Localization.integrations.contactsimporter.messages.headersValidated,
-					]);
+		const query = new URLSearchParams({ importKind, delimiter, batchSize: batchSize.toString()});
+        
+		if (importKind === 'insert') {
+			if (contactGroup) {
+				query.set('contactGroup', contactGroup);
+			}
+			if (recipientList) {
+				query.set('recipientList', recipientList);
+			}
+		}
 
-					parseFile(
-						file,
-						(buffer) => {
-							if (socket.readyState === socket.OPEN) {
-								socket.send(buffer);
-								return true;
-							}
-							return false;
-						},
-						() => {
-							socket.send(JSON.stringify({ type: 'done' }));
-						},
-					);
+		// The server answers with one JSON message per line while the import runs
+		let parsedLength = 0;
+		let importEnded = false;
 
-					break;
-				}
-				case 'toofast': {
-					toofast = true;
+		const handleMessage = (message: { type: string; payload: string }): void => {
+			switch (message.type) {
+				case 'importStarted': {
+					setState((prev) => [...prev, Localization.integrations.contactsimporter.messages.importStarted]);
 					break;
 				}
 				case 'msg': {
-					setState((prev) => [...prev, p.payload]);
+					setState((prev) => [...prev, message.payload]);
 					break;
 				}
-				case 'progress': {
-					const len = Number.parseInt(p.payload, 10);
-
-					if (len === currentFile.total % (32 * 1024)) {
-						canContinue = false;
-						setState((prev) => [...prev, Localization.integrations.contactsimporter.messages.uploadComplete]);
-						setFile(null);
-					}
-
-					setCurrentFile((prev) => ({
-						total: prev.total,
-						current: prev.current + len,
-					}));
-
+				case 'error': {
+					importEnded = true;
+					setError(Localization.integrations.contactsimporter.messages.importFailed);
+					setState((prev) => [...prev, message.payload]);
 					break;
 				}
 				case 'finished': {
+					importEnded = true;
 					setState((prev) => [...prev, Localization.integrations.contactsimporter.messages.importComplete]);
 					setFile(null);
-					canContinue = false;
-					if (socket.readyState < socket.CLOSING) {
-						socket.close();
-					}
 					break;
 				}
 			}
 		};
-		socket.onopen = (_event) => {
-			setError(null);
-			setState((prev) => [
-				...prev,
-				`${Localization.integrations.contactsimporter.messages.sendingFile}: ${getFileSize(file)}`,
-			]);
-			canContinue = true;
 
-			socket.send(
-				JSON.stringify({
-					type: 'header',
-					payload: {
-						importKind,
-						contactGroup: contactGroup === null ? null : contactGroup,
-						recipientList: recipientList === null ? null : recipientList,
-						delimiter,
-						batchSize,
-					},
-				}),
-			);
+		const readMessages = (): void => {
+			const lastNewLine = xhr.responseText.lastIndexOf('\n');
+			if (lastNewLine < parsedLength) {
+				return;
+			}
+
+			const lines = xhr.responseText.substring(parsedLength, lastNewLine).split('\n');
+			parsedLength = lastNewLine + 1;
+
+			for (const line of lines) {
+				if (line.trim() !== '') {
+					handleMessage(JSON.parse(line));
+				}
+			}
 		};
+
+		const xhr = new XMLHttpRequest();
+        
+		xhr.upload.onload = () => {
+			setState((prev) => [...prev, Localization.integrations.contactsimporter.messages.uploadComplete]);
+		};
+        
+		xhr.onprogress = () => {
+			if (xhr.status === 200) {
+				readMessages();
+			}
+		};
+        
+		xhr.onload = () => {
+			if (xhr.status !== 200) {
+				setError(xhr.responseText || Localization.integrations.contactsimporter.messages.errorUploading);
+				return;
+			}
+
+			readMessages();
+
+			if (!importEnded) {
+				setError(Localization.integrations.contactsimporter.messages.serverError);
+			}
+		};
+        
+		xhr.onerror = () => {
+			setError(Localization.integrations.contactsimporter.messages.errorUploading);
+		};
+
+		xhr.open('POST', `/contactsimport/upload?${query}`);
+		xhr.setRequestHeader('Content-Type', 'text/csv');
+		xhr.send(file);
 	};
 
 	return (
@@ -304,7 +211,6 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 										onUpload={([f]) => {
 											if (f instanceof File) {
 												setFile(f);
-												setCurrentFile({ current: 0, total: f.size });
 											}
 										}} />
 
@@ -391,19 +297,6 @@ export const ImportLayoutTemplate = (props: ImportTemplateClientProperties): JSX
 										min={1}
 										explanationText={Localization.integrations.contactsimporter.content.explanations.batchSize}/>
 								</div>
-
-								{currentFile.total > 0 && (
-									<div>
-										<Headline size={HeadlineSize.S} spacingBottom={Spacing.M}>
-											Upload Progress
-										</Headline>
-										<ProgressBar
-											completed={Math.floor(
-												(currentFile.current / currentFile.total) * 100,
-											)}
-										/>
-									</div>
-								)}
 
 								<Button
 									label={Localization.integrations.contactsimporter.content.labels.run}
