@@ -20,9 +20,6 @@ public static class ServiceCollectionExtensions
 /// </summary>
 public static class ApplicationBuilderExtensions
 {
-    public static IApplicationBuilder UseContactsImport(this IApplicationBuilder builder)
-    {
-        builder.UseWebSockets();
-        return builder.UseMiddleware<ContactsImportMiddleware>();
-    }
+    public static IApplicationBuilder UseContactsImport(this IApplicationBuilder builder) =>
+        builder.UseMiddleware<ContactsImportMiddleware>();
 }

@@ -4,15 +4,12 @@
         "messages": {
           "noFile": "No file was selected.",
           "errorUploading": "An error occurred while uploading the file.",
-          "headersValidated": "CSV headers validated. Starting import.",
           "uploadComplete": "File upload complete.",
+          "importStarted": "Starting import.",
           "importComplete": "Import complete.",
+          "importFailed": "The import failed. See the upload log and the event log for details.",
           "sendingFile": "Sending file of length",
-          "errorReading": "An error occurred while reading the file.",
-          "unexpectedFile": "Unexpected file read result type.",
-          "serverError": "Unexpected server error.",
-          "readComplete": "Completed reading file.",
-          "uploadPaused": "Pausing upload while contacts are imported."
+          "serverError": "Unexpected server error."
         },
         "content": {
           "headlines": {
@@ -35,7 +32,7 @@
             "contactGroup": "Assigns all contacts in CSV file to the selected group. Leave empty to skip assignment.",
             "recipientList": "Assigns all contacts in CSV file to the selected recipient list. Leave empty to skip assignment.",
             "delimiter": "The delimiter for CSV row data items.",
-            "batchSize": "The number of records that will be uploaded and processed at a time."
+            "batchSize": "The number of records that will be processed at a time."
           }
         }
       }
