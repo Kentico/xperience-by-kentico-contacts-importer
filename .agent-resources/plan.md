@@ -1,6 +1,6 @@
 # Contacts Importer (Labs) — High-Level Plan
 
-Status: **DRAFT v0.6**. Decisions in [§17](#17-decisions-log), open questions in [§16](#16-open-questions).
+Status: **DRAFT v0.7**. Decisions in [§17](#17-decisions-log), open questions in [§16](#16-open-questions).
 
 ⚠️ = unverified assumption, needs spike or confirmation.
 
@@ -38,11 +38,12 @@ Persona: marketer. Must follow XbyK admin UI patterns (design components, page a
   - Unsubscribe: contact stays member, stops counting (newest confirmation not approved).
   - Added by code w/o confirmation row → member but doesn't count (shows as unsubscribed).
   - Implications: confirming = insert new approved row (newest wins), not update; detect "unsubscribed" = member + newest row not approved; dry run must read newest row per contact+list.
-- **Bounces** (verified from XbyK source): `EmailBounceInfo` keyed by **email address** (not contact, not list) — `EmailBounceEmailAddress`, `EmailBounceIsHardBounce`, `EmailBounceSoftBounceCount`. Upserted on detected bounce; hard sets flag, soft increments count. Bounce state is global per address, shared by every contact/list using it. ⚠️ Send-time exclusion rule (soft bounce threshold setting?) unverified. No documented public subscribe/unsubscribe service.
-- Consents: `IConsentAgreementService.Agree/Revoke/IsAgreed` usable without HTTP context. ⚠️ No bulk API, no backdating param.
+- **Bounces** (verified from XbyK source): `EmailBounceInfo` keyed by **email address** (not contact, not list) — `EmailBounceEmailAddress`, `EmailBounceIsHardBounce`, `EmailBounceSoftBounceCount`. Upserted on detected bounce; hard sets flag, soft increments count. Bounce state is global per address, shared by every contact/list using it. Send-time exclusion (spike, 31.6.0): hard bounce OR `EmailBounceSoftBounceCount >= BouncedEmailsGlobalOptions.SoftBounceLimit` (ASP.NET option, default 5), joined on `ContactEmail` in `Proc_EmailLibrary_EmailMarketingRecipient_GenerateRecipients`. Hard flag reflects latest bounce (later soft bounce clears it). No documented public subscribe/unsubscribe service.
+- Consents (spike): `Agree` only inserts one `ConsentAgreementInfo` (ContactID, ConsentID, Time = now, ConsentHash = `consent.ConsentHash`, Revoked = false) + clears `consentagreement|{contactId}|{consentId}`; no events. "Agreed" = newest row by time not revoked.
+- Spike evidence: [spike-findings.md](spike-findings.md) (decompiled Kentico.Xperience.Core 31.6.0; re-check on target version).
 - Admin uploads: only Content hub has built-in chunked upload. No generic admin upload API.
 - SaaS: `AddXperienceCloudStoragePathMapping` maps `~/assets` to Azure Blob; custom paths need `AddStoragePathRegistration` (`SharedTemp`/`SharedPersistent`) or may be lost on redeploy/slot swap. Blob quota 50/250/1000 GB by plan. DB tiers small (S0–S2 on L1/L2).
-- Read-only (zero-downtime) deployments block DB/blob writes, scheduled tasks, background services → imports must tolerate interruption (see §11).
+- Read-only (zero-downtime) deployments: admin UI unavailable → no imports during deployment. Not worked around (D29); documented.
 - `IScheduledTask` runs once across web farm instances; overlapping run skipped.
 - Request limits: Azure ~4 min request timeout; ASP.NET Core request body size limit set by app (Kestrel default ~30 MB). Chunked upload keeps every request small + short → no file splitting needed by marketer. Document limits + chunk size setting.
 - No built-in contact import → no duplication.
@@ -67,8 +68,7 @@ Browser (React template)                     Server (XbyK app, 1..n instances)
 4. Loop while not done:        ─cmd─▶ PROCESS_NEXT (phase = analyze | execute)
    show progress                        next chunk(s) in file order / ~10–20 s → checkpoint → status.json
 5. Download report             ─cmd─▶ GET_REPORT   ← {root}/{jobId}/report-*.csv.gz
-                                        execute: CMSActionContext.LogWebFarmTasks = false
-                                        on finish: custom web farm task → clear caches
+                                        on finish: built-in cache clear (creates web farm tasks)
 ```
 
 `{root}` = configurable storage path (appsettings), CMS.IO-backed so it can be mapped to shared storage (§11).
@@ -148,8 +148,9 @@ All client-side, in a **Web Worker** (keeps admin UI responsive).
   - Existing-contact matching → DB, per batch. Nothing extra persisted in DB besides contacts themselves.
 - Key lookup, per batch of ~1k keys:
   - SQL Server hard limit = 2,100 parameters per request; very long literal `IN` lists (10k+) can hit error 8623 / slow compile. 1k is safe either way.
-  - ⚠️ Spike: does XbyK `WhereIn` parameterize or inline? Preferred: single `nvarchar(max)` JSON parameter → `WHERE ContactEmail IN (SELECT value FROM OPENJSON(@keys))` → no param limit, one plan.
-  - ⚠️ Spike: is `ContactEmail` indexed? Custom fields added via Modules have no index → lookups on custom key may scan `OM_Contact`; measure on 1M+ contacts, warn in UI if non-indexed key chosen.
+  - Spike: `WhereIn` w/ strings inlines escaped literals below `CMSDefaultSQLInlineLimit` (1,000), switches to table-valued param (`Type_CMS_StringTable`, nvarchar(450)) at ≥1,000. No param-limit risk. Use `WhereIn` for lookups (or `OPENJSON(@keys)` in raw SQL path).
+  - Spike: `IX_OM_Contact_ContactEmail` exists (non-unique). Custom fields added via Modules get **no index** → UI warns when custom key chosen on large contact tables.
+  - `OM_ContactGroupMember` has no unique constraint on group + contact → existence check before insert required.
 
 ## 8. Processing behaviors (marketer opt-in/out)
 
@@ -184,9 +185,10 @@ All choices shown on review + results screens and in audit event.
 
 - Optional. Marketer picks an existing XbyK consent. UI instructs them to create a **dedicated consent** mirroring the text contacts originally agreed to (e.g. "Newsletter — collected via webinar signup, 2024–2026"); don't reuse a site consent contacts never saw.
 - Scope (D6): **blanket** (all rows) by default, optional **column override** (consented y/n; optional date + source columns). Rows with column = n/empty get no agreement.
-- `IConsentAgreementService.Agree` per contact, batched + throttled.
-- Agreement time = import time. ⚠️ Spike: backdating via `ConsentAgreementInfo` provider. Fallback: source date/source → custom contact fields (documented).
-- Already agreed → skip. Revoked → keep revoked by default.
+- Write via `BulkInsert` of `ConsentAgreementInfo` (D27) — same columns `Agree` sets (ContactID, ConsentID, Time, ConsentHash from current consent, Revoked = false). No per-contact calls.
+- Agreement time: import time by default; **backdated** from mapped consent date column when provided (Time is plain column).
+- Already agreed (newest row not revoked) → skip. Revoked → keep revoked by default; note backdated agreement older than existing revocation stays revoked (newest wins).
+- After run: `CacheHelper.ClearCache("consentagreement|")` (10-min `IsAgreed` cache).
 - Warn if mapped consent date older than N months (staleness).
 
 ### GDPR notes (not legal advice — needs Kentico legal review)
@@ -220,7 +222,7 @@ Every long phase shows: what's happening, how much is done, how much is left (wh
 | Parse + upload | file size yes, row total no (estimated) | bytes read / file size (%), rows parsed, est. total rows (bytes ratio), chunks uploaded / created, MB/s, ETA, rejected rows, likely dupes |
 | Analyze (dry run) | yes (row total from `SAVE_PROFILE`) | rows analyzed / total (%), rows/s, ETA, running counts: new / update / unchanged / skipped / invalid |
 | Execute | yes | rows processed / total (%), rows/s, ETA, running counts: created / updated / skipped / failed, list adds, consents |
-| Paused / waiting | — | why (tab closed earlier, app read-only, network retry #n), last progress time, "Continue" button |
+| Paused / waiting | — | why (tab closed earlier, network retry #n), last progress time, "Continue" button |
 
 - Elapsed time + ETA from moving average of last N calls (smooth jumps).
 - Components: `ProgressBar` (`completed` 0–100), `InfoCard`/`InfoCardGroup` for counts, `NotificationBar`/`Callout` for paused/warning, `NavigationBlockerDialog` when leaving page mid-run ("import will pause").
@@ -236,7 +238,13 @@ Every long phase shows: what's happening, how much is done, how much is left (wh
   - Files: `job.json` (config, options, attestation), `status.json` (state, checkpoint, aggregates, heartbeat, worker instance), `parts/`, reports.
   - Writes via CMS.IO (write temp + replace) so path mapping works.
 - **Shared storage**: Usage guide shows custom path mapping ([storage path mapping docs](https://docs.kentico.com/documentation/developers-and-admins/api/files-api-and-cms-io/file-system-providers/storage-path-mapping)) for SaaS/web farm so chunks + status reach all instances. ⚠️ Option: `AddContactsImporter(o => o.RegisterStoragePath = true)` calls `AddStoragePathRegistration` for the user.
-- **Web farm**: `CMSActionContext.LogWebFarmTasks = false` during writes (avoid per-object task flood). On completion (and per pause/cancel), send **custom web farm task** that clears cache for contact, contact group member, subscription confirmation, consent agreement objects; also clear locally. ⚠️ Confirm exact cache dummy keys.
+- **Web farm / cache** (D28, replaces custom task in D7): no custom web farm task. Built-in calls already create web farm tasks:
+  - `CacheHelper.TouchKeys` for `om.contact|all`, `om.contactgroupmembercontact|all`, `emaillibrary.emailsubscriptionconfirmation|all`, `cms.consentagreement|all`
+  - `CacheHelper.TouchKeys("om.recipientlist|byid|{listId}")` (subscription `IsConfirmed` cache, 10 min)
+  - `CacheHelper.ClearCache("consentagreement|")`
+  - Optional: `ContactInfo.TYPEINFO.InvalidateAllObjects()`, `ProviderHelper.ClearHashtables`
+  - `BulkInsert`/`BulkUpdate` already touch `{type}|all` + log task regardless of `LogWebFarmTasks` (flag only affects per-object API).
+  - Run cleanup after execute completes and after cancel.
 - **Processing model** (decided D11): browser-driven `PROCESS_NEXT` loop; no scheduled task, no hosted service. Each request may hit a different instance → shared storage required for web farm/SaaS (above).
 
 ### Why no background worker / checkpoint-resume machinery
@@ -249,13 +257,13 @@ Interruption risk depends on run duration, chance of restart/scale-in during run
 |---|---|---|
 | Planned deploy/restart | yes | client retries next call on another/restarted instance |
 | Crash, platform maintenance, scale-in | no | same — one failed call, retried |
-| Read-only deploy | yes | calls fail cleanly per batch; client backs off, continues after |
+| Read-only deploy | yes | not supported (D29): admin UI unavailable; import stops, marketer re-runs after deploy (idempotent) |
 | Tab closed / laptop sleep | yes (docs) | pauses; reopen continues from checkpoint |
 | Two drivers | — | driver token + heartbeat |
 | Rows without dedupe key | — | **not idempotent** → skipped by default; "create without key" option flagged as non-repeatable |
 | Downstream effects mid-run (automations, groups) | — | not covered by any model; document |
 
-Usage guide: "plan imports outside deploy windows; keep tab open; large imports best run off-hours".
+Usage guide: "don't import during deployments; keep tab open; large imports best run off-hours".
 
 ## 12. Tracking / audit (decided D3)
 
@@ -297,16 +305,28 @@ Uploaded chunks (mapped columns only) = PII on server storage. Raw file never up
 - Batches (default ~1k, configurable); transaction per batch; checkpoint after commit. `PROCESS_NEXT` runs batches until time budget (~10–20 s) used, then returns.
 - Idempotency rules: match by dedupe key before write; memberships/subscriptions/consents existence-checked; field writes deterministic for same input + policy.
 - Create: `BulkInsert` (one SqlBulkCopy per batch).
-- Update (D19, D20): one set-based statement per batch, merge rule in SQL — e.g. `UPDATE c SET c.ContactFirstName = COALESCE(NULLIF(LTRIM(RTRIM(v.FirstName)), ''), c.ContactFirstName), …, c.ContactLastModified = @now FROM OM_Contact c JOIN OPENJSON(@rows) WITH (…) v ON c.ContactID = v.ContactID` via `ConnectionHelper`. One JSON param → no 2,100-param limit. Raw SQL bypasses Info API by design (D22) → we own `ContactLastModified` + cache clear; groups left to marketer. Validate against [stable customization guidelines](https://docs.kentico.com/documentation/developers-and-admins/customization/stable-customization-guidelines) + XbyK upgrade safety (column names from class schema, not hard-coded). Fallback: `BulkUpdate` grouped by identical value sets (poor fit for per-row values).
-- Memberships + subscription confirmations: `BulkInsert` after set-based existence check.
-- Consents: `IConsentAgreementService.Agree` is per-row → conflicts with D19. ⚠️ Spike: `BulkInsert` of `ConsentAgreementInfo` rows directly (also enables backdating). Check what `Agree` does beyond insert (events, cache, revision lookup).
+- Update (D19, D20): one set-based statement per batch, merge rule in SQL — e.g. `UPDATE c SET c.ContactFirstName = COALESCE(NULLIF(LTRIM(RTRIM(v.FirstName)), ''), c.ContactFirstName), …, c.ContactLastModified = @now FROM OM_Contact c JOIN OPENJSON(@rows) WITH (…) v ON c.ContactID = v.ContactID` via `ConnectionHelper`. One JSON param → no 2,100-param limit. Raw SQL bypasses Info API by design (D22) → we own `ContactLastModified` + cache clear; groups left to marketer.
+  - API: `ConnectionHelper.ExecuteNonQuery(sql, QueryDataParameters, QueryTypeEnum.SQLQuery)` (or async) inside `CMSTransactionScope`; JSON as nvarchar(max) param. Same pattern Kentico uses internally.
+  - Allowed by [stable customization guidelines](https://docs.kentico.com/documentation/developers-and-admins/customization/stable-customization-guidelines): direct DB access OK "for performance optimization of operations that handle very large amounts of data", w/ test coverage for schema changes → **integration tests required** (MSSQL container, per XbyK version). Column names from class schema, not hard-coded.
+- Memberships + subscription confirmations: `BulkInsert` after set-based existence check (no unique constraint on membership).
+- Consents: `BulkInsert` of `ConsentAgreementInfo` (D27, §9).
 - **Speed over per-row correctness hooks** (D22, intentional): no per-row Info API calls or global events. 1k contacts must not fire 1k events serially. All cleanup happens once, after the run:
-  - Web farm cache-clear task (+ local clear).
+  - Built-in cache clear calls (§11, D28) — create web farm tasks.
   - **Contact groups: not rebuilt automatically.** Results screen `Callout` tells marketer to rebuild affected groups or mark them for scheduled recalculation ([docs](https://docs.kentico.com/documentation/business-users/digital-marketing/contact-groups#recalculate-contact-groups)), w/ link to Contact groups app. Recipient lists = manual membership → unaffected.
   - Typical use: PROD before go-live or before new microsite launch → no live traffic depends on immediate consistency.
-  - Docs: list what's skipped (events, handlers, automation triggers on contact create/update, group recalculation) so devs know which custom handlers won't run.
 - Throttle: time budget per call, optional client delay between calls, adaptive batch size → protect live site on S0/S1.
-- Read-only mode: write fails → status "waiting for app to become writable", client backs off + retries.
+
+### Documented choices (not risks — intentional, must be in Usage guide + Setup docs)
+
+| Choice | Consequence developers/marketers must know |
+|---|---|
+| Set-based writes bypass Info API (D22) | Custom handlers on per-object Insert/Update events (`ContactInfo.TYPEINFO.Events`, `ConsentAgreementInfo` events) don't run. Type-level `BulkInsert` handlers (`SqlEvents.BulkInsert`) still run. |
+| Cache cleared by type keys (D28) | Custom caches keyed only on `om.contact|byid|{id}` stay stale until expiry → depend on `om.contact|all` or accept expiry. |
+| No contact group rebuild (D22) | Marketer rebuilds groups or schedules recalculation. |
+| No automation/activity triggers | Contact create/update automations don't start for imported contacts. |
+| Bounced addresses not edited | Importer never writes `EmailBounceInfo`; XbyK excludes at send. |
+| No import during deployment (D29) | Admin UI unavailable while app read-only; re-run after deploy. |
+| Clean data expected (D18) | Duplicate keys → last non-empty wins; dry run may over-count creates. |
 - ⚠️ Perf targets: 1M rows analyze < 15 min, execute < 60 min on SaaS Level 2.
 
 ## 14. Admin UI & project
@@ -324,7 +344,7 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 
 ## 15. Phasing
 
-0. **Spike**: browser streaming XLSX + JSON parsing (memory on 1M rows); TS↔C# key normalization parity; 2 GB chunked page-command upload behind Cloudflare/SaaS; `PROCESS_NEXT` throughput (rows/s) on S1 + L2 for 1M/10M rows; set-based OPENJSON update vs `BulkUpdate`; `WhereIn` param behavior; consent `BulkInsert` vs `Agree`; key column indexes (`ContactEmail`, custom fields); send-time bounce exclusion rule (soft bounce threshold); consent backdating; cache keys for web farm task.
+0. **Spike**: browser streaming XLSX + JSON parsing (memory on 1M rows); TS↔C# key normalization parity; 2 GB chunked page-command upload behind Cloudflare/SaaS; `PROCESS_NEXT` throughput (rows/s) on S1 + L2 for 1M/10M rows; set-based OPENJSON update throughput. Done (see spike-findings.md): WhereIn, indexes, bounce exclusion, consent bulk insert + backdating, cache keys, raw SQL API.
 1. **MVP**: all formats (§5) parsed client-side, dedupe/merge, update policies, recipient list (confirmed w/ attest / keep-unsubscribed), consent (blanket + column), profiling, full dry run + reports, resumable execute, results, recent imports, permissions, event log + `AfterContactImportEvent`, source field stamp.
 2. **Phase 2** (if customer traction): custom object types (job history, import status), undo created contacts, automation trigger ("Contacts imported"), mapping presets.
 3. **Backlog**: non-recipient contact group assignment, API/CLI import, recurring imports from remote source, import suppression list from previous ESP into `EmailBounceInfo` (hard bounces).
@@ -341,10 +361,10 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 | D1 | Upload: chunked (gzip + base64) via `[PageCommand]`. No custom endpoints. | 2026-10-20 |
 | D2 | Dry run: full-file analysis, same code path as execute w/ writes off. | 2026-10-20 |
 | D3 | Tracking v1: custom contact field + event log + `AfterContactImportEvent`. No custom object types in v1. | 2026-10-20 |
-| D4 | Consent: optional; records agreements via `IConsentAgreementService`; marketer prepares dedicated consent first. | 2026-10-20 |
+| D4 | Consent: optional; records agreements (`BulkInsert` per D27); marketer prepares dedicated consent first. | 2026-10-20 |
 | D5 | MVP formats: CSV/TSV, XLSX, JSON/NDJSON, `.gz`/`.zip`. | 2026-10-20 |
 | D6 | Consent scope: blanket default + optional per-row column override. | 2026-10-20 |
-| D7 | Job state: files under configurable `ContactsImporter:StoragePath`; docs explain shared-storage path mapping; `LogWebFarmTasks = false` + custom web farm cache-clear task on finish. | 2026-10-20 |
+| D7 | Job state: files under configurable `ContactsImporter:StoragePath`; docs explain shared-storage path mapping; cache cleanup per D28 (custom web farm task dropped). | 2026-10-20 |
 | D8 | Phase 2 (traction-gated): custom objects, undo created contacts, automation trigger, mapping presets. | 2026-10-20 |
 | D9 | Source field: one marketer-selected contact field (dropdown); marketer-editable value w/ generated default; who/when via event log + global event. | 2026-10-20 |
 | D10 | Repo: rewrite in place; new package `Kentico.Xperience.Labs.ContactsImporter.Admin`; deprecate old NuGet. | 2026-10-20 |
@@ -353,7 +373,7 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 | D13 | Concurrent imports: warn, don't block. | 2026-10-20 |
 | D14 | Consent/DOI UI copy based on XbyK GDPR compliance docs; Sean reviews. | 2026-10-20 |
 | D15 | Upload limits: chunking avoids Azure ~4 min timeout + body size limit; document limits, no manual file splitting. | 2026-10-20 |
-| D16 | Unsubscribe/bounce storage: resolve in spike (ILSpy on XbyK libs + sign-up/unsubscribe flows in Dancing Goat). Subscribed rule since found (§2, 2026-10-21); bounce storage found (`EmailBounceInfo` per address, 2026-10-22); send-time threshold still open. | 2026-10-20 |
+| D16 | Unsubscribe/bounce storage: resolve in spike (ILSpy on XbyK libs + sign-up/unsubscribe flows in Dancing Goat). Subscribed rule since found (§2, 2026-10-21); bounce storage found (`EmailBounceInfo` per address, 2026-10-22); send-time rule found (`SoftBounceLimit` option, 2026-10-22). | 2026-10-20 |
 | D17 | Parse, map + normalize in browser (Web Worker); upload only mapped columns as gzipped NDJSON; server validates every record. | 2026-10-20 |
 | D18 | Clean data expected (one row per key). No hash buckets; sequential chunks in file order; in-batch dupes collapsed; Bloom filter warns on likely dupes before upload. | 2026-10-20 |
 | D19 | No `IContactMergeService`, no per-row Info API updates or global events. Set-based batch writes. | 2026-10-20 |
@@ -364,3 +384,7 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 | D24 | No "pending" recipient list option: add confirmed (attested) or skip. Pending/DOI-send not planned (doesn't match XbyK design). | 2026-10-22 |
 | D25 | Selecting a recipient list always adds non-members as confirmed (attested). No "skip" option. | 2026-10-22 |
 | D26 | Attestation captured by Run `ConfirmationDialog` (consent statement + click = attest, logged), not a separate checkbox. | 2026-10-22 |
+| D27 | Consent agreements via `BulkInsert` of `ConsentAgreementInfo` (same columns as `Agree`); optional backdating from mapped date column. | 2026-10-22 |
+| D28 | No custom web farm task; built-in `CacheHelper.TouchKeys`/`ClearCache` calls (create web farm tasks) after run. | 2026-10-22 |
+| D29 | No support for importing during deployments (admin UI unavailable when read-only); documented. Read-only workarounds removed. | 2026-10-22 |
+| D30 | Bypassed events, stale custom caches, etc. are documented choices, not risks (§13 table). | 2026-10-22 |
