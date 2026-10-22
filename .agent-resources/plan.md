@@ -33,7 +33,12 @@ Persona: marketer. Must follow XbyK admin UI patterns (design components, page a
 - `IInfoProvider<ContactInfo>`: `BulkInsert` / `BulkUpdate` / `BulkDelete`. BulkInsert skips handlers + contact group recalculation.
 - Auto-merge by email only on live-site actions, **not** API/admin. `IContactMergeService.MergeContactByEmail` exists. Multiple contacts can share an email.
 - Recipient list = `ContactGroupInfo` (`ContactGroupIsRecipientList`) + `RecipientListSettingsInfo`. Membership = `ContactGroupMemberInfo` (manual) + `EmailSubscriptionConfirmationInfo` (`IsApproved`, date).
-- Unsubscribed contacts stay in list w/ "Unsubscribed" status. ⚠️ Storage of unsubscribe/bounce state undocumented. No documented public subscribe/unsubscribe service.
+- **"Subscribed" rule** (verified: Xperience 31.9.3 DLL analysis; unchanged across 30.x/31.x): contact counts as subscribed when it is a list **member** AND its **newest** `EmailSubscriptionConfirmationInfo` row for that list is **approved**. Same rule drives admin "Unsubscribed" tag + "Contact is in recipient list" macro rule.
+  - Double opt-in: contact added to list only after confirmation link clicked (no "pending member" state in XbyK).
+  - Unsubscribe: contact stays member, stops counting (newest confirmation not approved).
+  - Added by code w/o confirmation row → member but doesn't count (shows as unsubscribed).
+  - Implications: confirming = insert new approved row (newest wins), not update; detect "unsubscribed" = member + newest row not approved; dry run must read newest row per contact+list.
+- **Bounces** (verified from XbyK source): `EmailBounceInfo` keyed by **email address** (not contact, not list) — `EmailBounceEmailAddress`, `EmailBounceIsHardBounce`, `EmailBounceSoftBounceCount`. Upserted on detected bounce; hard sets flag, soft increments count. Bounce state is global per address, shared by every contact/list using it. ⚠️ Send-time exclusion rule (soft bounce threshold setting?) unverified. No documented public subscribe/unsubscribe service.
 - Consents: `IConsentAgreementService.Agree/Revoke/IsAgreed` usable without HTTP context. ⚠️ No bulk API, no backdating param.
 - Admin uploads: only Content hub has built-in chunked upload. No generic admin upload API.
 - SaaS: `AddXperienceCloudStoragePathMapping` maps `~/assets` to Azure Blob; custom paths need `AddStoragePathRegistration` (`SharedTemp`/`SharedPersistent`) or may be lost on redeploy/slot swap. Blob quota 50/250/1000 GB by plan. DB tiers small (S0–S2 on L1/L2).
@@ -155,9 +160,9 @@ All client-side, in a **Web Worker** (keeps admin UI responsive).
 | Empty values in file | ignore (keep DB value) / clear DB field | ignore |
 | Multiple existing DB matches | update newest / update all / skip | update newest |
 | Invalid email | skip row / import w/o email (non-repeatable, flagged) | skip row |
-| Recipient list: not member | add **pending** / add **confirmed** (attest) / skip | pending |
+| Recipient list: not member | selecting a list = add as **confirmed** (no options; attested via Run confirm dialog) | — (no list selected = no list changes) |
 | Recipient list: unsubscribed | keep unsubscribed / resubscribe (attest) / report only | keep |
-| Recipient list: bounced | keep excluded / report | keep |
+| Recipient list: bounced address (`EmailBounceInfo` hard bounce) | add to list + report / skip list add + report | add + report (XbyK excludes at send; importer never edits `EmailBounceInfo`) |
 | Consent | none / blanket / row-driven column (attest) | none |
 | Consent previously revoked | keep revoked / re-agree (attest) | keep |
 | Import source field stamp | created only / created + updated | created only |
@@ -170,9 +175,10 @@ All choices shown on review + results screens and in audit event.
 ### Recipient lists
 
 - Selecting a list shows persistent `Callout`: double opt-in, demonstrable consent, region-neutral note, docs link. Wording starts from [XbyK GDPR compliance docs](https://docs.kentico.com/documentation/developers-and-admins/data-protection/gdpr-compliance); Sean reviews (D14).
-- "Confirmed" / "resubscribe" require checkbox attestation + `ContactsImporter.ConfirmConsent` permission. Attestation (user, time, text version) logged + in event.
-- "Pending" leaves contacts unconfirmed (no email sent in v1; DOI send = backlog).
-- ⚠️ Spike: exact unsubscribe/bounce storage before implementing those behaviors.
+- **Attestation = Run confirm dialog** (D26): no separate checkbox. Options page shows consent `Callout` when list/resubscribe/consent chosen. On Run, `ConfirmationDialog` restates counts + consent statement ("I confirm documented consent exists for these contacts…"); clicking Run = attestation. Requires `ContactsImporter.ConfirmConsent` permission. Attestation (user, time, statement text version) logged + in `AfterContactImportEvent`.
+- No "pending" or "skip" option (D24, D25): XbyK has no pending member state; member w/o approved confirmation shows as **Unsubscribed** in admin. Selecting a list always adds non-members as confirmed (membership + new approved confirmation row, dated import time, no email sent), attested via Run confirm dialog.
+- Unsubscribed detection + resubscribe follow §2 "subscribed" rule. Resubscribe = insert new approved confirmation row.
+- Bounce lookup: set-based join of batch emails to `EmailBounceInfo` → dry run + results report hard-bounced / soft-bounce counts. Importer never writes bounce rows.
 
 ### Consent agreements (decided D4, D6)
 
@@ -198,11 +204,11 @@ All choices shown on review + results screens and in audit event.
 - **Preview**: sample rows as mapped contacts (Table), validation errors highlighted.
 - **Client-rejected rows** (parse errors, missing/invalid key) counted in `SAVE_PROFILE`; row #s + reasons downloadable from browser right after upload (never sent to server).
 - **Analyze (dry run)**: full pass, no writes:
-  - Aggregates: rows read/valid/invalid, in-file dupes, create/update/unchanged/multi-match, list adds (pending/confirmed), kept-unsubscribed, resubscribed, consents recorded/skipped/revoked.
+  - Aggregates: rows read/valid/invalid, in-file dupes, create/update/unchanged/multi-match, list adds (confirmed), kept-unsubscribed, resubscribed, consents recorded/skipped/revoked.
   - Field change stats for updates ("12,301 contacts: FirstName changes").
   - Row-level report (row #, outcome, reason) as downloadable gzipped CSV; CSV-injection safe. **No key/PII by default** — marketer has original file, row # locates the row. Optional "include key column" (then PII, same cleanup rules).
   - Sample before/after diffs.
-- **Confirm**: `ConfirmationDialog` restating counts; type-to-confirm when resubscribe/consent behaviors on or updates > N.
+- **Confirm**: `ConfirmationDialog` restating counts; includes consent statement when list add / resubscribe / consent behaviors on (= attestation, D26); type-to-confirm when updates > N.
 - **Execute**: progress (see below), pause/cancel.
 
 ### Progress UI (D23)
@@ -318,10 +324,10 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 
 ## 15. Phasing
 
-0. **Spike**: browser streaming XLSX + JSON parsing (memory on 1M rows); TS↔C# key normalization parity; 2 GB chunked page-command upload behind Cloudflare/SaaS; `PROCESS_NEXT` throughput (rows/s) on S1 + L2 for 1M/10M rows; set-based OPENJSON update vs `BulkUpdate`; `WhereIn` param behavior; consent `BulkInsert` vs `Agree`; key column indexes (`ContactEmail`, custom fields); unsubscribe/bounce storage (ILSpy + Dancing Goat sign-up/unsubscribe flows); consent backdating; cache keys for web farm task.
-1. **MVP**: all formats (§5) parsed client-side, dedupe/merge, update policies, recipient list (pending / confirmed w/ attest / keep-unsubscribed), consent (blanket + column), profiling, full dry run + reports, resumable execute, results, recent imports, permissions, event log + `AfterContactImportEvent`, source field stamp.
+0. **Spike**: browser streaming XLSX + JSON parsing (memory on 1M rows); TS↔C# key normalization parity; 2 GB chunked page-command upload behind Cloudflare/SaaS; `PROCESS_NEXT` throughput (rows/s) on S1 + L2 for 1M/10M rows; set-based OPENJSON update vs `BulkUpdate`; `WhereIn` param behavior; consent `BulkInsert` vs `Agree`; key column indexes (`ContactEmail`, custom fields); send-time bounce exclusion rule (soft bounce threshold); consent backdating; cache keys for web farm task.
+1. **MVP**: all formats (§5) parsed client-side, dedupe/merge, update policies, recipient list (confirmed w/ attest / keep-unsubscribed), consent (blanket + column), profiling, full dry run + reports, resumable execute, results, recent imports, permissions, event log + `AfterContactImportEvent`, source field stamp.
 2. **Phase 2** (if customer traction): custom object types (job history, import status), undo created contacts, automation trigger ("Contacts imported"), mapping presets.
-3. **Backlog**: send double opt-in email to pending, non-recipient contact group assignment, API/CLI import, recurring imports from remote source.
+3. **Backlog**: non-recipient contact group assignment, API/CLI import, recurring imports from remote source, import suppression list from previous ESP into `EmailBounceInfo` (hard bounces).
 
 ## 16. Open questions
 
@@ -347,7 +353,7 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 | D13 | Concurrent imports: warn, don't block. | 2026-10-20 |
 | D14 | Consent/DOI UI copy based on XbyK GDPR compliance docs; Sean reviews. | 2026-10-20 |
 | D15 | Upload limits: chunking avoids Azure ~4 min timeout + body size limit; document limits, no manual file splitting. | 2026-10-20 |
-| D16 | Unsubscribe/bounce storage: resolve in spike (ILSpy on XbyK libs + sign-up/unsubscribe flows in Dancing Goat). | 2026-10-20 |
+| D16 | Unsubscribe/bounce storage: resolve in spike (ILSpy on XbyK libs + sign-up/unsubscribe flows in Dancing Goat). Subscribed rule since found (§2, 2026-10-21); bounce storage found (`EmailBounceInfo` per address, 2026-10-22); send-time threshold still open. | 2026-10-20 |
 | D17 | Parse, map + normalize in browser (Web Worker); upload only mapped columns as gzipped NDJSON; server validates every record. | 2026-10-20 |
 | D18 | Clean data expected (one row per key). No hash buckets; sequential chunks in file order; in-batch dupes collapsed; Bloom filter warns on likely dupes before upload. | 2026-10-20 |
 | D19 | No `IContactMergeService`, no per-row Info API updates or global events. Set-based batch writes. | 2026-10-20 |
@@ -355,3 +361,6 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 | D21 | "Empty values" option: ignore (default) or clear DB field. | 2026-10-20 |
 | D22 | Raw set-based SQL bypassing Info API is intentional: fast, no per-row events; cleanup after run (cache clear). Contact groups: marketer rebuilds / schedules recalculation, guided by results screen. | 2026-10-20 |
 | D23 | Progress UI: done / total (or estimate), %, rate, ETA, running outcome counts, pause reason, per phase. | 2026-10-20 |
+| D24 | No "pending" recipient list option: add confirmed (attested) or skip. Pending/DOI-send not planned (doesn't match XbyK design). | 2026-10-22 |
+| D25 | Selecting a recipient list always adds non-members as confirmed (attested). No "skip" option. | 2026-10-22 |
+| D26 | Attestation captured by Run `ConfirmationDialog` (consent statement + click = attest, logged), not a separate checkbox. | 2026-10-22 |
