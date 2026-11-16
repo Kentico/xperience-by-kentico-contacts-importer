@@ -1,6 +1,6 @@
 # Contacts Importer (Labs) — High-Level Plan
 
-Status: **DRAFT v0.9** (2026-11-16). Decisions in [§17](#17-decisions-log), open questions in [§16](#16-open-questions). Current state: [STATUS.md](STATUS.md).
+Status: **DRAFT v0.10** (2026-11-16). Decisions in [§17](#17-decisions-log), open questions in [§16](#16-open-questions). Current state: [STATUS.md](STATUS.md).
 
 ⚠️ = unverified assumption, needs spike or confirmation.
 
@@ -71,7 +71,7 @@ Browser (React template)                     Server (XbyK app, 1..n instances)
 5. Loop while not done:        ─cmd─▶ PROCESS_NEXT (phase = analyze | execute)
    show progress                        next chunk(s) in file order / ~10–20 s → checkpoint → status.json
 6. Download report             ─cmd─▶ GET_REPORT   ← {root}/{jobId}/report-*.csv.gz
-                                        execute ends: built-in cache clear (creates web farm tasks)
+                                        execute Completed: built-in cache clear (creates web farm tasks; D36)
 ```
 
 `{root}` = configurable storage path (appsettings), CMS.IO-backed so it can be mapped to shared storage (§11).
@@ -99,7 +99,7 @@ UI steps (§14) ↔ states: File + Map = `Configuring`; Upload = `Uploading`/`Up
 - Mapping/key/transforms change after upload → re-upload required (mapping applied client-side). Behavior options (§8) change after analysis → back to `Uploaded` (re-analyze only).
 - Upload resume after tab close: marketer re-selects same file (browser can't keep file handle); client verifies file fingerprint (size + hash of first/last MB) and skips uploaded chunks.
 - Drift guard: execute > N hours after analysis → warn / require re-analyze.
-- Cancel → stop at batch boundary; results show partial counts.
+- Cancel → stop at batch boundary; results show partial counts. No cache clear unless `Completed` (D36, §11).
 - `Paused` = no `PROCESS_NEXT` heartbeat for > N s (tab closed, laptop asleep, network loss). Derived on read, not written by a thread.
 - One driver per job: `PROCESS_NEXT` carries a driver token; another tab/user may take over only when heartbeat stale (explicit "Continue import" button). Another import already running in app → **warn** (D13), don't block.
 - File cleanup (PII) — see §11 "File cleanup".
@@ -115,12 +115,13 @@ All client-side, in a **Web Worker** (keeps admin UI responsive).
 - **Compressed**: `.gz` via `DecompressionStream('gzip')`; `.zip` single entry via zip lib.
 - Parser abstraction in TS: `RecordSource` → async iterator of `{ rowNumber, values }`.
 
-## 6. Normalization & upload steps (D1, D17, D18)
+## 6. Normalization & upload steps (D1, D17, D18, D34)
 
 1. **Sample profile** (instant): first ~1k rows / few MB → columns, sample rows, fill rate, email validity → mapping suggestions (§7).
 2. **Map** (§7): marketer picks which columns to import + target contact fields + dedupe key → `SAVE_CONFIG`. Unpicked columns never leave browser.
 3. **Full pass**: parse → keep mapped columns → trim values → normalize key (trim + lowercase email) → Bloom filter dupe check → append to chunk buffer → flush as gzipped NDJSON chunk at ~4–8 MB. Chunks keep file order + row #.
-   - Rows with missing/invalid key → not uploaded, counted + listed by row # in client-side report (§10).
+   - Rows with missing/invalid key → **always skipped** (D34): not uploaded, counted + listed by row # in client-side report (§10). No option to import them. Email = key → invalid email = invalid key → skipped.
+   - Email ≠ key (e.g. custom ID key): rows w/ valid key but invalid email uploaded w/ email flagged invalid; server applies §8 "Invalid email" option at analyze/execute → option not needed before upload.
    - Full-file stats (rows, invalid, likely-dupe count) sent via `SAVE_PROFILE`.
 4. **Duplicate warning** (D18): Bloom filter (~12 MB for 10M keys, 1% false positive) flags keys probably seen before. Before upload confirm: "~N rows look like duplicate keys. Clean data is expected; duplicates are applied in file order (last non-empty value wins) and the preview may over-count new contacts." Download suspect row #s. Continue or cancel to clean file.
 5. **Upload**: `UPLOAD_CHUNK` page command (base64 gzipped NDJSON). Chunk size configurable, must stay below app request body limit; each request seconds vs ~4 min Azure timeout. 2–3 in parallel, retry w/ backoff, resumable (server reports received chunk IDs). SHA-256 per chunk (Web Crypto), server verifies + validates records.
@@ -166,16 +167,18 @@ All client-side, in a **Web Worker** (keeps admin UI responsive).
 | Existing contacts | merge rule (§7) / don't update | merge rule |
 | Empty values in file | ignore (keep DB value) / clear DB field | ignore |
 | Multiple existing DB matches | update newest / update all / skip | update newest |
-| Invalid email | skip row / import w/o email (non-repeatable, flagged; scope open, §16 Q3) | skip row |
+| Invalid email (only when email ≠ dedupe key; email = key → row always skipped, §6, D34) | skip row / import w/o email (repeatable: key present; applied server-side) | skip row |
 | Recipient list: not member | selecting a list = add as **confirmed** (no options; attested via Run confirm dialog) | — (no list selected = no list changes) |
 | Recipient list: unsubscribed | keep unsubscribed / resubscribe (attest) / report only | keep |
-| Recipient list: bounced address (`EmailBounceInfo` hard bounce; definition open, §16 Q4) | add to list + report / skip list add + report | add + report (XbyK excludes at send; importer never edits `EmailBounceInfo`) |
+| Recipient list: bounced address (XbyK send-time rule: hard bounce OR `EmailBounceSoftBounceCount >= SoftBounceLimit`, §2, D35) | add to list + report / skip list add + report | add + report (XbyK excludes at send; importer never edits `EmailBounceInfo`) |
 | Consent | none / blanket / blanket + per-row column override (attest) | none |
 | Consent previously revoked | keep revoked / re-agree (attest) | keep |
 | Import source field stamp | created only / created + updated | created only |
 | Contact groups | no automatic rebuild; results screen guides marketer (§13) | — |
 
 (attest) = attested via Run `ConfirmationDialog` (D26, §9). All choices shown on review + results screens and in audit event.
+
+Rows w/ missing/invalid dedupe key: always skipped client-side (§6, D34), not an option.
 
 ## 9. Recipient lists & consent
 
@@ -185,7 +188,7 @@ All client-side, in a **Web Worker** (keeps admin UI responsive).
 - **Attestation = Run confirm dialog** (D26): no separate checkbox. Options page shows consent `Callout` when list/resubscribe/consent chosen. On Run, `ConfirmationDialog` restates counts + consent statement ("I confirm documented consent exists for these contacts…"); clicking Run = attestation. Requires `ContactsImporter.ConfirmConsent` permission. Attestation (user, time, statement text version) logged + in `AfterContactImportEvent`.
 - No "pending" or "skip" option (D24, D25): XbyK has no pending member state; member w/o approved confirmation shows as **Unsubscribed** in admin. Selecting a list always adds non-members as confirmed (membership + new approved confirmation row, dated import time, no email sent), attested via Run confirm dialog.
 - Unsubscribed detection + resubscribe follow §2 "subscribed" rule. Resubscribe = insert new approved confirmation row.
-- Bounce lookup: set-based join of batch emails to `EmailBounceInfo` (`ContactEmail = EmailBounceEmailAddress`, unique index) → dry run + results report bounced (hard) / bounced (soft ≥ `SoftBounceLimit`, read via `IOptionsMonitor<BouncedEmailsGlobalOptions>`) / soft < limit (still sends). Importer never writes bounce rows.
+- Bounce lookup: set-based join of batch emails to `EmailBounceInfo` (`ContactEmail = EmailBounceEmailAddress`, unique index). §8 option treats as bounced exactly the addresses XbyK won't email: hard OR soft ≥ `SoftBounceLimit` (D35). Dry run + results report split bounced (hard) / bounced (soft ≥ `SoftBounceLimit`, read via `IOptionsMonitor<BouncedEmailsGlobalOptions>`) / soft < limit (still sends). Importer never writes bounce rows.
 
 ### Consent agreements (decided D4, D6)
 
@@ -195,7 +198,7 @@ All client-side, in a **Web Worker** (keeps admin UI responsive).
 - Agreement time: import time by default (same clock as XbyK, `IDateTimeNowService`); **backdated** from mapped consent date column when provided (Time is plain column; date validated not in future).
 - `ConsentHash` pins consent text version → finalize dedicated consent text before import.
 - Already agreed (newest row not revoked) → skip. Revoked → keep revoked by default; note backdated agreement older than existing revocation stays revoked (newest wins).
-- After run: `CacheHelper.ClearCache("consentagreement|")` (10-min `IsAgreed` cache).
+- After `Completed` run (D36): `CacheHelper.ClearCache("consentagreement|")` (10-min `IsAgreed` cache).
 - Warn if mapped consent date older than N months (staleness).
 
 ### GDPR notes (not legal advice — needs Kentico legal review)
@@ -211,9 +214,9 @@ All client-side, in a **Web Worker** (keeps admin UI responsive).
 ## 10. Dry run, preview, results (decided D2)
 
 - **Preview**: sample rows as mapped contacts (Table), validation errors highlighted.
-- **Client-rejected rows** (parse errors, missing/invalid key) counted in `SAVE_PROFILE`; row #s + reasons downloadable from browser right after upload (never sent to server).
+- **Client-rejected rows** (parse errors, missing/invalid key — always skipped, D34) counted in `SAVE_PROFILE`; row #s + reasons downloadable from browser right after upload (never sent to server).
 - **Analyze (dry run)**: full pass, no writes:
-  - Aggregates: rows read/valid/invalid, in-file dupes, create/update/unchanged/multi-match, list adds (confirmed), kept-unsubscribed, resubscribed, consents recorded/skipped/revoked.
+  - Aggregates: rows read/valid/invalid, invalid email (skipped / imported w/o email), in-file dupes, create/update/unchanged/multi-match, list adds (confirmed), kept-unsubscribed, resubscribed, consents recorded/skipped/revoked.
   - Field change stats for updates ("12,301 contacts: FirstName changes").
   - Row-level report (row #, outcome, reason) as downloadable gzipped CSV; CSV-injection safe. **No key/PII by default** — marketer has original file, row # locates the row. Optional "include key column" (then PII, same cleanup rules).
   - Sample before/after diffs.
@@ -235,7 +238,7 @@ Every long phase shows: what's happening, how much is done, how much is left (wh
 - Components: `ProgressBar` (`completed` 0–100), `InfoCard`/`InfoCardGroup` for counts, `NotificationBar`/`Callout` for paused/warning, `NavigationBlockerDialog` when leaving page mid-run ("import will pause").
 - Page title / tab title shows `%` so marketer can see progress from other tabs.
 - Phase stepper header (File → Map → Upload → Options → Review → Run → Results, §14) shows current step.
-- **Results**: expected (dry run) vs actual, error report download.
+- **Results**: expected (dry run) vs actual, error report download. `Cancelled`/`Failed` → `Callout`: caches not cleared, use built-in clear cache action in System application (D36).
 - **Recent imports**: list built from `status.json` files (who, when, file, outcome). Full history = phase 2.
 
 ## 11. Job state, storage, web farm (decided D3, D7)
@@ -245,13 +248,13 @@ Every long phase shows: what's happening, how much is done, how much is left (wh
   - Files per job (`{root}/{jobId}/`): `job.json` (mapping, options, attestation), `status.json` (state, checkpoint, aggregates, heartbeat, driver token, last instance), `chunks/{n}.ndjson.gz`, `report-*.csv.gz`.
   - Writes via CMS.IO (write temp + replace) so path mapping works.
 - **Shared storage**: Setup docs (§14) show custom path mapping ([storage path mapping docs](https://docs.kentico.com/documentation/developers-and-admins/api/files-api-and-cms-io/file-system-providers/storage-path-mapping)) for SaaS/web farm so chunks + status reach all instances. ⚠️ Option: `AddContactsImporter(o => o.RegisterStoragePath = true)` calls `AddStoragePathRegistration` for the user.
-- **Web farm / cache** (D28, replaces custom task in D7): no custom web farm task. Built-in calls already create web farm tasks:
+- **Web farm / cache** (D28, D36; replaces custom task in D7): no custom web farm task. Built-in calls already create web farm tasks:
   - `CacheHelper.TouchKeys` for `om.contact|all`, `om.contactgroupmembercontact|all`, `emaillibrary.emailsubscriptionconfirmation|all`, `cms.consentagreement|all`
   - `CacheHelper.TouchKeys("om.recipientlist|byid|{listId}")` (subscription `IsConfirmed` cache, 10 min)
   - `CacheHelper.ClearCache("consentagreement|")`
   - Optional: `ContactInfo.TYPEINFO.InvalidateAllObjects()`, `ProviderHelper.ClearHashtables`
   - `BulkInsert`/`BulkUpdate` already touch `{type}|all` + log task regardless of `LogWebFarmTasks` (flag only affects per-object API).
-  - Run once when execute ends (Completed / Cancelled / Failed). During long pauses: open, §16 Q5.
+  - Run once, only when execute reaches `Completed` (D36). Not on pause, cancel or failure. Import not completed (cancelled, failed, abandoned) → caches may stay stale; admin uses Xperience's built-in clear cache action (System application). Documented in Usage guide + limitations (§14, D38).
 - **Processing model** (decided D11): browser-driven `PROCESS_NEXT` loop; no scheduled task, no hosted service. Each request may hit a different instance → shared storage required for web farm/SaaS (above).
 
 ### File cleanup (PII) (D12)
@@ -284,10 +287,10 @@ Interruption risk depends on run duration, chance of restart/scale-in during run
 | Read-only deploy | yes | not supported (D29): admin UI unavailable; import stops, marketer re-runs after deploy (idempotent) |
 | Tab closed / laptop sleep | yes (docs) | pauses; reopen continues from checkpoint |
 | Two drivers | — | driver token + heartbeat |
-| Rows without dedupe key | — | **not idempotent** → skipped by default; any "import without key" option flagged as non-repeatable (scope open, §16 Q3) |
+| Rows without valid dedupe key | — | always skipped client-side (D34), never uploaded → runs stay idempotent |
 | Downstream effects mid-run (automations, groups) | — | not covered by any model; document |
 
-Usage guide: "don't import during deployments; keep tab open; large imports best run off-hours".
+Usage guide: "don't import during deployments; keep tab open; large imports best run off-hours; import not completed → clear caches via System application".
 
 ## 12. Tracking / audit (decided D3)
 
@@ -295,10 +298,9 @@ Usage guide: "don't import during deployments; keep tab open; large imports best
   - Who/when/options recorded by event log + `AfterContactImportEvent`, not in the field.
   - Phase 2 "undo created contacts": field value + `ContactCreated` within job run window identifies created contacts (no 2nd field).
 - **Event log** via `ILogger` (`EventId` e.g. `CONTACT_IMPORT`): start, finish, cancel, failure, attestation.
-- **Audit event** (Simple Stats pattern, `IAsyncEventHandler<T>` + `AddEventHandler`):
+- **Audit event** (Simple Stats pattern, `IAsyncEventHandler<T>` + `AddEventHandler`). Only `AfterContactImportEvent`; no before/policy-gate event (D37):
   - `AfterContactImportEvent` — `JobID`, `UserID`, `Timestamp`, `FileName`, `FileSize`, `IsDryRun`, `Status`, options summary, aggregates, `RecipientListID`, `ConsentID` + `ConsentHash`, attestation text/version, `ImportSourceFieldName`.
   - Handler exceptions logged, never fail import. Usage guide gets "Audit contact imports" section + sample handler.
-  - Maybe `BeforeContactImportExecuteEvent` for dev-side policy gates (§16 Q6).
 
 ### Undo — what's realistic
 
@@ -318,21 +320,23 @@ Usage guide: "don't import during deployments; keep tab open; large imports best
 - Memberships + subscription confirmations: `BulkInsert` after set-based existence check (no unique constraint on membership).
 - Consents: `BulkInsert` of `ConsentAgreementInfo` (D27, §9).
 - **Speed over per-row correctness hooks** (D22, intentional): no per-row Info API calls or global events. 1k contacts must not fire 1k events serially. All cleanup happens once, after the run:
-  - Built-in cache clear calls (§11, D28) — create web farm tasks.
+  - Built-in cache clear calls (§11, D28) — create web farm tasks. Only on `Completed` (D36); otherwise manual clear in System application.
   - **Contact groups: not rebuilt automatically.** Results screen `Callout` tells marketer to rebuild affected groups or mark them for scheduled recalculation ([docs](https://docs.kentico.com/documentation/business-users/digital-marketing/contact-groups#recalculate-contact-groups)), w/ link to Contact groups app. Recipient lists = manual membership → unaffected.
   - Typical use: PROD before go-live or before new microsite launch → no live traffic depends on immediate consistency.
 - Throttle: time budget per call, optional client delay between calls, adaptive batch size → protect live site on S0/S1.
 - ⚠️ Perf targets: 1M rows analyze < 15 min, execute < 60 min on SaaS Level 2.
 
-### Documented choices (not risks — intentional, must be in Usage guide + Setup docs)
+### Documented choices (not risks — intentional, must be in Usage guide + Setup docs + README Limitations, §14, D38)
 
 | Choice | Consequence developers/marketers must know |
 |---|---|
 | Set-based writes bypass Info API (D22) | Custom handlers on per-object Insert/Update events (`ContactInfo.TYPEINFO.Events`, `ConsentAgreementInfo` events) don't run. Type-level `BulkInsert` handlers (`SqlEvents.BulkInsert`) still run. |
 | Cache cleared by type keys (D28) | Custom caches keyed only on `om.contact|byid|{id}` stay stale until expiry → depend on `om.contact|all` or accept expiry. |
+| Cache cleared only on `Completed` (D36) | Paused / cancelled / failed / abandoned import → caches may be stale; admin uses built-in clear cache action (System application). |
+| Rows w/o valid dedupe key skipped (D34) | Not imported, no option; row #s downloadable after upload → fix file + re-run. |
 | No contact group rebuild (D22) | Marketer rebuilds groups or schedules recalculation. |
 | No automation/activity triggers | Contact create/update automations don't start for imported contacts. |
-| Bounced addresses not edited | Importer never writes `EmailBounceInfo`; XbyK excludes at send. |
+| Bounced addresses not edited | Importer never writes `EmailBounceInfo`; XbyK excludes at send (hard OR soft ≥ `SoftBounceLimit`, D35). |
 | No import during deployment (D29) | Admin UI unavailable while app read-only; re-run after deploy. |
 | Clean data expected (D18) | Duplicate keys → last non-empty wins; dry run may over-count creates. |
 
@@ -355,12 +359,22 @@ App: **Contacts Importer (Labs)** under Digital marketing.
   - Perf data generator: `tests/Kentico.Xperience.Labs.ContactsImporter.Admin.DataGenerator` (non-packable console tool → 1M/10M rows, multi-GB, all §5 formats). Separate tool, not folded into integration tests: its files feed browser parsing/upload + SaaS throughput runs (§15 spikes), not only DB tests. Replaces old `test/Generator` (removed).
 - Sample: `examples/DancingGoat` + `examples/AppHost` (Aspire).
 - CI/signing/release from template (GitHub Actions CI, Azure DevOps signing + publishing for Labs).
+- Version (D39): continues old package line. Old `Kentico.Xperience.Contacts.Importer` last shipped `1.0.0-prerelease-4`; `Kentico.Xperience.Labs.ContactsImporter.Admin` starts at `1.0.0-prerelease-5` (`Directory.Build.props`).
 - Docs: Usage guide (marketer, `docs/Usage-Guide.md`; incl. documented choices §13, "Audit contact imports" + sample handler §12), Setup (source custom field, storage path mapping, permissions, custom key index, optional lazy-sweep scheduled task §11), consent/legal note.
+- **Limitations docs (required, D38, §15 MVP)**: populate README "Limitations" (replaces placeholder under Description) + Usage guide limitations/documented choices section. Pointer list, sources:
+  - §13 documented choices table (bypassed events, contact groups not recalculated, stale custom caches, no automation triggers, bounces not edited)
+  - no import during deployments (D29)
+  - clean data expected; duplicate keys → last non-empty wins (D18)
+  - browser tab must stay open; closed → pauses (D11)
+  - rows w/o valid dedupe key skipped (D34)
+  - cache clear only on `Completed`; otherwise built-in clear cache in System application (D36)
+  - file size / storage limits (§6, §11, D15)
+  - shared storage required for web farm/SaaS (§11)
 
 ## 15. Phasing
 
 0. **Spike**: browser streaming XLSX + JSON parsing (memory on 1M rows); TS↔C# key normalization parity; 2 GB chunked page-command upload behind Cloudflare/SaaS; `PROCESS_NEXT` throughput (rows/s) on S1 + L2 for 1M/10M rows; set-based OPENJSON update throughput (data from DataGenerator, §14). Done (see spike-findings.md): WhereIn, indexes, bounce exclusion, consent bulk insert + backdating, cache keys, raw SQL API.
-1. **MVP**: all formats (§5) parsed client-side, dedupe/merge, update policies, recipient list (confirmed w/ attest; keep-unsubscribed / resubscribe; bounce report), consent (blanket + column), profiling, full dry run + reports, resumable execute, results, recent imports, permissions, event log + `AfterContactImportEvent`, source field stamp.
+1. **MVP**: all formats (§5) parsed client-side, dedupe/merge, update policies, recipient list (confirmed w/ attest; keep-unsubscribed / resubscribe; bounce option + report, D35), consent (blanket + column), profiling, full dry run + reports, resumable execute, results, recent imports, permissions, event log + `AfterContactImportEvent`, source field stamp. Definition of done includes README "Limitations" + Usage guide limitations section populated (§14, D38).
 2. **Phase 2** (if customer traction): custom object types (job history, import status), undo created contacts, automation trigger ("Contacts imported"), mapping presets.
 3. **Backlog**: non-recipient contact group assignment, API/CLI import, recurring imports from remote source, import suppression list from previous ESP into `EmailBounceInfo` (hard bounces).
 
@@ -368,10 +382,6 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 
 1. Streaming JSON + XLSX libs for browser (spike).
 2. SaaS autoscale-in behavior during long imports (low impact now — browser-driven calls just retry).
-3. Rows without valid key (conflict): §6 drops missing/invalid-key rows client-side (never uploaded), and options (§8) are set after upload (§4); but §8 "Invalid email → import w/o email" and §11 "import without key" imply server can create such rows. Decide: always drop (remove options), or upload keyless rows flagged + apply option server-side (option then needed before upload). Also: when email ≠ key, "import w/o email" is repeatable — "non-repeatable" flag only applies when email = key.
-4. Bounced address definition for §8 option: hard flag only (current text) vs XbyK send-time rule (hard OR soft ≥ `SoftBounceLimit`, §2). Reporting already shows both (§9).
-5. Cache cleanup timing: spike-findings §5 suggests cleanup on pause too, but `Paused` is derived, not an event (§4, D11) → caches stale during long pauses (per-contact system caches expire ≤ 10 min; `|all`-dependent caches don't). Options: cleanup at end of each `PROCESS_NEXT` call, every N calls, or only when execute ends (current).
-6. `BeforeContactImportExecuteEvent` for dev-side policy gates: add? cancelable?
 
 ## 17. Decisions log
 
@@ -386,8 +396,8 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 | D7 | Job state: files under configurable `ContactsImporter:StoragePath`; docs explain shared-storage path mapping; cache cleanup per D28 (custom web farm task dropped). | 2026-10-20 |
 | D8 | Phase 2 (traction-gated): custom objects, undo created contacts, automation trigger, mapping presets. | 2026-10-20 |
 | D9 | Source field: one marketer-selected contact field (dropdown); marketer-editable value w/ generated default; who/when via event log + global event. | 2026-10-20 |
-| D10 | Repo: rewrite in place; old package code removed from repo (git history); new package `Kentico.Xperience.Labs.ContactsImporter.Admin` (single package, D32); deprecate old NuGet. | 2026-10-20 |
-| D11 | Processing: browser-driven `PROCESS_NEXT` page command loop, time-boxed batches, idempotent runs; no background worker. (Chunk layout superseded by D18.) Rows w/o dedupe key skipped by default. | 2026-10-20 |
+| D10 | Repo: rewrite in place; old package code removed from repo (git history); new package `Kentico.Xperience.Labs.ContactsImporter.Admin` (single package, D32); deprecate old NuGet. Version continues old line (D39). | 2026-10-20 |
+| D11 | Processing: browser-driven `PROCESS_NEXT` page command loop, time-boxed batches, idempotent runs; no background worker. (Chunk layout superseded by D18.) Rows w/o dedupe key always skipped (D34). | 2026-10-20 |
 | D12 | PII file cleanup: event-driven + lazy sweep; row report PII-free by default. | 2026-10-20 |
 | D13 | Concurrent imports: warn, don't block. | 2026-10-20 |
 | D14 | Consent/DOI UI copy based on XbyK GDPR compliance docs; Sean reviews. | 2026-10-20 |
@@ -404,9 +414,15 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 | D25 | Selecting a recipient list always adds non-members as confirmed (attested). No "skip" option. | 2026-10-22 |
 | D26 | Attestation captured by Run `ConfirmationDialog` (consent statement + click = attest, logged), not a separate checkbox. | 2026-10-22 |
 | D27 | Consent agreements via `BulkInsert` of `ConsentAgreementInfo` (same columns as `Agree`); optional backdating from mapped date column. | 2026-10-22 |
-| D28 | No custom web farm task; built-in `CacheHelper.TouchKeys`/`ClearCache` calls (create web farm tasks) after run. | 2026-10-22 |
+| D28 | No custom web farm task; built-in `CacheHelper.TouchKeys`/`ClearCache` calls (create web farm tasks) after run (only `Completed`, D36). | 2026-10-22 |
 | D29 | No support for importing during deployments (admin UI unavailable when read-only); documented. Read-only workarounds removed. | 2026-10-22 |
 | D30 | Bypassed events, stale custom caches, etc. are documented choices, not risks (§13 table). | 2026-10-22 |
 | D31 | Repo aligned to Kentico Xperience repository template (Labs, ContactsImporter); plan applies on top of template structure. | 2026-11-16 |
 | D32 | Single package `Kentico.Xperience.Labs.ContactsImporter.Admin` (services, UI, page commands, permissions, React `Client/`); template core project removed + folded in. Resolves v0.8 §16 Q3. | 2026-11-16 |
 | D33 | Test projects (.NET naming): unit `tests/Kentico.Xperience.Labs.ContactsImporter.Admin.Tests` (NUnit); integration `tests/Kentico.Xperience.Labs.ContactsImporter.Admin.IntegrationTests` (MSSQL container, set-based SQL writes per stable customization guidelines); e2e `tests/e2e` (Playwright); perf data generator `tests/Kentico.Xperience.Labs.ContactsImporter.Admin.DataGenerator` (non-packable tool). Resolves v0.8 §16 Q4. | 2026-11-16 |
+| D34 | Rows w/ missing/invalid dedupe key always skipped client-side (not uploaded, counted, row #s downloadable); no "import without key" option. Invalid email matters only when email ≠ key: "skip row (default) / import w/o email" option, repeatable, applied server-side after upload. Email = key → invalid email = invalid key → skipped. Resolves v0.9 §16 Q3. | 2026-11-16 |
+| D35 | "Bounced" for §8 recipient list option = XbyK send-time rule: hard bounce OR `EmailBounceSoftBounceCount >= SoftBounceLimit` (`IOptionsMonitor<BouncedEmailsGlobalOptions>`) → exactly the addresses XbyK won't email. Report still splits hard / soft ≥ limit / soft < limit (§9). Resolves v0.9 §16 Q4. | 2026-11-16 |
+| D36 | Cache clear only when import `Completed`; not on pause, cancel or failure. Not completed → admin uses Xperience's built-in clear cache action (System application); documented in Usage guide + limitations. Resolves v0.9 §16 Q5. | 2026-11-16 |
+| D37 | No `BeforeContactImportExecuteEvent`; only `AfterContactImportEvent`. Resolves v0.9 §16 Q6. | 2026-11-16 |
+| D38 | README "Limitations" + Usage guide limitations/documented choices section populated as part of implementation (MVP definition of done); pointer list per §14. | 2026-11-16 |
+| D39 | Version continues old package line: `Kentico.Xperience.Contacts.Importer` last shipped `1.0.0-prerelease-4` → `Kentico.Xperience.Labs.ContactsImporter.Admin` starts at `1.0.0-prerelease-5` (`Directory.Build.props`). | 2026-11-16 |

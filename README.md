@@ -12,9 +12,9 @@ Lets marketers import contacts from CSV, Excel, and JSON files into Xperience by
 
 ### Library Version Matrix
 
-| Xperience Version | Library Version |
-| ----------------- | --------------- |
-| >= 31.10.3        | 1.0.0           |
+| Xperience Version | Library Version    |
+| ----------------- | ------------------ |
+| >= 31.10.3        | 1.0.0-prerelease-5 |
 
 ### Dependencies
 
@@ -26,7 +26,7 @@ Lets marketers import contacts from CSV, Excel, and JSON files into Xperience by
 Add the package to your application using the .NET CLI.
 
 ```powershell
-dotnet add package Kentico.Xperience.Labs.ContactsImporter.Admin
+dotnet add package --prerelease Kentico.Xperience.Labs.ContactsImporter.Admin
 ```
 
 ## Quick Start

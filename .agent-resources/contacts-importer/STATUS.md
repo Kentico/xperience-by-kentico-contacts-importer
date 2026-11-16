@@ -6,7 +6,11 @@ Updated: 2026-11-16
 
 ## Phase
 
-Plan draft (PLAN.md DRAFT v0.9). Implementation not started. Phase 0 spike partly done (PLAN.md §15).
+Plan draft (PLAN.md DRAFT v0.10). Implementation not started. Phase 0 spike partly done (PLAN.md §15).
+
+Release version: `Kentico.Xperience.Labs.ContactsImporter.Admin` `1.0.0-prerelease-5` (`Directory.Build.props`); continues old `Kentico.Xperience.Contacts.Importer` (last `1.0.0-prerelease-4`) (D39).
+
+MVP deliverable (D38): README "Limitations" + Usage guide limitations section populated (source list PLAN.md §14 Docs).
 
 ## Components
 
@@ -37,9 +41,5 @@ PLAN.md §16:
 
 1. Streaming JSON + XLSX browser libs (spike)
 2. SaaS autoscale-in during long imports (low impact)
-3. Rows without valid key: drop client-side vs "import w/o email/key" option (conflict §6 vs §8/§11)
-4. Bounced definition for §8 option: hard only vs send-time rule (hard OR soft ≥ limit)
-5. Cache cleanup timing during long pauses
-6. `BeforeContactImportExecuteEvent` (add? cancelable?)
 
-Resolved 2026-11-16: package split → single `.Admin` package (D32); integration test project location (D33).
+Resolved 2026-11-16: package split → single `.Admin` package (D32); integration test project location (D33); keyless rows always skipped, invalid-email option only when email ≠ key (D34); bounced = send-time rule (D35); cache clear only on `Completed` (D36); no `BeforeContactImportExecuteEvent` (D37); limitations docs required (D38); version `1.0.0-prerelease-5` (D39).

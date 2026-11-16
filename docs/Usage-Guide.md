@@ -5,7 +5,7 @@
 Add the package to your application:
 
 ```powershell
-dotnet add package Kentico.Xperience.Labs.ContactsImporter.Admin
+dotnet add package --prerelease Kentico.Xperience.Labs.ContactsImporter.Admin
 ```
 
 ## Registration
