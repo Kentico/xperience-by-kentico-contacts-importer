@@ -7,6 +7,7 @@
     <Project Path="src/Kentico.Xperience.Labs.ContactsImporter.Admin/Kentico.Xperience.Labs.ContactsImporter.Admin.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Kentico.Xperience.Labs.ContactsImporter.Admin.IntegrationTests/Kentico.Xperience.Labs.ContactsImporter.Admin.IntegrationTests.csproj" />
     <Project Path="tests/Kentico.Xperience.Labs.ContactsImporter.Admin.Tests/Kentico.Xperience.Labs.ContactsImporter.Admin.Tests.csproj" />
   </Folder>
 </Solution>

@@ -48,6 +48,25 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
       DOTNET_NOLOGO: 1
+      # Throwaway SQL Server of this job (service container below); not a secret.
+      SQL_SA_PASSWORD: Ci-Integration-Tests-1
+      # Integration tests (tests/Kentico.Xperience.Labs.ContactsImporter.Admin.IntegrationTests) run against this Xperience database.
+      # They need no license. The database name must end with "-integration": the tests delete all contacts.
+      CONTACTSIMPORTER_INTEGRATION_SQL: Data Source=localhost,1433;Initial Catalog=contacts-importer-integration;User ID=sa;Password=Ci-Integration-Tests-1;Encrypt=False
+
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: Ci-Integration-Tests-1
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Ci-Integration-Tests-1 -C -Q 'SELECT 1' -b"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v7
@@ -66,6 +85,19 @@ jobs:
           cache: npm
           cache-dependency-path: src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client/package-lock.json
 
+      # From the repository root (no project appsettings.json to rewrite, no sample data), so the database has the plain Xperience schema.
+      - name: Create integration test database
+        run: |
+          dotnet tool restore
+          dotnet kentico-xperience-dbmanager -- `
+            --server-name "localhost,1433" `
+            --username sa `
+            --password $env:SQL_SA_PASSWORD `
+            --admin-password $env:SQL_SA_PASSWORD `
+            --database-name contacts-importer-integration `
+            --recreate-existing-database
+          if ($LASTEXITCODE -ne 0) { throw "kentico-xperience-dbmanager failed ($LASTEXITCODE)" }
+
       - name: Install dependencies
         run: |
           dotnet restore `
@@ -81,6 +113,10 @@ jobs:
       - name: Type-check admin client
         working-directory: src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client
         run: npm run typecheck
+
+      - name: Test admin client
+        working-directory: src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client
+        run: npm test
 
       - name: Test Solution
         run: |

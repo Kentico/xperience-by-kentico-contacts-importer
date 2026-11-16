@@ -244,7 +244,7 @@ Every long phase shows: what's happening, how much is done, how much is left (wh
 ## 11. Job state, storage, web farm (decided D3, D7)
 
 - **No custom object types.** Job state in files under configurable root:
-  - `appsettings`: `ContactsImporter:StoragePath` (default `~/assets/contacts-importer`), plus max file size, chunk size, batch size, retention (see "File cleanup").
+  - `appsettings`: `ContactsImporter:StoragePath` (default `~/App_Data/contacts-importer`), plus max file size, chunk size, batch size, retention (see "File cleanup").
   - Files per job (`{root}/{jobId}/`): `job.json` (mapping, options, attestation), `status.json` (state, checkpoint, aggregates, heartbeat, driver token, last instance), `chunks/{n}.ndjson.gz`, `report-*.csv.gz`.
   - Writes via CMS.IO (write temp + replace) so path mapping works.
 - **Shared storage**: Setup docs (§14) show custom path mapping ([storage path mapping docs](https://docs.kentico.com/documentation/developers-and-admins/api/files-api-and-cms-io/file-system-providers/storage-path-mapping)) for SaaS/web farm so chunks + status reach all instances. ⚠️ Option: `AddContactsImporter(o => o.RegisterStoragePath = true)` calls `AddStoragePathRegistration` for the user.
@@ -346,7 +346,7 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 
 - `Imports` section: recent imports list + "New import".
 - Import page (custom template, step layout): File → Map → Upload → Options → Review (analyze) → Run → Results. Step = job state (§4).
-- Permissions: `ContactsImporter.View`, `.Import`, `.ConfirmConsent`. (`.UndoImport` phase 2.) Never rename once shipped.
+- Permissions (D45): built-in View (open app) + custom `ContactsImporter.Import`, `ContactsImporter.ConfirmConsent`. `.Import` users can access all imports. (`.UndoImport` phase 2.) Never rename once shipped.
 - Components: Dropzone/UploadTile, ProgressBar, Callout, Card, Table, Select, RadioGroup, Switch, ConfirmationDialog, InfoCard, NotificationBar. Strings via resx.
 - Structure from Kentico Xperience repository template (Labs family, Name `ContactsImporter`); solution `Kentico.Xperience.Labs.ContactsImporter.slnx`.
 - Single package (D32): `src/Kentico.Xperience.Labs.ContactsImporter.Admin` — services (record validation, dedupe/merge, set-based writes, job storage, cache cleanup, `AfterContactImportEvent`, `AddContactsImporter`) + `UIApplication`, pages, page commands, permissions, React client (`Client/`). Template core project removed, folded in.
@@ -426,3 +426,10 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 | D37 | No `BeforeContactImportExecuteEvent`; only `AfterContactImportEvent`. Resolves v0.9 §16 Q6. | 2026-11-16 |
 | D38 | README "Limitations" + Usage guide limitations/documented choices section populated as part of implementation (MVP definition of done); pointer list per §14. | 2026-11-16 |
 | D39 | Version continues old package line: `Kentico.Xperience.Contacts.Importer` last shipped `1.0.0-prerelease-4` → `Kentico.Xperience.Labs.ContactsImporter.Admin` starts at `1.0.0-prerelease-5` (`Directory.Build.props`). | 2026-11-16 |
+| D36a | Correction to D36 (verified 31.10.3): `BulkInsert` itself touches `om.contact|all` (+ web farm task) after every batch that creates contacts, also in imports later cancelled/failed. "Only on `Completed`" applies to the importer's explicit clear (`InvalidateAllObjects`, `ClearHashtables`, key touches) and to update-only work; `om.contact|byid|…` dependents stay stale until then. | 2026-11-16 |
+| D40 | Default `ContactsImporter:StoragePath` = `~/App_Data/contacts-importer` (was `~/assets/…`: job `.json` files broke host builds, NETSDK1022). Package ships `build`/`buildTransitive` targets removing `App_Data\contacts-importer\**` from Content/None so job files are not published (default path only; opt-out `ContactsImporterExcludeStorageFromProject=false`). | 2026-11-16 |
+| D41 | Wire contract + normalization rules per implementation-spec-1 (chunk record `r`/`k`/`v`/`f`, JS-semantics key normalization w/ parity fixture, email regex + 254 limit, whole-chunk rejection, client pre-validation). | 2026-11-16 |
+| D42 | All contact fields mappable (system + custom, §7) except importer-owned `ContactID`, `ContactGUID`, `ContactCreated`, `ContactLastModified` (Sean). Reference fields (SQL FK, `TYPEINFO.DependsOn`, `ReferenceToObjectType`) take IDs; per batch a set-based existence check skips rows w/ missing reference (`invalidValue` + field) in dry run and run; SQL 547 race → batch re-planned once. No name → ID lookup. Key field type ∈ text / integer / longinteger / guid. | 2026-11-16 |
+| D43 | Execute `PROCESS_NEXT` calls for a job serialized by session-owned `sp_getapplock` (prevents duplicate contacts from overlapping calls under RCSI). `status.json` has version counter; terminal state also in `status.final.json`. Config mismatch found before any write → job back to `Uploaded` w/ error, chunks kept. | 2026-11-16 |
+| D44 | Existing-contact lookup = raw `OPENJSON` join loading current values (unchanged contacts not written), not `WhereIn`. Update merge rule on typed values + per-field absent flag. Transient SQL errors → retryable outcome, not `Failed`. | 2026-11-16 |
+| D45 | Permissions: built-in View for the app + custom `ContactsImporter.Import`, `ContactsImporter.ConfirmConsent` (no custom `.View`). Any user with `.Import` can work with any import (needed for takeover). Confirmed by Sean. Supersedes §14 permission list. | 2026-11-16 |

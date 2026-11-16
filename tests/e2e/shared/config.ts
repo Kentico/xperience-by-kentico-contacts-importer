@@ -25,6 +25,11 @@ export const adminBaseUrl = process.env.ADMIN_BASE_URL ?? `${appBaseUrl}/admin`;
 export const adminUsername = process.env.XPERIENCE_ADMIN_USERNAME ?? "administrator";
 export const adminPassword = process.env.XPERIENCE_ADMIN_PASSWORD ?? "Pass@12345";
 
+// Optional user who has only the View permission of the "Contacts Importer (Labs)" application
+// (same password default as the administrator). Permission specs are skipped without it.
+export const viewerUsername = process.env.E2E_VIEWER_USERNAME || undefined;
+export const viewerPassword = process.env.E2E_VIEWER_PASSWORD ?? adminPassword;
+
 // Storage state written by the `admin-setup` project (admin/auth.setup.ts) and
 // reused by `admin-tests`, so admin specs start signed in.
 export const adminStorageStatePath = path.resolve(__dirname, "../playwright/.auth/admin.json");

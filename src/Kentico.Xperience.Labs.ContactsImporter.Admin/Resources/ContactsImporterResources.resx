@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="contactsimporter.error.invalidjobid" xml:space="preserve">
+    <value>The import ID is not valid.</value>
+  </data>
+  <data name="contactsimporter.error.jobnotfound" xml:space="preserve">
+    <value>The import does not exist.</value>
+  </data>
+  <data name="contactsimporter.error.jobunreadable" xml:space="preserve">
+    <value>The files of the import cannot be read.</value>
+  </data>
+  <data name="contactsimporter.error.invalidrequest" xml:space="preserve">
+    <value>The request is not valid.</value>
+  </data>
+  <data name="contactsimporter.error.invalidstate" xml:space="preserve">
+    <value>This action is not possible while the import is {0}.</value>
+  </data>
+  <data name="contactsimporter.error.invalidconfig" xml:space="preserve">
+    <value>The import settings are not valid.</value>
+  </data>
+  <data name="contactsimporter.error.jobidmismatch" xml:space="preserve">
+    <value>The uploaded data belongs to a different import.</value>
+  </data>
+  <data name="contactsimporter.error.truncateindex" xml:space="preserve">
+    <value>The chunk index is not valid.</value>
+  </data>
+  <data name="contactsimporter.error.busy" xml:space="preserve">
+    <value>The import is being processed right now. Try again in a moment.</value>
+  </data>
+  <data name="contactsimporter.error.sourcefieldmapped" xml:space="preserve">
+    <value>The import source field must not be one of the mapped contact fields.</value>
+  </data>
+  <data name="contactsimporter.error.analysisexpired" xml:space="preserve">
+    <value>The analysis is too old to import from. Analyze the file again.</value>
+  </data>
+  <data name="contactsimporter.error.noreport" xml:space="preserve">
+    <value>This report is not available.</value>
+  </data>
+</root>

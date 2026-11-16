@@ -5,6 +5,9 @@
 # Local agent settings
 .claude/settings.local.json
 
+# Contacts Importer job files of the sample site (uploaded contact data; ContactsImporter:StoragePath default)
+examples/DancingGoat/App_Data/contacts-importer/
+
 ### Xbk additions end
 
 ## Ignore Visual Studio temporary files, build results, and

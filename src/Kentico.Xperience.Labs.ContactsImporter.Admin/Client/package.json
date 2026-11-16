@@ -7,7 +7,9 @@
     "start": "webpack serve --mode development",
     "build:dev": "webpack --mode development",
     "build": "webpack --mode production",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "engines": {
     "node": ">=26"
@@ -29,6 +31,8 @@
     "@types/react-dom": "18.3.7",
     "babel-loader": "10.1.1",
     "typescript": "5.9.3",
+    "vite": "8.3.8",
+    "vitest": "5.1.0",
     "webpack": "5.112.2",
     "webpack-cli": "7.3.1",
     "webpack-dev-server": "6.1.0"

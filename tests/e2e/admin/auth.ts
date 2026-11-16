@@ -31,24 +31,36 @@ export const adminShellSelectors = [
   'a[aria-label="Settings"]',
 ];
 
-export async function signInToAdmin(page: Page): Promise<void> {
+export interface SignInOptions {
+  username?: string;
+  password?: string;
+  // Elements that show the shell rendered for this user; a user with few permissions does not
+  // see the built-in applications in adminShellSelectors.
+  readySelectors?: string[];
+}
+
+export async function signInToAdmin(page: Page, options: SignInOptions = {}): Promise<void> {
+  const username = options.username ?? adminUsername;
+  const password = options.password ?? adminPassword;
+  const readySelectors = options.readySelectors ?? adminShellSelectors;
+
   await page.goto(adminBaseUrl);
 
-  if (await isVisibleWithin(page, adminShellSelectors, 2_000)) {
+  if (await isVisibleWithin(page, readySelectors, 2_000)) {
     return;
   }
 
   const usernameInput = await waitForAnyVisible(page, usernameSelectors, 30_000);
   const passwordInput = await waitForAnyVisible(page, passwordSelectors, 30_000);
 
-  await usernameInput.fill(adminUsername);
-  await passwordInput.fill(adminPassword);
+  await usernameInput.fill(username);
+  await passwordInput.fill(password);
   await (await waitForAnyVisible(page, submitSelectors, 5_000)).click();
 
   await expect
     .poll(
       async () => {
-        if (await isVisibleWithin(page, adminShellSelectors, 1_000)) {
+        if (await isVisibleWithin(page, readySelectors, 1_000)) {
           return "ready";
         }
         return new URL(page.url()).pathname.toLowerCase().includes("sign") ? "sign-in" : "loading";

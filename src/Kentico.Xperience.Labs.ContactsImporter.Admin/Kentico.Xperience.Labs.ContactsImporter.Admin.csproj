@@ -22,6 +22,7 @@
   <ItemGroup>
     <AssemblyAttribute Include="CMS.AssemblyDiscoverableAttribute"></AssemblyAttribute>
     <InternalsVisibleTo Include="$(AssemblyName).Tests" />
+    <InternalsVisibleTo Include="$(AssemblyName).IntegrationTests" />
   </ItemGroup>
 
   <Target Name="NpmInstall" BeforeTargets="NpmBuildClient" Condition=" '$(Configuration)|$(Platform)' != 'Debug|AnyCPU' ">
@@ -43,5 +44,11 @@
 
   <ItemGroup>
     <PackageReference Include="Kentico.Xperience.Admin" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Keeps job files under the default storage path (~/App_Data/contacts-importer) out of the Content items of
+         projects that install the package, directly or through another package or project. -->
+    <None Update="build\Kentico.Xperience.Labs.ContactsImporter.Admin.targets" Pack="true" PackagePath="build\Kentico.Xperience.Labs.ContactsImporter.Admin.targets;buildTransitive\Kentico.Xperience.Labs.ContactsImporter.Admin.targets" />
   </ItemGroup>
 </Project>

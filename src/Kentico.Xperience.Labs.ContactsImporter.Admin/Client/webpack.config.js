@@ -59,6 +59,11 @@ function buildConfig(baseConfig, opts, argv) {
     module: {
       rules: [
         {
+          // Web Worker bundles inlined as strings (see build/inline-worker-loader.js)
+          resourceQuery: /inline-worker/,
+          use: [path.resolve(__dirname, 'build/inline-worker-loader.js')],
+        },
+        {
           test: /\.(js|ts)x?$/,
           exclude: [/node_modules/],
           loader: 'babel-loader',
