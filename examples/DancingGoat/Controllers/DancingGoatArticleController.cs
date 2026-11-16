@@ -1,4 +1,8 @@
-﻿using CMS.DataEngine;
+﻿using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+using CMS.DataEngine;
 using CMS.Websites;
 
 using DancingGoat;
@@ -47,6 +51,8 @@ namespace DancingGoat.Controllers
         {
             var article = await contentRetriever.RetrieveCurrentPage<ArticlePage>(
                 new RetrieveCurrentPageParameters { IncludeSecuredItems = true, LinkedItemsMaxLevel = 3 },
+                query => query.WithAiProvenance(),
+                new RetrievalCacheSettings("WithAiProvenance"),
                 HttpContext.RequestAborted
             );
 

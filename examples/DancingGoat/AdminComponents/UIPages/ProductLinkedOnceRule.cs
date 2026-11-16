@@ -1,4 +1,9 @@
-﻿using CMS.ContentEngine;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+using CMS.ContentEngine;
 using CMS.Core;
 
 using DancingGoat.AdminComponents.UIPages;
@@ -6,7 +11,7 @@ using DancingGoat.Models;
 
 using Kentico.Xperience.Admin.Base.Forms;
 
-[assembly: RegisterFormValidationRule(ProductLinkedOnceRule.IDENTIFIER, typeof(ProductLinkedOnceRule), "Product linked only once", "Checks whether product is already linked once.")]
+[assembly: RegisterFormValidationRule(ProductLinkedOnceRule.IDENTIFIER, typeof(ProductLinkedOnceRule), "{$dancinggoat.formvalidationrule.productlinkedonce.name$}", "{$dancinggoat.formvalidationrule.productlinkedonce.description$}")]
 
 namespace DancingGoat.AdminComponents.UIPages;
 

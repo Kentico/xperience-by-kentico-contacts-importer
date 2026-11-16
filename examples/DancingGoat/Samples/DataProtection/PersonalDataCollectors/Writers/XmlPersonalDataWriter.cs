@@ -1,4 +1,6 @@
-﻿using System.Text;
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
 using System.Xml;
 
 using CMS.DataEngine;
@@ -21,7 +23,7 @@ namespace Samples.DancingGoat
         public XmlPersonalDataWriter()
         {
             stringBuilder = new StringBuilder();
-            xmlWriter = XmlWriter.Create(stringBuilder, new XmlWriterSettings { Indent = true, OmitXmlDeclaration = true });
+            xmlWriter = XmlWriter.Create(stringBuilder, new XmlWriterSettings { Indent = true, OmitXmlDeclaration = true, ConformanceLevel = ConformanceLevel.Fragment });
         }
 
 

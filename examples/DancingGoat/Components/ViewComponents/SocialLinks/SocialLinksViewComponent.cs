@@ -1,4 +1,7 @@
-﻿using DancingGoat.Models;
+﻿using System.Linq;
+using System.Threading.Tasks;
+
+using DancingGoat.Models;
 
 using Kentico.Content.Web.Mvc;
 

@@ -1,4 +1,6 @@
-﻿using CMS.Commerce;
+﻿using System.Linq;
+
+using CMS.Commerce;
 
 using DancingGoat.Commerce;
 

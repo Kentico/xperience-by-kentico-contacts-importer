@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 using Microsoft.AspNetCore.Mvc.Rendering;
 
@@ -19,6 +20,10 @@ public sealed record PaymentShippingViewModel
     public string ShippingMethod { get; set; }
 
     public decimal ShippingPrice { get; set; }
+
+    public decimal OriginalShippingPrice { get; set; }
+
+    public bool HasFreeShippingPromotion { get; set; }
 
     [Display(Name = "Payment method")]
     [Required(ErrorMessage = REQUIRED_FIELD_ERROR_MESSAGE)]

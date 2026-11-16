@@ -1,4 +1,7 @@
-﻿using CMS.ContactManagement;
+﻿using System.Collections.Generic;
+using System.Linq;
+
+using CMS.ContactManagement;
 using CMS.DataEngine;
 
 using DancingGoat.Personalization;

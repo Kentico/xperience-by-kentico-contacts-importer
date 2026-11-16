@@ -2,127 +2,67 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": ".NET: build (Solution)",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "build",
-        "/property:GenerateFullPaths=true",
-        "/consoleloggerparameters:NoSummary"
-      ],
-      "problemMatcher": "$msCompile"
-    },
-    {
-      "label": ".NET: build (Solution) - LOCAL_NUGET",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "build",
-        "-p:LOCAL_NUGET=true",
-        "/property:GenerateFullPaths=true",
-        "/consoleloggerparameters:NoSummary"
-      ],
-      "problemMatcher": "$msCompile"
-    },
-    {
-      "label": ".NET: rebuild (Solution)",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "build",
-        "--no-incremental",
-        "/property:GenerateFullPaths=true",
-        "/consoleloggerparameters:NoSummary"
-      ],
-      "problemMatcher": "$msCompile"
-    },
-    {
-      "label": ".NET: clean (Solution)",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "clean",
-        "/property:GenerateFullPaths=true",
-        "/consoleloggerparameters:NoSummary"
-      ],
-      "problemMatcher": "$msCompile"
-    },
-    {
-      "label": ".NET: test (Solution)",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "test",
-        "/property:GenerateFullPaths=true",
-        "/consoleloggerparameters:NoSummary"
-      ],
-      "problemMatcher": "$msCompile"
-    },
-    {
-      "label": ".NET: format (Contacts.Importer)",
-      "command": "dotnet",
-      "type": "process",
-      "args": ["format", "Kentico.Xperience.Contacts.Importer.csproj"],
-      "problemMatcher": "$msCompile",
-      "options": {
-        "cwd": "${workspaceFolder}/src/Kentico.Xperience.Contacts.Importer"
-      }
-    },
-    {
-      "label": ".NET: pack (Contacts.Importer)",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "pack",
-        "./src/Kentico.Xperience.Contacts.Importer",
-        "-c",
-        "Release",
-        "-o",
-        "nuget-local",
-        "-p:SIGN_FILE=false"
-      ],
-      "problemMatcher": "$msCompile",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      }
-    },
-    {
       "type": "npm",
       "script": "install",
-      "path": "src/Kentico.Xperience.Contacts.Importer/Admin/Client",
+      "path": "src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client",
       "group": "build",
       "problemMatcher": [],
-      "label": "npm: install - src/Kentico.Xperience.Contacts.Importer/Admin/Client",
+      "label": "npm: install - admin client",
       "detail": "install dependencies from package"
+    },
+    {
+      "type": "dotnet",
+      "task": "build",
+      "problemMatcher": ["$msCompile"],
+      "group": "build",
+      "label": "dotnet: build"
+    },
+    {
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "format",
+        "Kentico.Xperience.Labs.ContactsImporter.slnx"
+      ],
+      "problemMatcher": ["$msCompile"],
+      "group": "none",
+      "label": "dotnet: format"
+    },
+    {
+      "type": "dotnet",
+      "task": "clean",
+      "problemMatcher": ["$msCompile"],
+      "group": "build",
+      "label": "dotnet: clean"
     },
     {
       "type": "npm",
       "script": "build",
-      "path": "src/Kentico.Xperience.Contacts.Importer/Admin/Client",
+      "path": "src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client",
       "group": "build",
       "problemMatcher": [],
-      "label": "npm: build - src/Kentico.Xperience.Contacts.Importer/Admin/Client",
+      "label": "npm: build - admin client",
       "detail": "webpack --mode=production"
     },
     {
       "type": "npm",
       "script": "build:dev",
-      "path": "src/Kentico.Xperience.Contacts.Importer/Admin/Client",
+      "path": "src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client",
       "group": "build",
       "problemMatcher": [],
-      "label": "npm: build:dev - src/Kentico.Xperience.Contacts.Importer/Admin/Client",
+      "label": "npm: build:dev - admin client",
       "detail": "webpack --mode=development"
     },
     {
       "type": "npm",
       "script": "start",
-      "path": "src/Kentico.Xperience.Contacts.Importer/Admin/Client",
+      "path": "src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client",
       "problemMatcher": [],
-      "label": "npm: start - src/Kentico.Xperience.Contacts.Importer/Admin/Client",
+      "label": "npm: watch - admin client",
       "detail": "webpack serve --mode development"
     },
     {
-      "label": "dotnet: watch (DancingGoat)",
+      "label": "dotnet: watch DancingGoat",
       "command": "dotnet",
       "type": "process",
       "args": [

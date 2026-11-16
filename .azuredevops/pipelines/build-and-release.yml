@@ -1,0 +1,137 @@
+name: "$(Build.DefinitionName) #$(Build.BuildId)"
+
+trigger: none # Manual Publish
+pr: none # GitHub Actions handle PRs
+
+pool:
+  vmImage: windows-latest
+
+resources:
+  repositories:
+    - repository: self
+      type: git
+
+variables:
+  - name: SIGN_FILE
+    value: true
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Build
+        displayName: Build, Sign & Pack
+
+        variables:
+          - group: Code Sign KV Auth
+
+          - name: Configuration
+            value: Release
+
+          - name: SIGN_FILE
+            value: true
+
+          - name: slnPath
+            value: src/Kentico.Xperience.Labs.ContactsImporter.Libs.slnx
+
+        steps:
+          - task: UseDotNet@2
+            inputs:
+              useGlobalJson: true
+
+          - task: PowerShell@2
+            displayName: Set Node.js version from package.json
+            inputs:
+              targetType: inline
+              script: |
+                $fileContent = Get-Content -Path 'src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client/package.json' -Raw
+                $jsonObject = ConvertFrom-Json -InputObject $fileContent
+
+                # Get the value of engines.node
+                $enginesNode = $jsonObject.engines.node
+                Write-Host "Required Node version $enginesNode"
+                Write-Host "##vso[task.setvariable variable=PACKAGE_JSON_NODE_VERSION]$enginesNode"
+
+          - task: UseNode@1
+            displayName: "Install Node.js from package.json version"
+            inputs:
+              version: $(PACKAGE_JSON_NODE_VERSION)
+
+          - task: DotNetCoreCLI@2
+            displayName: Restore dotnet tools
+            inputs:
+              command: custom
+              custom: tool
+              arguments: restore
+              workingDirectory: $(System.DefaultWorkingDirectory)
+
+          - task: DotNetCoreCLI@2
+            displayName: Restore dependencies
+            inputs:
+              command: restore
+              projects: ${{ variables.slnPath }}
+              feedsToUse: select
+              restoreArguments: --locked-mode
+
+          - task: GetAzureAuthToken@5
+            name: KeyVaultToken
+            displayName: Get token to code signing certificate
+            inputs:
+              ServiceConnection: Code signer
+              AccessScopes: https://vault.azure.net/.default
+
+          - task: DotNetCoreCLI@2
+            displayName: Build
+            inputs:
+              command: build
+              projects: ${{ variables.slnPath }}
+              configuration: ${{ variables.Configuration }}
+              arguments: --no-restore
+            env:
+              AuthenticodeAccessToken: $(KeyVaultToken.AuthToken)
+              # Roll-forward behavior set for AzureSignTool dotnet tool (see .config\dotnet-tools.json) which requires .Net 6.0 runtime
+              DOTNET_ROLL_FORWARD: Major
+
+          - template: steps.yml
+            parameters:
+              Configuration: $(Configuration)
+              artifacts:
+                - Core:
+                  artifactName: "Kentico-Xperience-Labs-ContactsImporter"
+                  projectPath: "src/Kentico.Xperience.Labs.ContactsImporter"
+                - Admin:
+                  artifactName: "Kentico-Xperience-Labs-ContactsImporter-Admin"
+                  projectPath: "src/Kentico.Xperience.Labs.ContactsImporter.Admin"
+
+  - ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+      - stage: PublishNuGetPackages
+        displayName: Publish NuGet packages
+        dependsOn: Build
+
+        jobs:
+          - deployment: PublishNuGetPackages
+            displayName: Publish NuGet packages
+
+            environment: integrations-release-nuget
+            strategy:
+              runOnce:
+                deploy:
+                  steps:
+                    - checkout: none
+
+                    - task: NuGetToolInstaller@1
+                      displayName: Install latest nuget.exe
+                      inputs:
+                        versionSpec: ">=5.6"
+                        checkLatest: true
+
+                    - task: NuGetAuthenticate@1
+                      displayName: NuGet Authenticate
+
+                    - task: NuGetCommand@2
+                      displayName: NuGet push
+                      inputs:
+                        command: push
+                        packagesToPush: $(Pipeline.Workspace)/**/*.nupkg
+                        nuGetFeedType: external
+                        publishFeedCredentials: nuget.org
+                        allowPackageConflicts: true

@@ -4,22 +4,31 @@
     <CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageVersion Include="Kentico.Xperience.Admin" Version="31.0.1" />
-    <PackageVersion Include="kentico.xperience.azurestorage" Version="31.0.1" />
-    <PackageVersion Include="kentico.xperience.imageprocessing" Version="31.0.1" />
-    <PackageVersion Include="kentico.xperience.mjml" Version="31.0.1" />
-    <PackageVersion Include="kentico.xperience.webapp" Version="31.0.1" />
-    <PackageVersion Include="CsvHelper" Version="33.0.1" />
-    <PackageVersion Include="Kentico.Xperience.ContactsImporter" Version="" Condition="'$(LOCAL_NUGET)' == 'true'" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.0" />
-    <PackageVersion Include="SonarAnalyzer.CSharp" Version="9.25.0.90414" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
-    <PackageVersion Include="NUnit" Version="4.1.0" />
-    <PackageVersion Include="NUnit3TestAdapter" Version="4.5.0" />
-    <PackageVersion Include="NUnit.Analyzers" Version="4.2.0" />
-    <PackageVersion Include="coverlet.collector" Version="6.0.2" />
-    <PackageVersion Include="Bogus" Version="34.0.2" />
+  <!-- Minimum Xperience version the libraries in src/ support. examples/Directory.Packages.props
+       overrides these for DancingGoat and adds its other Xperience packages. -->
+  <ItemGroup Label="Xperience">
+    <PackageVersion Include="Kentico.Xperience.Admin" Version="31.10.3" />
+    <PackageVersion Include="Kentico.Xperience.WebApp" Version="31.10.3" />
+  </ItemGroup>
+  <ItemGroup Label="Aspire">
+    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.6.5" />
+    <PackageVersion Include="Aspire.Hosting.SqlServer" Version="13.6.5" />
+    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.MailPit" Version="13.6.1" />
+  </ItemGroup>
+  <ItemGroup Label="Tests">
+    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
+    <PackageVersion Include="NUnit" Version="5.0.0" />
+    <PackageVersion Include="NUnit.Analyzers" Version="4.15.0" />
+    <PackageVersion Include="NUnit3TestAdapter" Version="6.3.1" />
+  </ItemGroup>
+  <ItemGroup Label="Transitive security pins">
+    <!-- Xperience brings 10.0.0 via MailKit/MimeKit and Microsoft.Data.SqlClient (GHSA-2fmv-rv2c-59x7, GHSA-846f-f764-76mx). Remove when Xperience references a patched version. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
+  </ItemGroup>
+  <ItemGroup Label="Analyzers">
+    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.36.0.15337" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,50 @@
+# Auto detect text files and perform LF normalization
+
+*                   text=auto eol=lf
+
+*.cs                text diff=csharp
+*.cshtml            text diff=html
+
+*.sln               text
+*.slnx              text
+*.csproj            text
+*.vcproj            text
+*.sqlproj           text
+
+*.xproj             text
+*.props             text
+*.filters           text
+*.vcxitems          text
+
+*.yaml              text
+*.yml               text
+
+*.css               text diff=css
+*.html              text diff=html
+*.js                text
+*.jsx               text
+*.ts                text
+*.tsx               text
+
+package.json        text
+package-lock.json   text -diff
+
+*.sql               linguist-detectable=true
+*.sql               linguist-language=sql
+.vscode/*.json      linguist-language=JSON-with-Comments
+tsconfig.json       linguist-language=JSON-with-Comments
+
+*.webm              binary
+*.mp4               binary
+
+*.svg               text
+*.ico               binary
+*.gif               binary
+*.pdf               binary
+*.png               binary
+*.jpg               binary
+*.jpeg              binary
+*.webp              binary
+
+*.woff              binary
+*.woff2             binary

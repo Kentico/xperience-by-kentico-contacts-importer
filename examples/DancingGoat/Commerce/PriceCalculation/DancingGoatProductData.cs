@@ -1,4 +1,7 @@
-﻿using CMS.Commerce;
+﻿using System;
+using System.Collections.Generic;
+
+using CMS.Commerce;
 using CMS.ContentEngine;
 
 namespace DancingGoat.Commerce;

@@ -1,4 +1,6 @@
-﻿using CMS.Websites;
+﻿using System.Collections.Generic;
+
+using CMS.Websites;
 
 namespace DancingGoat.Models
 {

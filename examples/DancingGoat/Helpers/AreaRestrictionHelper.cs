@@ -1,4 +1,8 @@
-﻿using Kentico.PageBuilder.Web.Mvc;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+
+using Kentico.PageBuilder.Web.Mvc;
 
 namespace DancingGoat.Helpers
 {
@@ -13,6 +17,19 @@ namespace DancingGoat.Helpers
         public static string[] GetLandingPageRestrictions()
         {
             var allowedScopes = new[] { "Kentico.", "DancingGoat.General.", "DancingGoat.LandingPage." };
+
+            return GetWidgetsIdentifiers()
+                .Where(id => allowedScopes.Any(scope => id.StartsWith(scope, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+        }
+
+
+        /// <summary>
+        /// Gets list of widget identifiers allowed for home page. Excludes widgets designed for landing pages.
+        /// </summary>
+        public static string[] GetHomePageRestrictions()
+        {
+            var allowedScopes = new[] { "Kentico.", "DancingGoat.General." };
 
             return GetWidgetsIdentifiers()
                 .Where(id => allowedScopes.Any(scope => id.StartsWith(scope, StringComparison.OrdinalIgnoreCase)))

@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AdminOrgName>kentico</AdminOrgName>
+    <Product>Xperience by Kentico Labs: Contacts Importer administration</Product>
+    <Title>$(Product)</Title>
+    <Description>Lets marketers import contacts from CSV, Excel, and JSON files into Xperience by Kentico, with deduplication, dry runs, and recipient list assignment.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Requires that npm run build or npm run build:dev was executed _before_ the .NET build -->
+    <AdminClientPath Include="Client\dist\**" Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+      <ProjectName>xperience-labs-contacts-importer-admin</ProjectName>
+    </AdminClientPath>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Client\node_modules\**" />
+    <EmbeddedResource Remove="Client\node_modules\**" />
+    <None Remove="Client\node_modules\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="CMS.AssemblyDiscoverableAttribute"></AssemblyAttribute>
+  </ItemGroup>
+
+  <Target Name="NpmInstall" BeforeTargets="NpmBuildClient" Condition=" '$(Configuration)|$(Platform)' != 'Debug|AnyCPU' ">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(MSBuildProjectDirectory)\Client" />
+  </Target>
+  <Target Name="NpmBuildClient" BeforeTargets="BeforeBuild" Condition=" '$(Configuration)|$(Platform)' != 'Debug|AnyCPU' ">
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)\Client" />
+
+    <ItemGroup>
+      <AdminClientPath Include="Client\dist\**">
+        <ProjectName>xperience-labs-contacts-importer-admin</ProjectName>
+      </AdminClientPath>
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Kentico.Xperience.Admin" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Kentico.Xperience.Labs.ContactsImporter\Kentico.Xperience.Labs.ContactsImporter.csproj" />
+  </ItemGroup>
+</Project>
