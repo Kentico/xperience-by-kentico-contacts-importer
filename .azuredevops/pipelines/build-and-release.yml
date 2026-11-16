@@ -95,9 +95,6 @@ stages:
             parameters:
               Configuration: $(Configuration)
               artifacts:
-                - Core:
-                  artifactName: "Kentico-Xperience-Labs-ContactsImporter"
-                  projectPath: "src/Kentico.Xperience.Labs.ContactsImporter"
                 - Admin:
                   artifactName: "Kentico-Xperience-Labs-ContactsImporter-Admin"
                   projectPath: "src/Kentico.Xperience.Labs.ContactsImporter.Admin"

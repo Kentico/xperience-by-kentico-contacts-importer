@@ -6,8 +6,8 @@ Xperience by Kentico Labs: Contacts Importer (Kentico Labs family, library): let
 
 This repository was created from the Kentico repository template, the starting point for Xperience by Kentico integrations, Kentico Labs projects, example projects, and community libraries. The template supplied the first commit: build and CI setup, agent skills, the DancingGoat sample, and the Aspire host. GitHub does not sync template changes afterwards; this content is now the repository's own.
 
-- `src/` – `Kentico.Xperience.Labs.ContactsImporter` (core) and `Kentico.Xperience.Labs.ContactsImporter.Admin` (extends the Xperience administration with a React client in `Client/`), published as NuGet packages
-- `tests/` – NUnit unit tests; Playwright e2e tests in `tests/e2e`
+- `src/` – `Kentico.Xperience.Labs.ContactsImporter.Admin` (service registration and the Xperience administration extension, with a React client in `Client/`), published as a single NuGet package
+- `tests/` – NUnit unit tests in `Kentico.Xperience.Labs.ContactsImporter.Admin.Tests`; Playwright e2e tests in `tests/e2e`
 - `examples/DancingGoat` – Xperience sample site that uses the libraries; `examples/AppHost` – Aspire host that runs it locally
 - `docs/` – usage guide and contributor setup
 - `.agent-resources/` – agent planning docs (see below)

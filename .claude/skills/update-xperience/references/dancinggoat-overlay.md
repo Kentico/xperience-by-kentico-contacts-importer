@@ -4,8 +4,8 @@ What this repository changes in the generated `kentico-xperience-sample-mvc` pro
 
 | File | Overlay |
 | --- | --- |
-| `DancingGoat.csproj` | `ProjectReference` to the core project and the `.Admin` project (unconditional, `SeparatedAdmin` ignored); repository's own `UserSecretsId` |
-| `Program.cs` | `using <core namespace>;`; `builder.Services.Add<Name>();` after `AddDancingGoatServices()`; `builder.AddDancingGoatLocalEnvironment();` before `AddDancingGoatManagementApi()` |
+| `DancingGoat.csproj` | `ProjectReference` to the `.Admin` project (unconditional, `SeparatedAdmin` ignored); repository's own `UserSecretsId` |
+| `Program.cs` | `using <.Admin namespace>;`; `builder.Services.Add<Name>();` after `AddDancingGoatServices()`; `builder.AddDancingGoatLocalEnvironment();` before `AddDancingGoatManagementApi()` |
 | `LocalEnvironmentConfiguration.cs` | repository-only: `AddXperienceSmtp()` (fallback for system emails, notifications, and all email channels); binds `SmtpOptions`, `SystemEmailOptions`, `EmailQueueOptions`, and the `AdminIdentityOptions:ExpireTimeSpanMinutes` override from configuration |
 | `appsettings.json` | `CMSConnectionString` to `localhost,1433`, database = repository slug, `sa` / `Pass@12345`; `CMSHashStringSalt` stays empty as the template ships it (`scripts/Initialize-Database.ps1` keeps the real salt in user secrets) |
 | `appsettings.Development.json` | repository's ManagementApi port and secret; `SmtpOptions` (localhost:1025); `SystemEmailOptions`; `EmailQueueOptions`, `CMSProcessContactActionsInterval`, `AdminIdentityOptions:ExpireTimeSpanMinutes`; `CMSAdminClientModuleSettings` Proxy entry for the admin module key |

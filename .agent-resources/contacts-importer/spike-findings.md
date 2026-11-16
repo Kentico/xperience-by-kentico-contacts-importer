@@ -2,6 +2,8 @@
 
 Source: ILSpy decompile of `Kentico.Xperience.Core` 31.6.0 (`CMS.*.dll`) + SQL install scripts embedded in `CMS.DbDataManager.dll` (`CMS.DbDataManager.Data.SQL.zip` → `SQL/Objects/*.sql`) + docs.kentico.com (Kentico Docs MCP). Decompiled output kept outside repo (scratchpad). Behavior may differ in other 31.x minors; re-check on target version.
 
+"Plan changes" below = applied to PLAN.md (as of v0.9), except: cleanup on pause (§5) → PLAN.md §16 Q5; read-only resume note (§5) moot under D29. § numbers refer to PLAN.md.
+
 ---
 
 ## 1. Send-time bounce exclusion

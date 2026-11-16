@@ -1005,17 +1005,10 @@
           "System.IO.Hashing": "8.0.0"
         }
       },
-      "kentico.xperience.labs.contactsimporter": {
-        "type": "Project",
-        "dependencies": {
-          "Kentico.Xperience.WebApp": "[31.10.3, )"
-        }
-      },
       "kentico.xperience.labs.contactsimporter.admin": {
         "type": "Project",
         "dependencies": {
-          "Kentico.Xperience.Admin": "[31.10.3, )",
-          "Kentico.Xperience.Labs.ContactsImporter": "[1.0.0-prerelease-1, )"
+          "Kentico.Xperience.Admin": "[31.10.3, )"
         }
       },
       "System.Security.Cryptography.Pkcs": {

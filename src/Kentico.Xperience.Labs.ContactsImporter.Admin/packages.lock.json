@@ -780,12 +780,6 @@
           "System.IO.Hashing": "8.0.0"
         }
       },
-      "kentico.xperience.labs.contactsimporter": {
-        "type": "Project",
-        "dependencies": {
-          "Kentico.Xperience.WebApp": "[31.10.3, )"
-        }
-      },
       "Kentico.Xperience.WebApp": {
         "type": "CentralTransitive",
         "requested": "[31.10.3, )",

@@ -23,7 +23,7 @@ Lets marketers import contacts from CSV, Excel, and JSON files into Xperience by
 
 ## Package Installation
 
-Add the package to your application using the .NET CLI. The administration package references the core package.
+Add the package to your application using the .NET CLI.
 
 ```powershell
 dotnet add package Kentico.Xperience.Labs.ContactsImporter.Admin
@@ -35,7 +35,7 @@ dotnet add package Kentico.Xperience.Labs.ContactsImporter.Admin
 1. Register the services in your application's `Program.cs`:
 
    ```csharp
-   using Kentico.Xperience.Labs.ContactsImporter;
+   using Kentico.Xperience.Labs.ContactsImporter.Admin;
 
    builder.Services.AddContactsImporter();
    ```

@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Kentico.Xperience.Labs.ContactsImporter;
+namespace Kentico.Xperience.Labs.ContactsImporter.Admin;
 
 public static class ContactsImporterServiceCollectionExtensions
 {

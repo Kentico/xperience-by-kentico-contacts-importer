@@ -17,7 +17,7 @@ using Kentico.Membership;
 using Kentico.OnlineMarketing.Web.Mvc;
 using Kentico.PageBuilder.Web.Mvc;
 using Kentico.Web.Mvc;
-using Kentico.Xperience.Labs.ContactsImporter;
+using Kentico.Xperience.Labs.ContactsImporter.Admin;
 using Kentico.Xperience.Mjml;
 
 using Microsoft.AspNetCore.Builder;

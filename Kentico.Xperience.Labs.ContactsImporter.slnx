@@ -5,9 +5,8 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Kentico.Xperience.Labs.ContactsImporter.Admin/Kentico.Xperience.Labs.ContactsImporter.Admin.csproj" />
-    <Project Path="src/Kentico.Xperience.Labs.ContactsImporter/Kentico.Xperience.Labs.ContactsImporter.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Kentico.Xperience.Labs.ContactsImporter.Tests/Kentico.Xperience.Labs.ContactsImporter.Tests.csproj" />
+    <Project Path="tests/Kentico.Xperience.Labs.ContactsImporter.Admin.Tests/Kentico.Xperience.Labs.ContactsImporter.Admin.Tests.csproj" />
   </Folder>
 </Solution>

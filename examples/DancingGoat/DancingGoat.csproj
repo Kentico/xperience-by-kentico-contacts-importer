@@ -22,7 +22,6 @@
     <DefineConstants>$(DefineConstants);SEPARATED_ADMIN</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Kentico.Xperience.Labs.ContactsImporter\Kentico.Xperience.Labs.ContactsImporter.csproj" />
     <ProjectReference Include="..\..\src\Kentico.Xperience.Labs.ContactsImporter.Admin\Kentico.Xperience.Labs.ContactsImporter.Admin.csproj" />
   </ItemGroup>
   <ItemGroup>

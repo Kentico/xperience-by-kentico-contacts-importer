@@ -82,7 +82,7 @@ Playwright tests for the live site and the administration live in `tests/e2e`; t
    - `refactor/` - for restructuring of existing features
    - `fix/` - for bugfixes
 
-1. Run `dotnet format` against the `Kentico.Xperience.Labs.ContactsImporter` solution
+1. Run `dotnet format` against the `Kentico.Xperience.Labs.ContactsImporter.slnx` solution
 
    > use `dotnet: format` VS Code task.
 

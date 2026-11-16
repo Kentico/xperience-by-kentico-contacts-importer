@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <AssemblyAttribute Include="CMS.AssemblyDiscoverableAttribute"></AssemblyAttribute>
+    <InternalsVisibleTo Include="$(AssemblyName).Tests" />
   </ItemGroup>
 
   <Target Name="NpmInstall" BeforeTargets="NpmBuildClient" Condition=" '$(Configuration)|$(Platform)' != 'Debug|AnyCPU' ">
@@ -42,9 +43,5 @@
 
   <ItemGroup>
     <PackageReference Include="Kentico.Xperience.Admin" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Kentico.Xperience.Labs.ContactsImporter\Kentico.Xperience.Labs.ContactsImporter.csproj" />
   </ItemGroup>
 </Project>
