@@ -264,7 +264,7 @@ describe('startUploadSession', () => {
 
     const failure = await session(server, contactsCsv(50)).done.catch((error: unknown) => error);
 
-    expect(failure).toMatchObject({ kind: 'rejected', message: 'A value is too long.', rowNumber: 17 });
+    expect(failure).toMatchObject({ kind: 'rejected', serverMessage: 'A value is too long.', rowNumber: 17 });
   });
 
   it('fails with kind worker when the mapping does not fit the file', async () => {
@@ -295,7 +295,7 @@ describe('startUploadSession', () => {
 
     const failure = await session(server, contactsCsv(10)).done.catch((error: unknown) => error);
 
-    expect(failure).toMatchObject({ kind: 'complete', message: 'Some chunks are not uploaded yet.' });
+    expect(failure).toMatchObject({ kind: 'complete', serverMessage: 'Some chunks are not uploaded yet.' });
   });
 
   it('retries COMPLETE_UPLOAD when the request fails', async () => {

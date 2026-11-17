@@ -4,9 +4,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { downloadReport, saveBlob } from '../process/report-download';
 import { Commands } from '../shared/commands';
 import type { ExecuteCommand, GetReportRequest, GetReportResponse, ProcessPhase } from '../shared/commands';
-import { formatNumber } from '../shared/format';
 import { useIsMounted } from '../shared/hooks';
-import { Strings, format } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { TestIds, Text, testId } from '../shared/ui';
 
 export interface ReportButtonProps {
@@ -18,6 +17,7 @@ export interface ReportButtonProps {
 
 /** Downloads a row report page by page (`GET_REPORT`) and saves it as one `.csv.gz` file. */
 export const ReportButton = ({ execute, phase, label, hint }: ReportButtonProps) => {
+  const { t } = useText();
   const isMounted = useIsMounted();
   const abortRef = useRef<AbortController | null>(null);
   const [rows, setRows] = useState<number | null>(null);
@@ -42,21 +42,21 @@ export const ReportButton = ({ execute, phase, label, hint }: ReportButtonProps)
       }
     } catch (reason) {
       if (isMounted() && !controller.signal.aborted) {
-        setError(format(Strings.review.downloadFailed, reason instanceof Error ? reason.message : ''));
+        setError(t('contactsimporter.review.downloadfailed', { reason: reason instanceof Error ? reason.message : '' }));
       }
     } finally {
       if (isMounted()) {
         setRows(null);
       }
     }
-  }, [execute, isMounted, phase]);
+  }, [execute, isMounted, phase, t]);
 
   return (
     <Stack spacing={Spacing.S}>
       {error && <NotificationBarAlert onDismiss={() => setError(null)}>{error}</NotificationBarAlert>}
       <div>
         <Button
-          label={rows === null ? label : format(Strings.review.downloading, formatNumber(rows))}
+          label={rows === null ? label : t('contactsimporter.review.downloading', { count: rows, rows })}
           color={ButtonColor.Secondary}
           icon="xp-arrow-down-line"
           disabled={rows !== null}

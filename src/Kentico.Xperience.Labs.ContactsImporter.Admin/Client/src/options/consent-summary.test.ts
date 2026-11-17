@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { consentSummaryLines } from './consent-summary';
+import { enMessage } from '../shared/test-resources';
+
+import { consentSummaryLines as summaryMessages } from './consent-summary';
 import type { ConsentSummaryJob } from './consent-summary';
 import { DEFAULT_OPTIONS } from './options-state';
+
+/** The summary in en-US. */
+const consentSummaryLines = (job: ConsentSummaryJob): string[] => summaryMessages(job).map(enMessage);
 
 const NOTHING: ConsentSummaryJob = { options: DEFAULT_OPTIONS, recipientListName: null, consentName: null, consentMapping: null };
 

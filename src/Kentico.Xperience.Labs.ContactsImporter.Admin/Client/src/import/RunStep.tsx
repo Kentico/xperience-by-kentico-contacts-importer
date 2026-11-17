@@ -1,18 +1,17 @@
 import { Dialog, Headline, HeadlineSize, Spacing, Stack } from '@kentico/xperience-admin-components';
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useBlocker } from 'react-router';
 
 import type { ExecuteCommand } from '../shared/commands';
-import { Strings } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { Text } from '../shared/ui';
 
 import { CancelImport } from './CancelImport';
 import { progressFor } from './model';
 import type { JobView } from './model';
 import { ProcessPanel } from './ProcessPanel';
+import type { CountCardTexts } from './ProcessPanel';
 import { useProcessLoop } from './useProcessLoop';
-
-const S = Strings.run;
 
 export interface RunStepProps {
   readonly execute: ExecuteCommand;
@@ -26,6 +25,24 @@ export interface RunStepProps {
  * and why the import waits when it does. Leaving the page pauses the import.
  */
 export const RunStep = ({ execute, view, onReload }: RunStepProps) => {
+  const { t } = useText();
+  const cards = useMemo<CountCardTexts>(
+    () => ({
+      created: t('contactsimporter.run.cards.created'),
+      createdDetail: t('contactsimporter.run.cards.createddetail'),
+      createdTooltip: t('contactsimporter.run.cards.createdtooltip'),
+      updated: t('contactsimporter.run.cards.updated'),
+      updatedDetail: t('contactsimporter.run.cards.updateddetail'),
+      updatedTooltip: t('contactsimporter.run.cards.updatedtooltip'),
+      unchanged: t('contactsimporter.run.cards.unchanged'),
+      unchangedDetail: t('contactsimporter.run.cards.unchangeddetail'),
+      unchangedTooltip: t('contactsimporter.run.cards.unchangedtooltip'),
+      skipped: t('contactsimporter.run.cards.skipped'),
+      skippedDetail: t('contactsimporter.run.cards.skippeddetail'),
+      skippedTooltip: t('contactsimporter.run.cards.skippedtooltip'),
+    }),
+    [t],
+  );
   const loop = useProcessLoop({
     jobId: view.job.jobId,
     phase: 'execute',
@@ -62,29 +79,35 @@ export const RunStep = ({ execute, view, onReload }: RunStepProps) => {
 
   return (
     <Stack spacing={Spacing.L}>
-      <Headline size={HeadlineSize.M}>{S.headline}</Headline>
+      <Headline size={HeadlineSize.M}>{t('contactsimporter.run.headline')}</Headline>
       <ProcessPanel
         view={loop}
-        runningText={loop.snapshot.calls === 0 ? S.starting : S.running}
-        cards={S.cards}
+        runningText={loop.snapshot.calls === 0 ? t('contactsimporter.run.starting') : t('contactsimporter.run.running')}
+        cards={cards}
         titleName={view.job.file.name}
         usesList={view.job.options.recipientListId !== null}
         usesConsent={view.job.options.consent !== 'none'}
         actions={
-          <CancelImport execute={execute} message={S.cancelMessage} keepLabel={S.cancelKeep} onBeforeCancel={loop.pause} onCancelled={onReload} />
+          <CancelImport
+            execute={execute}
+            message={t('contactsimporter.run.cancelmessage')}
+            keepLabel={t('contactsimporter.run.cancelkeep')}
+            onBeforeCancel={loop.pause}
+            onCancelled={onReload}
+          />
         }
       />
 
       <Dialog
         isOpen={blocker.state === 'blocked'}
-        headline={Strings.leave.headline}
-        headerCloseButton={{ tooltipText: Strings.leave.close }}
+        headline={t('contactsimporter.leave.headline')}
+        headerCloseButton={{ tooltipText: t('contactsimporter.leave.close') }}
         isDismissable={true}
         onClose={() => blocker.reset?.()}
-        confirmAction={{ label: Strings.leave.leave, onClick: () => blocker.proceed?.() }}
-        cancelAction={{ label: Strings.leave.stay, onClick: () => blocker.reset?.() }}
+        confirmAction={{ label: t('contactsimporter.leave.leave'), onClick: () => blocker.proceed?.() }}
+        cancelAction={{ label: t('contactsimporter.leave.stay'), onClick: () => blocker.reset?.() }}
       >
-        <Text>{S.leaveMessage}</Text>
+        <Text>{t('contactsimporter.run.leavemessage')}</Text>
       </Dialog>
     </Stack>
   );

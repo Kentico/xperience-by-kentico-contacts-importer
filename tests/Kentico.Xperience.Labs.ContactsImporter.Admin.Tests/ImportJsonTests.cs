@@ -77,7 +77,7 @@ public class ImportJsonTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(json.Select(p => p.Key), Is.EqualTo(new[] { "state", "chunks", "profile", "checkpoint", "aggregates", "analysis", "heartbeatUtc", "driverToken", "lastInstance", "updatedUtc", "finishedUtc", "error", "version", "driverCallId", "longestBatchSeconds" }));
+            Assert.That(json.Select(p => p.Key), Is.EqualTo(new[] { "state", "chunks", "profile", "checkpoint", "aggregates", "analysis", "heartbeatUtc", "driverToken", "lastInstance", "updatedUtc", "finishedUtc", "error", "errorArguments", "version", "driverCallId", "longestBatchSeconds" }));
             Assert.That(json["state"]!.GetValue<string>(), Is.EqualTo("Uploading"));
             Assert.That(json["chunks"]![0]!.ToJsonString(), Is.EqualTo("""{"index":0,"sha256":"abc","rows":1234,"firstRow":1,"lastRow":1300}"""));
             Assert.That(json["profile"]!.ToJsonString(), Is.EqualTo("""{"rowsRead":0,"rowsValid":0,"rowsRejected":0,"likelyDuplicates":0,"chunkCount":0}"""));

@@ -24,7 +24,11 @@ internal sealed record ImportRecordConsent(bool Agreed, DateTime? Date);
 /// The uploaded data of a job is missing or unreadable. The message is safe to store and show (no contact data).
 /// </summary>
 #pragma warning disable S3871 // Internal by design: thrown and caught inside the importer only, not part of the package API.
-internal sealed class ImportDataException(string message, Exception? innerException = null) : Exception(message, innerException);
+internal sealed class ImportDataException(ImportMessage userMessage, Exception? innerException = null) : Exception(userMessage.ToString(), innerException)
+{
+    /// <summary>What the user is told; the job stores it as the reason it failed.</summary>
+    public ImportMessage UserMessage { get; } = userMessage;
+}
 #pragma warning restore S3871
 
 /// <summary>
@@ -99,7 +103,7 @@ internal sealed class ChunkRecordReader : IDisposable
     public void Dispose() => reader.Dispose();
 
     private ImportDataException Unreadable(Exception ex) =>
-        new($"Uploaded data chunk {chunkIndex} cannot be read. Upload the file again.", ex);
+        new(ImportMessages.ChunkUnreadable(chunkIndex), ex);
 
     private ImportRecord Parse(string line)
     {

@@ -35,14 +35,11 @@ import {
 import { Commands } from '../shared/commands';
 import type { ChoiceDto, ExecuteCommand, FieldDto, ImportJobResponse, JobDto, OptionsDto, StatusDto } from '../shared/commands';
 import { useIsMounted } from '../shared/hooks';
-import { Strings, format } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { OptionSelect, TestIds, Text, testId } from '../shared/ui';
 
 import { fieldLabel } from './model';
 
-const S = Strings.options;
-const L = Strings.listOptions;
-const C = Strings.consentOptions;
 const NO_FIELD = '';
 const NO_CHOICE = '';
 
@@ -68,6 +65,7 @@ export interface OptionsStepProps {
  * The recipient list and consent options start at the choice that changes nothing.
  */
 export const OptionsStep = ({ execute, job, status, fields, recipientLists, consents, onBack, onSaved }: OptionsStepProps) => {
+  const { t } = useText();
   const isMounted = useIsMounted();
   const context = useMemo(() => toOptionsContext(job, { recipientLists: [...recipientLists], consents: [...consents] }), [job, recipientLists, consents]);
   const [options, setOptions] = useState<OptionsDto>(() => initialOptions(job.options, context));
@@ -80,19 +78,19 @@ export const OptionsStep = ({ execute, job, status, fields, recipientLists, cons
   const analyzed = status.state === 'Analyzing' || status.state === 'Analyzed' || status.state === 'Confirmed' || status.state === 'Paused';
   const unchanged = isSameOptions(options, job.options, context) && !dropped.recipientList && !dropped.consent && !dropped.consentColumn;
   const listOptions = useMemo(
-    () => [{ value: NO_CHOICE, label: L.listNone }, ...recipientLists.map((list) => ({ value: String(list.id), label: list.name }))],
-    [recipientLists],
+    () => [{ value: NO_CHOICE, label: t('contactsimporter.listoptions.listnone') }, ...recipientLists.map((list) => ({ value: String(list.id), label: list.name }))],
+    [recipientLists, t],
   );
   const consentChoices = useMemo(
-    () => [{ value: NO_CHOICE, label: C.consentNone }, ...consents.map((consent) => ({ value: String(consent.id), label: consent.name }))],
-    [consents],
+    () => [{ value: NO_CHOICE, label: t('contactsimporter.consentoptions.consentnone') }, ...consents.map((consent) => ({ value: String(consent.id), label: consent.name }))],
+    [consents, t],
   );
   const consentColumn = job.consentMapping?.agreed ?? '';
   const consentDateColumn = job.consentMapping?.date ?? '';
   const keyField = fields.find((field) => field.name === job.keyField);
   const sourceOptions = useMemo(
-    () => [{ value: NO_FIELD, label: S.sourceFieldNone }, ...job.sourceFields.map((field) => ({ value: field.name, label: fieldLabel(field) }))],
-    [job.sourceFields],
+    () => [{ value: NO_FIELD, label: t('contactsimporter.options.sourcefieldnone') }, ...job.sourceFields.map((field) => ({ value: field.name, label: fieldLabel(field) }))],
+    [job.sourceFields, t],
   );
 
   const set = useCallback(<K extends keyof OptionsDto>(key: K, value: OptionsDto[K]) => {
@@ -110,72 +108,72 @@ export const OptionsStep = ({ execute, job, status, fields, recipientLists, cons
 
     setSaving(false);
     if (!response) {
-      setError(S.saveFailed);
+      setError(t('contactsimporter.options.savefailed'));
     } else if (response.code !== 'ok' || !response.job || !response.status) {
-      setError(response.message ?? S.saveFailed);
+      setError(response.message ?? t('contactsimporter.options.savefailed'));
       setServerErrors(response.errors ?? []);
     } else {
       onSaved(response);
     }
-  }, [context, execute, isMounted, onSaved, options]);
+  }, [context, execute, isMounted, onSaved, options, t]);
 
   return (
     <Stack spacing={Spacing.XL}>
       <Stack spacing={Spacing.M}>
-        <Headline size={HeadlineSize.M}>{S.headline}</Headline>
-        <Text>{S.intro}</Text>
-        {status.state === 'Uploaded' && status.error && <NotificationBarAlert>{format(S.configError, status.error)}</NotificationBarAlert>}
-        {analyzed && <NotificationBarInfo>{S.reanalyze}</NotificationBarInfo>}
+        <Headline size={HeadlineSize.M}>{t('contactsimporter.options.headline')}</Headline>
+        <Text>{t('contactsimporter.options.intro')}</Text>
+        {status.state === 'Uploaded' && status.error && <NotificationBarAlert>{t('contactsimporter.options.configerror', { reason: status.error })}</NotificationBarAlert>}
+        {analyzed && <NotificationBarInfo>{t('contactsimporter.options.reanalyze')}</NotificationBarInfo>}
       </Stack>
 
       <Choice
         name="newContacts"
-        label={S.newContacts}
+        label={t('contactsimporter.options.newcontacts')}
         value={options.newContacts}
         onChange={(value) => set('newContacts', value)}
         choices={[
-          ['create', S.newContactsCreate],
-          ['skip', S.newContactsSkip],
+          ['create', t('contactsimporter.options.newcontactscreate')],
+          ['skip', t('contactsimporter.options.newcontactsskip')],
         ]}
       />
       <Choice
         name="existingContacts"
-        label={S.existingContacts}
+        label={t('contactsimporter.options.existingcontacts')}
         value={options.existingContacts}
         onChange={(value) => set('existingContacts', value)}
         choices={[
-          ['update', S.existingContactsUpdate],
-          ['skip', S.existingContactsSkip],
+          ['update', t('contactsimporter.options.existingcontactsupdate')],
+          ['skip', t('contactsimporter.options.existingcontactsskip')],
         ]}
       />
-      {validation.nothingToDo && <NotificationBarAlert>{S.nothingToDo}</NotificationBarAlert>}
+      {validation.nothingToDo && <NotificationBarAlert>{t('contactsimporter.options.nothingtodo')}</NotificationBarAlert>}
 
       {options.existingContacts === 'update' && (
         <>
           <Choice
             name="emptyValues"
-            label={S.emptyValues}
+            label={t('contactsimporter.options.emptyvalues')}
             value={options.emptyValues}
             onChange={(value) => set('emptyValues', value)}
             choices={[
-              ['ignore', S.emptyValuesIgnore],
-              ['clear', S.emptyValuesClear],
+              ['ignore', t('contactsimporter.options.emptyvaluesignore')],
+              ['clear', t('contactsimporter.options.emptyvaluesclear')],
             ]}
           />
           {options.emptyValues === 'clear' && (
             <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk}>
-              {S.emptyValuesWarning}
+              {t('contactsimporter.options.emptyvalueswarning')}
             </Callout>
           )}
           <Choice
             name="multipleMatches"
-            label={S.multipleMatches}
+            label={t('contactsimporter.options.multiplematches')}
             value={options.multipleMatches}
             onChange={(value) => set('multipleMatches', value)}
             choices={[
-              ['updateNewest', S.multipleMatchesNewest],
-              ['updateAll', S.multipleMatchesAll],
-              ['skip', S.multipleMatchesSkip],
+              ['updateNewest', t('contactsimporter.options.multiplematchesnewest')],
+              ['updateAll', t('contactsimporter.options.multiplematchesall')],
+              ['skip', t('contactsimporter.options.multiplematchesskip')],
             ]}
           />
         </>
@@ -184,31 +182,31 @@ export const OptionsStep = ({ execute, job, status, fields, recipientLists, cons
       {job.invalidEmailApplies && (
         <Choice
           name="invalidEmail"
-          label={S.invalidEmail}
+          label={t('contactsimporter.options.invalidemail')}
           value={options.invalidEmail}
           onChange={(value) => set('invalidEmail', value)}
           choices={[
-            ['skipRow', S.invalidEmailSkip],
-            ['importWithoutEmail', S.invalidEmailImport],
+            ['skipRow', t('contactsimporter.options.invalidemailskip')],
+            ['importWithoutEmail', t('contactsimporter.options.invalidemailimport')],
           ]}
         />
       )}
 
       <Stack spacing={Spacing.M}>
-        <Headline size={HeadlineSize.S}>{L.headline}</Headline>
-        <Text>{L.intro}</Text>
-        {dropped.recipientList && <NotificationBarWarning>{L.listDropped}</NotificationBarWarning>}
+        <Headline size={HeadlineSize.S}>{t('contactsimporter.listoptions.headline')}</Headline>
+        <Text>{t('contactsimporter.listoptions.intro')}</Text>
+        {dropped.recipientList && <NotificationBarWarning>{t('contactsimporter.listoptions.listdropped')}</NotificationBarWarning>}
         {recipientLists.length === 0 ? (
           <Callout type={CalloutType.QuickTip} placement={CalloutPlacementType.OnDesk}>
-            {L.noLists}
+            {t('contactsimporter.listoptions.nolists')}
           </Callout>
         ) : (
           <div style={{ maxWidth: 480 }}>
             <OptionSelect
-              label={L.list}
+              label={t('contactsimporter.listoptions.list')}
               value={options.recipientListId === null ? NO_CHOICE : String(options.recipientListId)}
               options={listOptions}
-              explanationText={L.listHelp}
+              explanationText={t('contactsimporter.listoptions.listhelp')}
               dataTestId={TestIds.recipientList}
               onChange={(value) => setOptions((current) => setRecipientList(current, value === NO_CHOICE ? null : Number(value), context))}
             />
@@ -219,64 +217,64 @@ export const OptionsStep = ({ execute, job, status, fields, recipientLists, cons
             <Callout
               type={CalloutType.FriendlyWarning}
               placement={CalloutPlacementType.OnDesk}
-              headline={L.calloutHeadline}
+              headline={t('contactsimporter.listoptions.calloutheadline')}
               dataTestId={testId(TestIds.consentCallout)}
-              actionButton={<Link href={DATA_PROTECTION_DOCS_URL} text={L.calloutLink} target="_blank" />}
+              actionButton={<Link href={DATA_PROTECTION_DOCS_URL} text={t('contactsimporter.listoptions.calloutlink')} target="_blank" />}
             >
-              {L.calloutText}
+              {t('contactsimporter.listoptions.callouttext')}
             </Callout>
             <Choice
               name="unsubscribed"
-              label={L.unsubscribed}
+              label={t('contactsimporter.listoptions.unsubscribed')}
               value={options.unsubscribed}
               onChange={(value) => set('unsubscribed', value)}
               choices={[
-                ['keep', L.unsubscribedKeep],
-                ['resubscribe', L.unsubscribedResubscribe],
+                ['keep', t('contactsimporter.listoptions.unsubscribedkeep')],
+                ['resubscribe', t('contactsimporter.listoptions.unsubscribedresubscribe')],
               ]}
             />
             {options.unsubscribed === 'resubscribe' && (
-              <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={L.unsubscribedWarningHeadline}>
-                {L.unsubscribedWarning}
+              <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={t('contactsimporter.listoptions.unsubscribedwarningheadline')}>
+                {t('contactsimporter.listoptions.unsubscribedwarning')}
               </Callout>
             )}
             <Choice
               name="bouncedAddress"
-              label={L.bounced}
+              label={t('contactsimporter.listoptions.bounced')}
               value={options.bouncedAddress}
               onChange={(value) => set('bouncedAddress', value)}
               choices={[
-                ['addAndReport', L.bouncedAdd],
-                ['skipAndReport', L.bouncedSkip],
+                ['addAndReport', t('contactsimporter.listoptions.bouncedadd')],
+                ['skipAndReport', t('contactsimporter.listoptions.bouncedskip')],
               ]}
             />
-            <Text hint={true}>{L.bouncedHelp}</Text>
+            <Text hint={true}>{t('contactsimporter.listoptions.bouncedhelp')}</Text>
           </>
         )}
       </Stack>
 
       <Stack spacing={Spacing.M}>
-        <Headline size={HeadlineSize.S}>{C.headline}</Headline>
-        <Text>{C.intro}</Text>
-        {dropped.consent && <NotificationBarWarning>{C.consentDropped}</NotificationBarWarning>}
-        {dropped.consentColumn && <NotificationBarWarning>{C.columnDropped}</NotificationBarWarning>}
+        <Headline size={HeadlineSize.S}>{t('contactsimporter.consentoptions.headline')}</Headline>
+        <Text>{t('contactsimporter.consentoptions.intro')}</Text>
+        {dropped.consent && <NotificationBarWarning>{t('contactsimporter.consentoptions.consentdropped')}</NotificationBarWarning>}
+        {dropped.consentColumn && <NotificationBarWarning>{t('contactsimporter.consentoptions.columndropped')}</NotificationBarWarning>}
         {consents.length === 0 ? (
           <Callout type={CalloutType.QuickTip} placement={CalloutPlacementType.OnDesk}>
-            {C.noConsents}
+            {t('contactsimporter.consentoptions.noconsents')}
           </Callout>
         ) : (
           <Choice
             name="consent"
-            label={C.mode}
+            label={t('contactsimporter.consentoptions.mode')}
             value={options.consent}
             onChange={(value) => setOptions((current) => setConsentMode(current, value, context))}
             choices={[
-              ['none', C.modeNone],
-              ['blanket', C.modeBlanket],
+              ['none', t('contactsimporter.consentoptions.modenone')],
+              ['blanket', t('contactsimporter.consentoptions.modeblanket')],
               [
                 'blanketWithColumnOverride',
-                context.consentColumnMapped ? format(C.modeColumn, consentColumn) : C.modeColumnUnavailable,
-                { disabled: !context.consentColumnMapped, caption: context.consentColumnMapped ? C.modeColumnHelp : C.modeColumnUnavailableHelp },
+                context.consentColumnMapped ? t('contactsimporter.consentoptions.modecolumn', { column: consentColumn }) : t('contactsimporter.consentoptions.modecolumnunavailable'),
+                { disabled: !context.consentColumnMapped, caption: context.consentColumnMapped ? t('contactsimporter.consentoptions.modecolumnhelp') : t('contactsimporter.consentoptions.modecolumnunavailablehelp') },
               ],
             ]}
           />
@@ -285,34 +283,34 @@ export const OptionsStep = ({ execute, job, status, fields, recipientLists, cons
           <>
             <div style={{ maxWidth: 480 }}>
               <OptionSelect
-                label={C.consent}
+                label={t('contactsimporter.consentoptions.consent')}
                 value={options.consentId === null ? NO_CHOICE : String(options.consentId)}
                 options={consentChoices}
-                explanationText={C.consentHelp}
+                explanationText={t('contactsimporter.consentoptions.consenthelp')}
                 dataTestId={TestIds.consentSelect}
                 onChange={(value) => setOptions((current) => setConsent(current, value === NO_CHOICE ? null : Number(value), context))}
               />
             </div>
-            {validation.consentMissing && <NotificationBarAlert>{C.consentMissing}</NotificationBarAlert>}
-            <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={C.calloutHeadline}>
-              {C.calloutText}
+            {validation.consentMissing && <NotificationBarAlert>{t('contactsimporter.consentoptions.consentmissing')}</NotificationBarAlert>}
+            <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={t('contactsimporter.consentoptions.calloutheadline')}>
+              {t('contactsimporter.consentoptions.callouttext')}
             </Callout>
             <Text hint={true}>
-              {options.consent === 'blanketWithColumnOverride' && consentDateColumn !== '' ? format(C.timeColumn, consentDateColumn) : C.timeImport}
+              {options.consent === 'blanketWithColumnOverride' && consentDateColumn !== '' ? t('contactsimporter.consentoptions.timecolumn', { column: consentDateColumn }) : t('contactsimporter.consentoptions.timeimport')}
             </Text>
             <Choice
               name="revokedConsent"
-              label={C.revoked}
+              label={t('contactsimporter.consentoptions.revoked')}
               value={options.revokedConsent}
               onChange={(value) => set('revokedConsent', value)}
               choices={[
-                ['keep', C.revokedKeep],
-                ['reAgree', C.revokedReAgree],
+                ['keep', t('contactsimporter.consentoptions.revokedkeep')],
+                ['reAgree', t('contactsimporter.consentoptions.revokedreagree')],
               ]}
             />
             {options.revokedConsent === 'reAgree' && (
-              <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={C.revokedWarningHeadline}>
-                {C.revokedWarning}
+              <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={t('contactsimporter.consentoptions.revokedwarningheadline')}>
+                {t('contactsimporter.consentoptions.revokedwarning')}
               </Callout>
             )}
           </>
@@ -320,19 +318,19 @@ export const OptionsStep = ({ execute, job, status, fields, recipientLists, cons
       </Stack>
 
       <Stack spacing={Spacing.M}>
-        <Headline size={HeadlineSize.S}>{S.sourceHeadline}</Headline>
-        <Text>{S.sourceIntro}</Text>
+        <Headline size={HeadlineSize.S}>{t('contactsimporter.options.sourceheadline')}</Headline>
+        <Text>{t('contactsimporter.options.sourceintro')}</Text>
         {job.sourceFields.length === 0 ? (
           <Callout type={CalloutType.QuickTip} placement={CalloutPlacementType.OnDesk}>
-            {S.noSourceField}
+            {t('contactsimporter.options.nosourcefield')}
           </Callout>
         ) : (
           <div style={{ maxWidth: 480 }}>
             <OptionSelect
-              label={S.sourceField}
+              label={t('contactsimporter.options.sourcefield')}
               value={options.sourceField ?? NO_FIELD}
               options={sourceOptions}
-              explanationText={S.sourceFieldHelp}
+              explanationText={t('contactsimporter.options.sourcefieldhelp')}
               dataTestId={TestIds.sourceField}
               onChange={(value) => setOptions((current) => setSourceField(current, value === NO_FIELD ? null : value, context))}
             />
@@ -342,14 +340,14 @@ export const OptionsStep = ({ execute, job, status, fields, recipientLists, cons
           <>
             <div style={{ maxWidth: 480 }}>
               <Input
-                label={S.sourceValue}
+                label={t('contactsimporter.options.sourcevalue')}
                 value={options.sourceValue ?? ''}
                 invalid={validation.sourceValue !== null}
                 validationMessage={
                   validation.sourceValue === 'missing'
-                    ? S.sourceValueMissing
+                    ? t('contactsimporter.options.sourcevaluemissing')
                     : validation.sourceValue === 'tooLong'
-                      ? format(S.sourceValueTooLong, validation.sourceValueMaxLength ?? 0)
+                      ? t('contactsimporter.options.sourcevaluetoolong', { maxLength: validation.sourceValueMaxLength ?? 0 })
                       : undefined
                 }
                 dataTestId={testId(TestIds.sourceValue)}
@@ -358,12 +356,12 @@ export const OptionsStep = ({ execute, job, status, fields, recipientLists, cons
             </div>
             <Choice
               name="sourceStamp"
-              label={S.sourceStamp}
+              label={t('contactsimporter.options.sourcestamp')}
               value={options.sourceStamp}
               onChange={(value) => set('sourceStamp', value)}
               choices={[
-                ['createdOnly', S.sourceStampCreated],
-                ['createdAndUpdated', S.sourceStampAll],
+                ['createdOnly', t('contactsimporter.options.sourcestampcreated')],
+                ['createdAndUpdated', t('contactsimporter.options.sourcestampall')],
               ]}
             />
           </>
@@ -371,11 +369,11 @@ export const OptionsStep = ({ execute, job, status, fields, recipientLists, cons
       </Stack>
 
       <Stack spacing={Spacing.M}>
-        <Headline size={HeadlineSize.S}>{S.reportHeadline}</Headline>
+        <Headline size={HeadlineSize.S}>{t('contactsimporter.options.reportheadline')}</Headline>
         <Checkbox
-          label={format(S.reportIncludesKey, keyField ? fieldLabel(keyField) : job.keyField)}
+          label={t('contactsimporter.options.reportincludeskey', { field: keyField ? fieldLabel(keyField) : job.keyField })}
           checked={options.reportIncludesKey}
-          explanationText={S.reportIncludesKeyHelp}
+          explanationText={t('contactsimporter.options.reportincludeskeyhelp')}
           dataTestId={testId(TestIds.reportIncludesKey)}
           onChange={(_event, checked) => set('reportIncludesKey', checked)}
         />
@@ -391,9 +389,9 @@ export const OptionsStep = ({ execute, job, status, fields, recipientLists, cons
       )}
 
       <Inline spacing={Spacing.M}>
-        <Button label={S.back} color={ButtonColor.Secondary} disabled={saving} dataTestId={testId(TestIds.optionsBack)} onClick={onBack} />
+        <Button label={t('contactsimporter.options.back')} color={ButtonColor.Secondary} disabled={saving} dataTestId={testId(TestIds.optionsBack)} onClick={onBack} />
         <Button
-          label={saving ? S.saving : unchanged && status.state !== 'Uploaded' ? S.next : S.save}
+          label={saving ? t('contactsimporter.options.saving') : unchanged && status.state !== 'Uploaded' ? t('contactsimporter.options.next') : t('contactsimporter.options.save')}
           color={ButtonColor.Primary}
           disabled={saving || !validation.isValid}
           inProgress={saving}

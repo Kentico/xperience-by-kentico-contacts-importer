@@ -467,10 +467,10 @@ public class ImportProcessorWebFarmTests
         {
             Assert.That(rejected.Outcome, Is.EqualTo(ImportProcessOutcome.Failed));
             Assert.That(rejected.State, Is.EqualTo(ImportJobState.Uploaded));
-            Assert.That(rejected.Error, Does.Contain("no longer exists"));
+            Assert.That(rejected.Error?.ToString(), Does.Contain("no longer exists"));
             Assert.That(rejected.DriverToken, Is.Null);
             Assert.That(status.State, Is.EqualTo(ImportJobState.Uploaded));
-            Assert.That(status.Error, Does.Contain("no longer exists"));
+            Assert.That(status.ErrorMessage?.ToString(), Does.Contain("no longer exists"));
             Assert.That(status.DriverToken, Is.Null);
             Assert.That(status.FinishedUtc, Is.Null);
             Assert.That(farm.LogA, Has.Some.Contains("CONTACT_IMPORT_REJECTED"));
@@ -519,7 +519,7 @@ public class ImportProcessorWebFarmTests
         {
             Assert.That(rejected.Outcome, Is.EqualTo(ImportProcessOutcome.Failed));
             Assert.That(rejected.State, Is.EqualTo(ImportJobState.Uploaded));
-            Assert.That(rejected.Error, Does.Contain("data type"));
+            Assert.That(rejected.Error?.ToString(), Does.Contain("data type"));
             Assert.That(status.State, Is.EqualTo(ImportJobState.Uploaded));
             Assert.That(status.Analysis, Is.Null, "The import needs a new analysis.");
             Assert.That(farm.Repository.Writes, Is.Zero);
@@ -546,7 +546,7 @@ public class ImportProcessorWebFarmTests
             Assert.That(failed.Outcome, Is.EqualTo(ImportProcessOutcome.Failed));
             Assert.That(failed.State, Is.EqualTo(ImportJobState.Failed));
             Assert.That(status.State, Is.EqualTo(ImportJobState.Failed));
-            Assert.That(status.Error, Does.Contain("no longer exists"));
+            Assert.That(status.ErrorMessage?.ToString(), Does.Contain("no longer exists"));
             Assert.That(status.Aggregates[ImportAggregateKeys.Rows], Is.EqualTo(2), "The counts of what was written stay.");
             Assert.That(farm.Temp.Store.HasChunks(jobId), Is.False);
         });

@@ -4,7 +4,8 @@ internal class ImportJobConfigValidatorTests
 {
     private static readonly ContactsImporterOptions options = new() { MaxFileSizeBytes = 10_000 };
 
-    private static IReadOnlyList<string> Validate(ImportJob job) => ImportJobConfigValidator.Validate(job, TestData.Fields, options);
+    /// <summary>The problems in English (en-US resources).</summary>
+    private static IReadOnlyList<string> Validate(ImportJob job) => [.. ImportJobConfigValidator.Validate(job, TestData.Fields, options).Select(error => error.ToString())];
 
     [Test]
     public void Valid_Configuration_Has_No_Errors()
@@ -123,7 +124,8 @@ internal class ImportJobConfigValidatorTests
 
         var errors = ImportJobConfigValidator.Validate(job, typedFields, options);
 
-        Assert.That(errors, Is.EqualTo(new[] { $"Contact field '{keyField}' cannot be the key field: only text, whole number and GUID fields can." }));
+        Assert.That(errors, Is.EqualTo(new[] { ImportMessages.KeyFieldNotAllowed(keyField) }));
+        Assert.That(errors[0].ToString(), Is.EqualTo($"Contact field '{keyField}' cannot be the key field: only text, whole number and GUID fields can."));
     }
 
     [TestCase("Picture")]
@@ -134,7 +136,7 @@ internal class ImportJobConfigValidatorTests
 
         var errors = ImportJobConfigValidator.Validate(job, typedFields, options);
 
-        Assert.That(errors, Is.EqualTo(new[] { $"Contact field '{target}' has a data type that cannot be imported." }));
+        Assert.That(errors, Is.EqualTo(new[] { ImportMessages.FieldTypeNotSupported(target) }));
     }
 
     [Test]
@@ -188,7 +190,7 @@ internal class ImportJobConfigValidatorTests
         {
             var job = TestData.Job(null, field.Name, "ContactNotes", field.Name);
 
-            Assert.That(ImportProcessingContext.TryCreate(job, typedFields, out _, out string? error), Is.True, error);
+            Assert.That(ImportProcessingContext.TryCreate(job, typedFields, out _, out var error), Is.True, error?.ToString());
         }
     }
 
@@ -200,7 +202,7 @@ internal class ImportJobConfigValidatorTests
     {
         var job = TestData.Job(null, keyField, "ContactEmail", keyField);
 
-        bool created = ImportProcessingContext.TryCreate(job, typedFields, out _, out string? error);
+        bool created = ImportProcessingContext.TryCreate(job, typedFields, out _, out var error);
 
         Assert.Multiple(() =>
         {
@@ -257,15 +259,15 @@ internal class ImportJobConfigValidatorTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(ImportProcessingContext.TryCreate(list, processingFields, out _, out string? noAudience), Is.False);
-            Assert.That(noAudience, Does.Contain("could not be checked"));
+            Assert.That(ImportProcessingContext.TryCreate(list, processingFields, out _, out var noAudience), Is.False);
+            Assert.That(noAudience, Is.EqualTo(ImportMessages.AudienceUnchecked));
             Assert.That(ImportProcessingContext.TryCreate(list, processingFields, out _, out _, new ImportAudience(RecipientListId: 5)), Is.False, "Another list than the one of the options.");
             Assert.That(ImportProcessingContext.TryCreate(list, processingFields, out var listContext, out _, new ImportAudience(RecipientListId: 4)), Is.True);
             Assert.That(listContext!.HasRecipientList && !listContext.RecordsConsent && listContext.HasAudience, Is.True);
             Assert.That(ImportProcessingContext.TryCreate(consent, processingFields, out _, out _, ImportAudience.None), Is.False);
             Assert.That(ImportProcessingContext.TryCreate(consent, processingFields, out var consentContext, out _, new ImportAudience(ConsentId: 2, ConsentHash: "h")), Is.True);
             Assert.That(consentContext!.RecordsConsent && !consentContext.ConsentFromColumns, Is.True);
-            Assert.That(ImportProcessingContext.TryCreate(columns, processingFields, out _, out string? noColumns, new ImportAudience(ConsentId: 2, ConsentHash: "h")), Is.False);
+            Assert.That(ImportProcessingContext.TryCreate(columns, processingFields, out _, out var noColumns, new ImportAudience(ConsentId: 2, ConsentHash: "h")), Is.False);
             Assert.That(noColumns, Is.EqualTo(ImportJobConfigValidator.ConsentColumnsMissingError));
             Assert.That(ImportProcessingContext.TryCreate(TestData.Job(), processingFields, out var plain, out _), Is.True);
             Assert.That(plain!.HasAudience, Is.False);

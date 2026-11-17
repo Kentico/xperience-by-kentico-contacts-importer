@@ -155,6 +155,7 @@ export class CsvParser {
         'recordTooLarge',
         `Record ${this.index + 1} is larger than ${this.maxRecordChars} characters. ` +
           'The file probably has an unbalanced quote or the wrong delimiter.',
+        { record: this.index + 1, maxChars: this.maxRecordChars },
       );
     }
   }

@@ -275,7 +275,7 @@ describe('ChunkUploader', () => {
 
     expect(calls).toBe(1);
     expect(failure).toBeInstanceOf(UploadError);
-    expect(failure).toMatchObject({ code: 'rejected', reason: 'invalidRecord', rowNumber: 42, index: 0, message: 'Value too long.' });
+    expect(failure).toMatchObject({ code: 'rejected', reason: 'invalidRecord', rowNumber: 42, index: 0, serverMessage: 'Value too long.' });
   });
 
   it('abort rejects waiting and running chunks with code aborted and passes the signal to send', async () => {
@@ -392,7 +392,7 @@ describe('ChunkUploader', () => {
 
       const failure = await target.add(chunk(0)).catch((error: unknown) => error);
 
-      expect(failure).toMatchObject({ code: 'truncateFailed', message: 'Not uploading.' });
+      expect(failure).toMatchObject({ code: 'truncateFailed', serverMessage: 'Not uploading.' });
       expect(log).toEqual([]);
     });
 

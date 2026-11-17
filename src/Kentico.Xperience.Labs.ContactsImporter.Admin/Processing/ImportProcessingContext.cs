@@ -181,7 +181,7 @@ internal sealed class ImportProcessingContext
     /// Recipient list and consent of the job, checked by <see cref="IImportAudienceResolver"/>. Required when the
     /// options select a list or record consent: without it such a job is refused, never processed without them.
     /// </param>
-    public static bool TryCreate(ImportJob job, IReadOnlyList<ContactFieldDefinition> mappableFields, out ImportProcessingContext? context, out string? error, ImportAudience? audience = null)
+    public static bool TryCreate(ImportJob job, IReadOnlyList<ContactFieldDefinition> mappableFields, out ImportProcessingContext? context, out ImportMessage? error, ImportAudience? audience = null)
     {
         context = null;
         if (!TryGetAudience(job, audience, out var checkedAudience, out error))
@@ -198,19 +198,19 @@ internal sealed class ImportProcessingContext
             string target = job.Mapping[i].Target;
             if (!definitions.TryGetValue(target, out var definition))
             {
-                error = "A mapped contact field no longer exists or cannot be imported. Map the columns again.";
+                error = ImportMessages.FieldMissing;
                 return false;
             }
 
             if (!names.Add(target))
             {
-                error = $"Contact field '{definition.Name}' is mapped more than once.";
+                error = ImportMessages.FieldMappedTwice(definition.Name);
                 return false;
             }
 
             if (ImportField.GetKind(definition.DataType) is not { } kind)
             {
-                error = $"Contact field '{definition.Name}' has a data type that cannot be imported.";
+                error = ImportMessages.FieldTypeNotSupported(definition.Name);
                 return false;
             }
 
@@ -220,13 +220,13 @@ internal sealed class ImportProcessingContext
         int keyIndex = Array.FindIndex(fields, f => string.Equals(f.Name, job.KeyField, StringComparison.Ordinal));
         if (keyIndex < 0)
         {
-            error = "The key field is not one of the mapped contact fields.";
+            error = ImportMessages.KeyFieldNotMapped;
             return false;
         }
 
         if (!definitions[fields[keyIndex].Name].CanBeKey)
         {
-            error = $"Contact field '{fields[keyIndex].Name}' cannot be the key field: only text, whole number and GUID fields can.";
+            error = ImportMessages.KeyFieldNotAllowed(fields[keyIndex].Name);
             return false;
         }
 
@@ -235,13 +235,13 @@ internal sealed class ImportProcessingContext
         {
             if (!definitions.TryGetValue(sourceField, out var source) || !source.IsText)
             {
-                error = "The import source field is not a text contact field.";
+                error = ImportMessages.SourceFieldNotText;
                 return false;
             }
 
             if (string.IsNullOrEmpty(job.Options.SourceValue) || job.Options.SourceValue.Length > (source.MaxLength ?? int.MaxValue))
             {
-                error = "The import source value is missing or too long for the field.";
+                error = ImportMessages.SourceValueInvalid;
                 return false;
             }
         }
@@ -257,7 +257,7 @@ internal sealed class ImportProcessingContext
     /// The audience must be exactly what the options ask for: a job with a recipient list or consent is never
     /// processed as if it had none, and never against another list or consent.
     /// </summary>
-    private static bool TryGetAudience(ImportJob job, ImportAudience? audience, out ImportAudience checkedAudience, out string? error)
+    private static bool TryGetAudience(ImportJob job, ImportAudience? audience, out ImportAudience checkedAudience, out ImportMessage? error)
     {
         var options = job.Options;
         int? consentId = options.Consent == ConsentMode.None ? null : options.ConsentId;
@@ -270,7 +270,7 @@ internal sealed class ImportProcessingContext
         }
         else if (checkedAudience.RecipientListId != options.RecipientListId || checkedAudience.ConsentId != consentId)
         {
-            error = "The recipient list or consent of the import could not be checked.";
+            error = ImportMessages.AudienceUnchecked;
         }
         else if (options.Consent == ConsentMode.BlanketWithColumnOverride && job.ConsentMapping is null)
         {

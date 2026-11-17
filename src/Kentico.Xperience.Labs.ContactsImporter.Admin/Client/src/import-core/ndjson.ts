@@ -55,6 +55,7 @@ export class NdjsonReader implements TextFormatReader {
       throw new ImportError(
         'recordTooLarge',
         `Line ${this.line + 1} is larger than ${this.maxRecordChars} characters.`,
+        { line: this.line + 1, maxChars: this.maxRecordChars },
       );
     }
   }

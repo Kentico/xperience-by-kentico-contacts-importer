@@ -26,5 +26,6 @@ internal sealed class ContactsImporterApplicationPage : ApplicationPage
 {
     public const string IDENTIFIER = "Kentico.Xperience.Labs.ContactsImporter.Application";
     public const string SLUG = "contacts-importer";
-    public const string NAME = "Contacts Importer (Labs)";
+    /// <summary>"Contacts Importer (Labs)" in the user's admin UI language (localization expression).</summary>
+    public const string NAME = "{$" + ImportTextKeys.APPLICATION_NAME + "$}";
 }

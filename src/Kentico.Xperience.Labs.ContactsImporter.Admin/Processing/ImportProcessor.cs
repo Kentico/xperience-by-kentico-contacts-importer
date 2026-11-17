@@ -18,11 +18,11 @@ internal sealed class ImportProcessor(
     IImportAudienceResolver? audienceResolver = null,
     IImportEventPublisher? events = null) : IImportProcessor
 {
-    internal const string UnexpectedError = "The import stopped because of an unexpected error. See the event log for details.";
-    internal const string UnreadableJobError = "The import configuration cannot be read. Start a new import.";
-    internal const string TransientError = "A temporary problem interrupted the import. It continues with the next attempt.";
-    internal const string BusyError = "Another request is still processing the import. It continues with the next attempt.";
-    internal const string CacheError = "The import is done, but clearing the cache failed. It is tried again with the next attempt.";
+    internal static ImportMessage UnexpectedError => ImportMessages.Unexpected;
+    internal static ImportMessage UnreadableJobError => ImportMessages.UnreadableJob;
+    internal static ImportMessage TransientError => ImportMessages.Transient;
+    internal static ImportMessage BusyError => ImportMessages.ProcessingBusy;
+    internal static ImportMessage CacheError => ImportMessages.CacheFailed;
 
     private const int ConstraintConflictSqlError = 547;
 
@@ -130,7 +130,7 @@ internal sealed class ImportProcessor(
         var utcNow = UtcNow();
         StartDecision? decision = null;
         ImportProcessingContext? context = null;
-        string? contextError = null;
+        ImportMessage? contextError = null;
         bool contextChecked = false;
         Exception? schemaException = null;
 
@@ -185,7 +185,7 @@ internal sealed class ImportProcessor(
         {
             if (decision.ConfigurationRejected)
             {
-                logger.LogWarning(rejectedEvent, "Contact import {JobId}: {Phase} cannot start; the import returned to the options. {Message}", jobId, phase, status.Error);
+                logger.LogWarning(rejectedEvent, "Contact import {JobId}: {Phase} cannot start; the import returned to the options. {Message}", jobId, phase, status.ErrorMessage?.ToString());
             }
 
             return Progress(stop, phase, status, null);
@@ -221,7 +221,7 @@ internal sealed class ImportProcessor(
     /// as configured: it needs an attestation of the consent statement and has none for the current statement, its
     /// recipient list or consent does not exist, or the job does not match the contact class.
     /// </summary>
-    private ImportProcessingContext? CreateContext(ImportJob job, ImportPhase phase, out string? error)
+    private ImportProcessingContext? CreateContext(ImportJob job, ImportPhase phase, out ImportMessage? error)
     {
         // The analysis writes nothing, so only the import needs the attestation.
         if (phase == ImportPhase.Execute && !ImportAttestationPolicy.IsSatisfied(job.Options, job.Attestation))
@@ -482,13 +482,13 @@ internal sealed class ImportProcessor(
     /// Uploaded (analysis and driver cleared, uploaded data kept) with the reason in <see cref="ImportJobStatus.Error"/>.
     /// The next start of a phase clears the reason.
     /// </summary>
-    internal static ImportJobStatus RejectConfiguration(ImportJobStatus current, DateTime utcNow, string error)
+    internal static ImportJobStatus RejectConfiguration(ImportJobStatus current, DateTime utcNow, ImportMessage error)
     {
         var uploaded = current.State == ImportJobState.Uploaded
             ? current with { UpdatedUtc = utcNow }
             : ImportJobStateMachine.Transition(current, ImportJobState.Uploaded, utcNow);
 
-        return uploaded with { Error = error };
+        return uploaded.WithError(error);
     }
 
     private static ImportJobState DrivenState(ImportPhase phase) => phase == ImportPhase.Analyze ? ImportJobState.Analyzing : ImportJobState.Running;
@@ -552,7 +552,7 @@ internal sealed class ImportProcessor(
                 var records = reader.ReadBatch(settings.BatchSize);
                 if (records.Count == 0)
                 {
-                    throw new ImportDataException($"Uploaded data chunk {checkpoint.ChunkIndex} is incomplete. Upload the file again.");
+                    throw new ImportDataException(ImportMessages.ChunkIncomplete(checkpoint.ChunkIndex));
                 }
 
                 var plan = PlanBatch(planner, context, records);
@@ -638,7 +638,7 @@ internal sealed class ImportProcessor(
             reader?.Dispose();
             reader = null;
 
-            return Fail(jobId, phase, status, ex.Message, ex, driver, call, job);
+            return Fail(jobId, phase, status, ex.UserMessage, ex, driver, call, job);
         }
         catch (Exception ex) when (IsTransient(ex))
         {
@@ -687,13 +687,13 @@ internal sealed class ImportProcessor(
     private ChunkRecordReader OpenChunk(Guid jobId, ImportProcessingContext context, ImportCheckpoint checkpoint)
     {
         var stream = store.OpenChunk(jobId, checkpoint.ChunkIndex)
-            ?? throw new ImportDataException($"Uploaded data chunk {checkpoint.ChunkIndex} is missing. Upload the file again.");
+            ?? throw new ImportDataException(ImportMessages.ChunkMissing(checkpoint.ChunkIndex));
         var reader = new ChunkRecordReader(stream, context, checkpoint.ChunkIndex);
         try
         {
             if (reader.Skip(checkpoint.RowOffset) != checkpoint.RowOffset)
             {
-                throw new ImportDataException($"Uploaded data chunk {checkpoint.ChunkIndex} is incomplete. Upload the file again.");
+                throw new ImportDataException(ImportMessages.ChunkIncomplete(checkpoint.ChunkIndex));
             }
 
             return reader;
@@ -855,7 +855,7 @@ internal sealed class ImportProcessor(
     /// Fails the job. A call that knows its driver identity fails the job only while it still drives it: an older call
     /// that was replaced or taken over must not end the job for the driver that continues it.
     /// </summary>
-    private ImportProgress Fail(Guid jobId, ImportPhase phase, ImportJobStatus status, string safeMessage, Exception? exception, DriverIdentity? driver = null, ProcessCall? call = null, ImportJob? job = null)
+    private ImportProgress Fail(Guid jobId, ImportPhase phase, ImportJobStatus status, ImportMessage safeMessage, Exception? exception, DriverIdentity? driver = null, ProcessCall? call = null, ImportJob? job = null)
     {
         var utcNow = UtcNow();
         bool failedNow = false;
@@ -877,7 +877,7 @@ internal sealed class ImportProcessor(
             job is null ? "unknown" : FormatId(job.CreatedByUserId),
             updated.Checkpoint.LastRow,
             updated.Checkpoint.ChunkIndex,
-            safeMessage,
+            safeMessage.ToString(),
             exception is null ? "none" : DescribeSafely(exception),
             exception?.StackTrace ?? "none");
 
@@ -896,7 +896,7 @@ internal sealed class ImportProcessor(
         return Progress(ImportProcessOutcome.Failed, phase, updated, null);
     }
 
-    private ImportProgress Progress(ImportProcessOutcome outcome, ImportPhase phase, ImportJobStatus status, string? token, string? error = null) =>
+    private ImportProgress Progress(ImportProcessOutcome outcome, ImportPhase phase, ImportJobStatus status, string? token, ImportMessage? error = null) =>
         new()
         {
             Outcome = outcome,
@@ -908,7 +908,7 @@ internal sealed class ImportProcessor(
             Aggregates = ImportAggregates.From(status.Aggregates),
             Analysis = status.Analysis is null ? null : ImportAggregates.From(status.Analysis.Aggregates),
             AnalyzedUtc = status.Analysis?.FinishedUtc,
-            Error = error ?? status.Error,
+            Error = error ?? status.ErrorMessage,
         };
 
     private static bool IsDrivenBy(ImportJobStatus status, ImportPhase phase, DriverIdentity driver) =>

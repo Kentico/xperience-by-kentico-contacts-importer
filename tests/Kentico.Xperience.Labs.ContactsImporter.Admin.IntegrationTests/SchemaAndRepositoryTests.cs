@@ -61,7 +61,7 @@ public class SchemaAndRepositoryTests : ImportIntegrationTest
         int id = Seed("all@fields.test", "Old");
         var fields = new ContactFieldSchemaProvider().GetMappableFields();
         var job = TestData.Job(keyField: Email, targets: [.. fields.Select(f => f.Name)]);
-        Assert.That(ImportProcessingContext.TryCreate(job, fields, out var context, out string? error), Is.True, error);
+        Assert.That(ImportProcessingContext.TryCreate(job, fields, out var context, out var error), Is.True, error?.ToString());
 
         var repository = new ContactImportRepository(Provider<ContactInfo>.Instance);
         var matches = repository.FindMatches(context!, ["all@fields.test"]);
@@ -90,7 +90,7 @@ public class SchemaAndRepositoryTests : ImportIntegrationTest
         // update of the batch fail on its foreign key.
         var fields = new ContactFieldSchemaProvider().GetMappableFields();
         var job = TestData.Job(null, Email, Email, FirstName, "ContactStatusID");
-        Assert.That(ImportProcessingContext.TryCreate(job, fields, out var context, out string? error), Is.True, error);
+        Assert.That(ImportProcessingContext.TryCreate(job, fields, out var context, out var error), Is.True, error?.ToString());
         var repository = new ContactImportRepository(Provider<ContactInfo>.Instance);
 
         var create = new ContactCreate(["new@transaction.test", "New", null]);

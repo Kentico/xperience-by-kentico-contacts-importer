@@ -70,7 +70,7 @@ internal class ImportJobStateMachineTests
         var running = Status(ImportJobState.Running) with { DriverToken = "token", HeartbeatUtc = now };
 
         var completed = ImportJobStateMachine.Transition(running, ImportJobState.Completed, now);
-        var failed = ImportJobStateMachine.Transition(running, ImportJobState.Failed, now, "Database unavailable.");
+        var failed = ImportJobStateMachine.Transition(running, ImportJobState.Failed, now, ImportMessages.ChunkMissing(3));
         var failedWithoutReason = ImportJobStateMachine.Transition(running, ImportJobState.Failed, now);
         var cancelled = ImportJobStateMachine.Transition(running, ImportJobState.Cancelled, now);
 
@@ -80,8 +80,10 @@ internal class ImportJobStateMachineTests
             Assert.That(completed.DriverToken, Is.Null);
             Assert.That(completed.Error, Is.Null);
             Assert.That(failed.FinishedUtc, Is.EqualTo(now));
-            Assert.That(failed.Error, Is.EqualTo("Database unavailable."));
-            Assert.That(failedWithoutReason.Error, Is.Not.Empty);
+            Assert.That(failed.Error, Is.EqualTo(ImportTextKeys.CHUNK_MISSING));
+            Assert.That(failed.ErrorArguments, Is.EqualTo(new[] { "3" }));
+            Assert.That(failed.ErrorMessage, Is.EqualTo(ImportMessages.ChunkMissing(3)));
+            Assert.That(failedWithoutReason.ErrorMessage, Is.EqualTo(ImportMessages.Failed));
             Assert.That(cancelled.FinishedUtc, Is.EqualTo(now));
             Assert.That(cancelled.Error, Is.Null);
         });

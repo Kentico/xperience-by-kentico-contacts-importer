@@ -232,6 +232,7 @@ export class TextRecordSource implements RecordSource {
       throw new ImportError(
         'unsupportedEncoding',
         `Encoding '${this.encoding}' is not supported.`,
+        { encoding: this.encoding },
       );
     }
     this.encoding = this.decoder.encoding;

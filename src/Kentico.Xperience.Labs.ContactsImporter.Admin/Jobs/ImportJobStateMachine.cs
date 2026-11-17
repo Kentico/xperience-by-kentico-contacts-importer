@@ -50,13 +50,13 @@ internal static class ImportJobStateMachine
     /// <param name="status">Current status.</param>
     /// <param name="to">Target state.</param>
     /// <param name="utcNow">Current time.</param>
-    /// <param name="error">Failure description, stored when the target is Failed.</param>
-    public static ImportJobStatus Transition(ImportJobStatus status, ImportJobState to, DateTime utcNow, string? error = null) =>
+    /// <param name="error">Failure message, stored when the target is Failed.</param>
+    public static ImportJobStatus Transition(ImportJobStatus status, ImportJobState to, DateTime utcNow, ImportMessage? error = null) =>
         TryTransition(status, to, utcNow, out var updated, error)
             ? updated
             : throw new InvalidOperationException($"Import job cannot move from {status.State} to {to}.");
 
-    public static bool TryTransition(ImportJobStatus status, ImportJobState to, DateTime utcNow, out ImportJobStatus updated, string? error = null)
+    public static bool TryTransition(ImportJobStatus status, ImportJobState to, DateTime utcNow, out ImportJobStatus updated, ImportMessage? error = null)
     {
         if (!CanTransition(status.State, to))
         {
@@ -72,7 +72,7 @@ internal static class ImportJobStateMachine
             ImportJobState.Analyzing => StartPhase(updated, ImportPhase.Analyze),
             ImportJobState.Running => StartPhase(updated, ImportPhase.Execute),
             ImportJobState.Completed or ImportJobState.Cancelled => Finish(updated, utcNow, null),
-            ImportJobState.Failed => Finish(updated, utcNow, error ?? "Import failed."),
+            ImportJobState.Failed => Finish(updated, utcNow, error ?? ImportMessages.Failed),
             ImportJobState.Uploading or ImportJobState.Analyzed or ImportJobState.Confirmed or ImportJobState.Paused => updated,
             _ => updated,
         };
@@ -228,13 +228,14 @@ internal static class ImportJobStateMachine
             DriverCallId = null,
             LongestBatchSeconds = 0,
             Error = null,
+            ErrorArguments = null,
         };
 
     private static ImportJobStatus StartPhase(ImportJobStatus status, ImportPhase phase) =>
-        status with { Checkpoint = new ImportCheckpoint { Phase = phase }, Aggregates = new Dictionary<string, long>(), LongestBatchSeconds = 0, Error = null };
+        status with { Checkpoint = new ImportCheckpoint { Phase = phase }, Aggregates = new Dictionary<string, long>(), LongestBatchSeconds = 0, Error = null, ErrorArguments = null };
 
-    private static ImportJobStatus Finish(ImportJobStatus status, DateTime utcNow, string? error) =>
-        status with { FinishedUtc = utcNow, DriverToken = null, DriverCallId = null, Error = error };
+    private static ImportJobStatus Finish(ImportJobStatus status, DateTime utcNow, ImportMessage? error) =>
+        (status with { FinishedUtc = utcNow, DriverToken = null, DriverCallId = null }).WithError(error);
 }
 
 /// <summary>

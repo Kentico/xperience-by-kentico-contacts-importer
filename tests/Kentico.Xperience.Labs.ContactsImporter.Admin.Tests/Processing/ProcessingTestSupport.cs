@@ -43,7 +43,7 @@ internal static class ProcessingTestData
     public static ImportProcessingContext Context(string keyField, string[] targets, ImportOptions? options = null, ImportConsentMapping? consentMapping = null, int softBounceLimit = ImportAudience.DefaultSoftBounceLimit)
     {
         var job = TestData.Job(keyField: keyField, targets: targets) with { Options = options ?? new ImportOptions(), ConsentMapping = consentMapping };
-        Assert.That(ImportProcessingContext.TryCreate(job, Fields, out var context, out string? error, Audience(job.Options, softBounceLimit)), Is.True, error);
+        Assert.That(ImportProcessingContext.TryCreate(job, Fields, out var context, out var error, Audience(job.Options, softBounceLimit)), Is.True, error?.ToString());
 
         return context!;
     }
@@ -308,7 +308,7 @@ internal sealed record FakeAgreement(int ContactId, bool Revoked, DateTime Time,
 /// </summary>
 internal sealed class FakeAudienceResolver : IImportAudienceResolver
 {
-    public string? Error { get; set; }
+    public ImportMessage? Error { get; set; }
 
     public int SoftBounceLimit { get; set; } = ImportAudience.DefaultSoftBounceLimit;
 

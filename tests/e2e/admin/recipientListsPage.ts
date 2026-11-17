@@ -44,7 +44,10 @@ export class RecipientListsPage {
 
     const sample = rows.filter({ hasText: sampleListName });
     const row = (await sample.count()) > 0 ? sample.first() : rows.first();
-    const name = (await row.getByTestId("table-cell-ContactGroupDisplayName").innerText()).trim();
+    // The row can render before its cells have text: wait for the name, an empty one would match no select option.
+    const nameCell = row.getByTestId("table-cell-ContactGroupDisplayName");
+    await expect(nameCell).not.toHaveText(/^\s*$/, { timeout: 30_000 });
+    const name = (await nameCell.innerText()).trim();
     // The first click after the listing renders is sometimes lost: click again until the list opens.
     await expect(async () => {
       await row.click();

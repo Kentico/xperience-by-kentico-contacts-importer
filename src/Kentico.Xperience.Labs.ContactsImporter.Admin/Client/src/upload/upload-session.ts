@@ -73,6 +73,10 @@ export type UploadSessionErrorKind =
   /** The server did not accept the finished upload. */
   | 'complete';
 
+/**
+ * Why a pass failed. `message` is developer text; the Upload step shows a text of its own for
+ * `kind` (see `uploadFailureMessage`), with the server's message or the worker error.
+ */
 export class UploadSessionError extends Error {
   readonly kind: UploadSessionErrorKind;
   /** Source row number named by the server (`rejected`). */
@@ -81,14 +85,24 @@ export class UploadSessionError extends Error {
   readonly reason?: string;
   /** Totals of the pass, when it got far enough (`noRows`, `complete`). */
   readonly result?: PipelineResult;
+  /** The server's message in the admin UI language (`rejected`, `complete`), when it sent one. */
+  readonly serverMessage?: string;
+  /** The worker's error (`worker`). */
+  readonly workerError?: ImportWorkerError;
 
-  constructor(kind: UploadSessionErrorKind, message: string, details: { rowNumber?: number; reason?: string; result?: PipelineResult } = {}) {
+  constructor(
+    kind: UploadSessionErrorKind,
+    message: string,
+    details: { rowNumber?: number; reason?: string; result?: PipelineResult; serverMessage?: string; workerError?: ImportWorkerError } = {},
+  ) {
     super(message);
     this.name = 'UploadSessionError';
     this.kind = kind;
     this.rowNumber = details.rowNumber;
     this.reason = details.reason;
     this.result = details.result;
+    this.serverMessage = details.serverMessage;
+    this.workerError = details.workerError;
   }
 }
 
@@ -221,7 +235,7 @@ export function startUploadSession(options: UploadSessionOptions): UploadSession
     }
 
     if (completion.code !== 'ok' || !completion.status) {
-      throw new UploadSessionError('complete', completion.message ?? 'The upload could not be completed.', { result });
+      throw new UploadSessionError('complete', 'The upload could not be completed.', { result, serverMessage: completion.message ?? undefined });
     }
 
     return { result, status: completion.status, stats: activeUploader.stats };
@@ -237,16 +251,22 @@ function toSessionError(signal: AbortSignal, uploadError: unknown, workerError: 
   if (uploadError instanceof UploadError && uploadError.code !== 'aborted') {
     const kind = uploadError.code === 'network' ? 'network' : 'rejected';
 
-    return new UploadSessionError(kind, uploadError.message, { rowNumber: uploadError.rowNumber, reason: uploadError.reason });
+    return new UploadSessionError(kind, uploadError.message, {
+      rowNumber: uploadError.rowNumber,
+      reason: uploadError.reason,
+      serverMessage: uploadError.serverMessage,
+    });
   }
   if (uploadError instanceof RetryExhaustedError) {
     return new UploadSessionError('network', uploadError.message);
   }
   if (workerError instanceof ImportWorkerError && workerError.code !== 'aborted') {
-    return new UploadSessionError('worker', workerError.message);
+    return new UploadSessionError('worker', workerError.message, { workerError });
   }
 
   const cause = uploadError ?? workerError;
 
-  return new UploadSessionError('worker', cause instanceof Error ? cause.message : 'The upload failed.');
+  const detail = cause instanceof Error ? cause.message : '';
+
+  return new UploadSessionError('worker', detail || 'The upload failed.', { workerError: new ImportWorkerError('failed', detail) });
 }

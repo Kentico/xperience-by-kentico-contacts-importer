@@ -82,7 +82,7 @@ public class ContactSqlBuilderTests
         var table = new ContactTable("Odd]Table", "Id]Column", "Modified Column");
         var fields = new[] { new ContactFieldDefinition("Key]Field", "Key", "text", 50), new ContactFieldDefinition("Value Field", "Value", "text", 50) };
         var job = TestData.Job(null, "Key]Field", "Key]Field", "Value Field");
-        Assert.That(ImportProcessingContext.TryCreate(job, fields, out var context, out string? error), Is.True, error);
+        Assert.That(ImportProcessingContext.TryCreate(job, fields, out var context, out var error), Is.True, error?.ToString());
 
         string lookup = ContactSqlBuilder.BuildLookupSql(table, context!);
         string update = ContactSqlBuilder.BuildUpdateSql(table, context!);

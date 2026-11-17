@@ -13,11 +13,15 @@ public static class ContactsImporterPermissions
     /// import, not only the ones they created.
     /// </summary>
     public const string IMPORT = PREFIX + "Import";
-    public const string IMPORT_DISPLAY_NAME = "Import contacts";
+
+    /// <summary>"Import contacts" in the user's admin UI language (localization expression).</summary>
+    public const string IMPORT_DISPLAY_NAME = "{$" + ImportTextKeys.PERMISSION_IMPORT + "$}";
 
     /// <summary>
     /// Run imports that add contacts to recipient lists, resubscribe them or record consent agreements.
     /// </summary>
     public const string CONFIRM_CONSENT = PREFIX + "ConfirmConsent";
-    public const string CONFIRM_CONSENT_DISPLAY_NAME = "Confirm consent for imported contacts";
+
+    /// <summary>"Confirm consent for imported contacts" in the user's admin UI language (localization expression).</summary>
+    public const string CONFIRM_CONSENT_DISPLAY_NAME = "{$" + ImportTextKeys.PERMISSION_CONFIRM_CONSENT + "$}";
 }

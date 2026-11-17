@@ -26,7 +26,7 @@ import type {
   StatusDto,
 } from '../shared/commands';
 import { useAdminNavigate, useExecuteCommand, useIsMounted } from '../shared/hooks';
-import { Strings } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { TestIds, Text, testId } from '../shared/ui';
 import { ImportWorkerClient } from '../worker/client';
 import { createImportWorker } from '../worker/create-worker';
@@ -60,6 +60,7 @@ type LoadState = 'loading' | 'ready' | 'failed';
  * is at (step = job state, PLAN §4), so an import opened again continues where it was.
  */
 export const ImportTemplate = ({ canImport, jobId, importsListPath, contactGroupsPath, canConfirmConsent }: ImportProps) => {
+  const { t } = useText();
   const navigate = useAdminNavigate();
   const backToList = useCallback(() => navigate(importsListPath), [navigate, importsListPath]);
   const openContactGroups = useCallback(() => navigate(contactGroupsPath), [navigate, contactGroupsPath]);
@@ -72,9 +73,9 @@ export const ImportTemplate = ({ canImport, jobId, importsListPath, contactGroup
             type={CalloutType.FriendlyWarning}
             placement={CalloutPlacementType.OnDesk}
             dataTestId={testId(TestIds.noPermission)}
-            actionButton={<Button label={Strings.app.backToList} color={ButtonColor.Secondary} onClick={backToList} />}
+            actionButton={<Button label={t('contactsimporter.app.backtolist')} color={ButtonColor.Secondary} onClick={backToList} />}
           >
-            {canImport ? Strings.app.invalidJob : Strings.app.noPermission}
+            {canImport ? t('contactsimporter.app.invalidjob') : t('contactsimporter.app.nopermission')}
           </Callout>
         </Stack>
       </Box>
@@ -92,6 +93,7 @@ interface ImportInnerProps {
 }
 
 const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups }: ImportInnerProps) => {
+  const { t } = useText();
   const execute = useExecuteCommand();
   const isMounted = useIsMounted();
   const workerRef = useRef<ImportWorkerClient | null>(null);
@@ -191,12 +193,12 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups }:
       setStep('options');
     } else if (next.status.state === 'Uploaded' && leftProcessing) {
       // The job fell back to Uploaded (the check got too old to import from): check again.
-      setReviewNotice(stepRef.current === 'run' ? Strings.review.expired : null);
+      setReviewNotice(stepRef.current === 'run' ? t('contactsimporter.review.expired') : null);
       setStep('review');
     } else {
       setStep(stepForState(next.status.state, next.progress.phase));
     }
-  }, [applyJob, execute, isMounted]);
+  }, [applyJob, execute, isMounted, t]);
   const reloadJob = useCallback(() => void reload(), [reload]);
 
   const onOptionsSaved = useCallback(
@@ -299,12 +301,12 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups }:
 
     setSaving(false);
     if (!response) {
-      setSaveError(Strings.map.saveFailed);
+      setSaveError(t('contactsimporter.map.savefailed'));
 
       return;
     }
     if (response.code !== 'ok' || !response.job || !response.status) {
-      setSaveError(response.message ?? Strings.map.saveFailed);
+      setSaveError(response.message ?? t('contactsimporter.map.savefailed'));
       setServerErrors(response.errors ?? []);
 
       return;
@@ -314,7 +316,7 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups }:
     setStatus(response.status);
     setAutoStart(true);
     setStep(stepForState(response.status.state));
-  }, [execute, isMounted, mapping, selected]);
+  }, [execute, isMounted, mapping, selected, t]);
 
   const onStatus = useCallback(
     (next: StatusDto) => {
@@ -336,7 +338,7 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups }:
     return (
       <Box spacing={Spacing.XL}>
         <Spinner />
-        <Text>{Strings.app.loading}</Text>
+        <Text>{t('contactsimporter.app.loading')}</Text>
       </Box>
     );
   }
@@ -344,9 +346,9 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups }:
     return (
       <Box spacing={Spacing.XL}>
         <Stack spacing={Spacing.L}>
-          <NotificationBarAlert>{Strings.app.loadFailed}</NotificationBarAlert>
+          <NotificationBarAlert>{t('contactsimporter.app.loadfailed')}</NotificationBarAlert>
           <div>
-            <Button label={Strings.app.retry} color={ButtonColor.Primary} onClick={() => void load()} />
+            <Button label={t('contactsimporter.app.retry')} color={ButtonColor.Primary} onClick={() => void load()} />
           </div>
         </Stack>
       </Box>

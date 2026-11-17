@@ -364,7 +364,7 @@ public class ImportProcessorTests
             Assert.That(progress.Outcome, Is.EqualTo(ImportProcessOutcome.Failed));
             Assert.That(progress.State, Is.EqualTo(ImportJobState.Failed));
             Assert.That(progress.Error, Is.EqualTo(ImportProcessor.UnexpectedError));
-            Assert.That(status.Error, Is.EqualTo(ImportProcessor.UnexpectedError));
+            Assert.That(status.ErrorMessage, Is.EqualTo(ImportProcessor.UnexpectedError));
             Assert.That(status.Checkpoint.LastRow, Is.EqualTo(2));
             Assert.That(fixture.Store.HasChunks(jobId), Is.False);
             Assert.That(fixture.Cache.Calls, Is.Zero);
@@ -444,12 +444,12 @@ public class ImportProcessorTests
         Assert.Multiple(() =>
         {
             Assert.That(missingProgress.Outcome, Is.EqualTo(ImportProcessOutcome.Failed));
-            Assert.That(missingProgress.Error, Does.Contain("chunk 1 is missing"));
+            Assert.That(missingProgress.Error?.ToString(), Does.Contain("chunk 1 is missing"));
             Assert.That(missingProgress.RowsProcessed, Is.EqualTo(2));
             Assert.That(corruptProgress.Outcome, Is.EqualTo(ImportProcessOutcome.Failed));
-            Assert.That(corruptProgress.Error, Does.Contain("chunk 0 cannot be read"));
+            Assert.That(corruptProgress.Error?.ToString(), Does.Contain("chunk 0 cannot be read"));
             Assert.That(shorterProgress.Outcome, Is.EqualTo(ImportProcessOutcome.Failed));
-            Assert.That(shorterProgress.Error, Does.Contain("chunk 0 is incomplete"));
+            Assert.That(shorterProgress.Error?.ToString(), Does.Contain("chunk 0 is incomplete"));
         });
     }
 
@@ -465,7 +465,7 @@ public class ImportProcessorTests
         Assert.Multiple(() =>
         {
             Assert.That(progress.Outcome, Is.EqualTo(ImportProcessOutcome.Failed));
-            Assert.That(progress.Error, Does.Contain("no longer exists"));
+            Assert.That(progress.Error?.ToString(), Does.Contain("no longer exists"));
             Assert.That(fixture.Status(jobId).State, Is.EqualTo(ImportJobState.Uploaded));
             Assert.That(fixture.Store.HasChunks(jobId), Is.True);
         });

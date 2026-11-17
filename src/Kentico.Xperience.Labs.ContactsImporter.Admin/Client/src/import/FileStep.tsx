@@ -24,17 +24,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { SampleProfile, TargetField } from '../import-core';
 import type { JobDto, LimitsDto } from '../shared/commands';
-import { formatBytes, formatNumber } from '../shared/format';
-import { Strings, format } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { OptionSelect, TestIds, Text, stringCell, testId, textColumn } from '../shared/ui';
 import type { Option } from '../shared/ui';
 import type { ImportWorkerClient, ProfileResult } from '../worker/client';
-import { ImportWorkerError } from '../worker/protocol';
+import { workerErrorMessage } from '../worker/messages';
 
 import { toOpenOptions } from './model';
 import type { SourceSettings } from './model';
-
-const S = Strings.file;
 
 /** Columns shown in the sample table; wider files are cut so the table stays readable. */
 const MAX_SAMPLE_COLUMNS = 12;
@@ -80,6 +77,7 @@ export const FileStep = ({
   onNext,
   onResumeUpload,
 }: FileStepProps) => {
+  const { t, m, bytes, number } = useText();
   const inputRef = useRef<HTMLInputElement>(null);
   const requestRef = useRef(0);
   const [file, setFile] = useState<File | null>(selected?.file ?? null);
@@ -101,8 +99,7 @@ export const FileStep = ({
         }
       } catch (reason) {
         if (request === requestRef.current) {
-          const unsupported = reason instanceof ImportWorkerError && reason.code === 'unsupportedFormat';
-          setError(unsupported ? S.unsupported : format(S.readFailed, reason instanceof Error ? reason.message : String(reason)));
+          setError(m(workerErrorMessage(reason, 'file')));
         }
       } finally {
         if (request === requestRef.current) {
@@ -110,7 +107,7 @@ export const FileStep = ({
         }
       }
     },
-    [worker, targetFields, onSelected],
+    [worker, targetFields, onSelected, m],
   );
 
   useEffect(
@@ -132,21 +129,21 @@ export const FileStep = ({
       if (chosen.size === 0) {
         requestRef.current++;
         onSelected(null);
-        setError(S.empty);
+        setError(t('contactsimporter.file.empty'));
 
         return;
       }
       if (chosen.size > limits.maxFileSizeBytes) {
         requestRef.current++;
         onSelected(null);
-        setError(format(S.tooLarge, formatBytes(chosen.size), formatBytes(limits.maxFileSizeBytes)));
+        setError(t('contactsimporter.file.toolarge', { size: bytes(chosen.size), maxSize: bytes(limits.maxFileSizeBytes) }));
 
         return;
       }
 
       void profile(chosen, settings);
     },
-    [limits.maxFileSizeBytes, onSelected, profile, settings],
+    [bytes, limits.maxFileSizeBytes, onSelected, profile, settings, t],
   );
 
   const changeSettings = useCallback(
@@ -168,17 +165,17 @@ export const FileStep = ({
 
   return (
     <Stack spacing={Spacing.L}>
-      <Headline size={HeadlineSize.M}>{S.headline}</Headline>
-      <Text>{S.intro}</Text>
+      <Headline size={HeadlineSize.M}>{t('contactsimporter.file.headline')}</Headline>
+      <Text>{t('contactsimporter.file.intro')}</Text>
 
       {resumeJob && (!selected || fingerprintMatches) && (
-        <Callout type={CalloutType.QuickTip} placement={CalloutPlacementType.OnDesk} headline={S.resumeHeadline}>
-          {format(S.resumeText, resumeJob.file.name, formatBytes(resumeJob.file.size))}
+        <Callout type={CalloutType.QuickTip} placement={CalloutPlacementType.OnDesk} headline={t('contactsimporter.file.resumeheadline')}>
+          {t('contactsimporter.file.resumetext', { fileName: resumeJob.file.name, size: bytes(resumeJob.file.size) })}
         </Callout>
       )}
       {resumeJob && selected && !fingerprintMatches && (
-        <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={S.resumeMismatchHeadline}>
-          {format(S.resumeMismatchText, resumeJob.file.name, formatBytes(resumeJob.file.size))}
+        <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={t('contactsimporter.file.resumemismatchheadline')}>
+          {t('contactsimporter.file.resumemismatchtext', { fileName: resumeJob.file.name, size: bytes(resumeJob.file.size) })}
         </Callout>
       )}
 
@@ -189,7 +186,7 @@ export const FileStep = ({
               <Row spacing={Spacing.M} alignY={undefined}>
                 <Column>
                   <Button
-                    label={file ? S.change : S.select}
+                    label={file ? t('contactsimporter.file.change') : t('contactsimporter.file.select')}
                     color={file ? ButtonColor.Secondary : ButtonColor.Primary}
                     icon="xp-arrow-up-line"
                     onClick={() => inputRef.current?.click()}
@@ -197,7 +194,7 @@ export const FileStep = ({
                 </Column>
                 <Column>
                   <Text hint={true} style={{ paddingTop: Spacing.S }}>
-                    {dropActive ? S.dropActive : S.dropHint}
+                    {dropActive ? t('contactsimporter.file.dropactive') : t('contactsimporter.file.drophint')}
                   </Text>
                 </Column>
               </Row>
@@ -217,14 +214,13 @@ export const FileStep = ({
               {file && (
                 <Text data-testid={TestIds.fileSummary}>
                   {sample
-                    ? format(
-                        sample.complete ? S.summaryExact : S.summary,
-                        file.name,
-                        formatBytes(file.size),
-                        formatNumber(sample.estimatedTotalRows),
-                        formatNumber(sample.columns.length),
-                      )
-                    : `${file.name} · ${formatBytes(file.size)}`}
+                    ? t(sample.complete ? 'contactsimporter.file.summaryexact' : 'contactsimporter.file.summary', {
+                        fileName: file.name,
+                        size: bytes(file.size),
+                        rows: sample.estimatedTotalRows,
+                        columns: sample.columns.length,
+                      })
+                    : `${file.name} · ${bytes(file.size)}`}
                 </Text>
               )}
               {reading && (
@@ -233,7 +229,7 @@ export const FileStep = ({
                     <Spinner />
                   </Column>
                   <Column>
-                    <Text>{S.reading}</Text>
+                    <Text>{t('contactsimporter.file.reading')}</Text>
                   </Column>
                 </Row>
               )}
@@ -246,15 +242,15 @@ export const FileStep = ({
 
       {file && (sample || error) && <SourceSettingsForm settings={settings} sample={sample} disabled={reading} onChange={changeSettings} />}
 
-      {sample && !hasColumns && <NotificationBarAlert>{S.noColumns}</NotificationBarAlert>}
-      {sample && hasColumns && !hasRows && <NotificationBarAlert>{S.noRows}</NotificationBarAlert>}
+      {sample && !hasColumns && <NotificationBarAlert>{t('contactsimporter.file.nocolumns')}</NotificationBarAlert>}
+      {sample && hasColumns && !hasRows && <NotificationBarAlert>{t('contactsimporter.file.norows')}</NotificationBarAlert>}
       {sample && sample.parseErrors > 0 && (
         <NotificationBarWarning>
-          {format(S.parseErrors, formatNumber(sample.parseErrors), formatNumber(sample.rowsSampled + sample.parseErrors))}
+          {t('contactsimporter.file.parseerrors', { amount: sample.parseErrors, total: sample.rowsSampled + sample.parseErrors })}
         </NotificationBarWarning>
       )}
       {sample && sample.raggedRows > 0 && (
-        <NotificationBarWarning>{format(S.raggedRows, formatNumber(sample.raggedRows), formatNumber(sample.rowsSampled))}</NotificationBarWarning>
+        <NotificationBarWarning>{t('contactsimporter.file.raggedrows', { amount: sample.raggedRows, total: sample.rowsSampled })}</NotificationBarWarning>
       )}
 
       {sample && hasColumns && hasRows && <SampleTable sample={sample} />}
@@ -262,14 +258,14 @@ export const FileStep = ({
       <Inline spacing={Spacing.M}>
         {selected && fingerprintMatches && canResumeUpload(selected) && (
             <Button
-              label={S.resumeContinue}
+              label={t('contactsimporter.file.resumecontinue')}
               color={ButtonColor.Primary}
               dataTestId={testId(TestIds.uploadResume)}
               onClick={() => onResumeUpload(selected)}
             />
         )}
           <Button
-            label={S.next}
+            label={t('contactsimporter.file.next')}
             color={selected && fingerprintMatches && canResumeUpload(selected) ? ButtonColor.Secondary : ButtonColor.Primary}
             disabled={!selected || !hasColumns || !hasRows || reading}
             dataTestId={testId(TestIds.fileNext)}
@@ -293,13 +289,20 @@ interface SourceSettingsFormProps {
 }
 
 const SourceSettingsForm = ({ settings, sample, disabled, onChange }: SourceSettingsFormProps) => {
+  const { t } = useText();
   const format_ = settings.format !== '' ? settings.format : (sample?.format ?? 'csv');
   const formatOptions: Option[] = [
-    { value: 'csv', label: S.formatCsv },
-    { value: 'ndjson', label: S.formatNdjson },
+    { value: 'csv', label: t('contactsimporter.file.formatcsv') },
+    { value: 'ndjson', label: t('contactsimporter.file.formatndjson') },
   ];
   const encodingOptions: Option[] = [
-    { value: '', label: sample && settings.encoding === '' ? `${S.encodingAuto} (${sample.info.encoding})` : S.encodingAuto },
+    {
+      value: '',
+      label:
+        sample && settings.encoding === ''
+          ? t('contactsimporter.file.encodingautodetected', { encoding: sample.info.encoding })
+          : t('contactsimporter.file.encodingauto'),
+    },
     ...ENCODINGS.map((encoding) => ({ value: encoding, label: encoding })),
   ];
   const detectedDelimiter = sample?.info.delimiter;
@@ -308,26 +311,26 @@ const SourceSettingsForm = ({ settings, sample, disabled, onChange }: SourceSett
       value: '',
       label:
         detectedDelimiter && settings.delimiter === ''
-          ? `${S.delimiterAuto} (${delimiterName(detectedDelimiter)})`
-          : S.delimiterAuto,
+          ? t('contactsimporter.file.delimiterautodetected', { delimiter: delimiterName(detectedDelimiter, t) })
+          : t('contactsimporter.file.delimiterauto'),
     },
-    { value: ',', label: S.delimiterComma },
-    { value: ';', label: S.delimiterSemicolon },
-    { value: '\t', label: S.delimiterTab },
-    { value: '|', label: S.delimiterPipe },
+    { value: ',', label: t('contactsimporter.file.delimitercomma') },
+    { value: ';', label: t('contactsimporter.file.delimitersemicolon') },
+    { value: '\t', label: t('contactsimporter.file.delimitertab') },
+    { value: '|', label: t('contactsimporter.file.delimiterpipe') },
   ];
   const headerOptions: Option[] = [
-    { value: 'yes', label: S.headerYes },
-    { value: 'no', label: S.headerNo },
+    { value: 'yes', label: t('contactsimporter.file.headeryes') },
+    { value: 'no', label: t('contactsimporter.file.headerno') },
   ];
 
   return (
     <Stack spacing={Spacing.M}>
-      <Headline size={HeadlineSize.S}>{S.settings}</Headline>
+      <Headline size={HeadlineSize.S}>{t('contactsimporter.file.settings')}</Headline>
       <Row spacing={Spacing.L}>
         <Column cols={Cols.Col3}>
           <OptionSelect
-            label={S.format}
+            label={t('contactsimporter.file.format')}
             value={format_}
             options={formatOptions}
             disabled={disabled}
@@ -336,7 +339,7 @@ const SourceSettingsForm = ({ settings, sample, disabled, onChange }: SourceSett
         </Column>
         <Column cols={Cols.Col3}>
           <OptionSelect
-            label={S.encoding}
+            label={t('contactsimporter.file.encoding')}
             value={settings.encoding}
             options={encodingOptions}
             disabled={disabled}
@@ -346,7 +349,7 @@ const SourceSettingsForm = ({ settings, sample, disabled, onChange }: SourceSett
         {format_ === 'csv' && (
           <Column cols={Cols.Col3}>
             <OptionSelect
-              label={S.delimiter}
+              label={t('contactsimporter.file.delimiter')}
               value={settings.delimiter}
               options={delimiterOptions}
               disabled={disabled}
@@ -357,7 +360,7 @@ const SourceSettingsForm = ({ settings, sample, disabled, onChange }: SourceSett
         {format_ === 'csv' && (
           <Column cols={Cols.Col3}>
             <OptionSelect
-              label={S.header}
+              label={t('contactsimporter.file.header')}
               value={settings.hasHeader ? 'yes' : 'no'}
               options={headerOptions}
               disabled={disabled}
@@ -370,16 +373,16 @@ const SourceSettingsForm = ({ settings, sample, disabled, onChange }: SourceSett
   );
 };
 
-function delimiterName(delimiter: string): string {
+function delimiterName(delimiter: string, t: (key: string) => string): string {
   switch (delimiter) {
     case ',':
-      return S.delimiterComma;
+      return t('contactsimporter.file.delimitercomma');
     case ';':
-      return S.delimiterSemicolon;
+      return t('contactsimporter.file.delimitersemicolon');
     case '\t':
-      return S.delimiterTab;
+      return t('contactsimporter.file.delimitertab');
     case '|':
-      return S.delimiterPipe;
+      return t('contactsimporter.file.delimiterpipe');
     default:
       return delimiter;
   }
@@ -390,12 +393,13 @@ function shownColumns(sample: SampleProfile): SampleProfile['columns'] {
 }
 
 const SampleTable = ({ sample }: { readonly sample: SampleProfile }) => {
+  const { t } = useText();
   const columns = useMemo(
     () => [
-      textColumn('row', S.sampleRowNumber, 6, 8),
+      textColumn('row', t('contactsimporter.file.samplerownumber'), 6, 8),
       ...shownColumns(sample).map((column) => textColumn(`c${column.index}`, column.name, 12, 30)),
     ],
-    [sample],
+    [sample, t],
   );
   const rows = useMemo<TableRow[]>(
     () =>
@@ -412,7 +416,7 @@ const SampleTable = ({ sample }: { readonly sample: SampleProfile }) => {
 
   return (
     <Stack spacing={Spacing.M}>
-      <Headline size={HeadlineSize.S}>{S.sample}</Headline>
+      <Headline size={HeadlineSize.S}>{t('contactsimporter.file.sample')}</Headline>
       <Table columns={columns} rows={rows} dataTestId={testId(TestIds.sampleTable)} />
     </Stack>
   );

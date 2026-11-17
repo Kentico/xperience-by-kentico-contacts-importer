@@ -4,7 +4,7 @@ import React, { useCallback, useState } from 'react';
 import { Commands } from '../shared/commands';
 import type { ExecuteCommand, ImportActionResponse } from '../shared/commands';
 import { useIsMounted } from '../shared/hooks';
-import { Strings } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { TestIds, Text, testId } from '../shared/ui';
 
 export interface CancelImportProps {
@@ -20,6 +20,7 @@ export interface CancelImportProps {
 
 /** "Cancel import" button with its confirmation; sends `CANCEL_IMPORT`. */
 export const CancelImport = ({ execute, message, keepLabel, onBeforeCancel, onCancelled }: CancelImportProps) => {
+  const { t } = useText();
   const isMounted = useIsMounted();
   const [open, setOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -40,14 +41,14 @@ export const CancelImport = ({ execute, message, keepLabel, onBeforeCancel, onCa
       setOpen(false);
       onCancelled();
     } else {
-      setError(response?.message ?? Strings.run.cancelFailed);
+      setError(response?.message ?? t('contactsimporter.run.cancelfailed'));
     }
-  }, [execute, isMounted, onBeforeCancel, onCancelled]);
+  }, [execute, isMounted, onBeforeCancel, onCancelled, t]);
 
   return (
     <>
       <Button
-        label={Strings.run.cancel}
+        label={t('contactsimporter.run.cancel')}
         color={ButtonColor.Secondary}
         destructive={true}
         dataTestId={testId(TestIds.runCancel)}
@@ -55,12 +56,12 @@ export const CancelImport = ({ execute, message, keepLabel, onBeforeCancel, onCa
       />
       <Dialog
         isOpen={open}
-        headline={Strings.run.cancelHeadline}
-        headerCloseButton={{ tooltipText: Strings.leave.close }}
+        headline={t('contactsimporter.run.cancelheadline')}
+        headerCloseButton={{ tooltipText: t('contactsimporter.leave.close') }}
         isDismissable={!cancelling}
         actionInProgress={cancelling}
         onClose={() => setOpen(false)}
-        confirmAction={{ label: Strings.run.cancelConfirm, destructive: true, onClick: () => void cancel() }}
+        confirmAction={{ label: t('contactsimporter.run.cancelconfirm'), destructive: true, onClick: () => void cancel() }}
         cancelAction={{ label: keepLabel, onClick: () => setOpen(false) }}
       >
         {error && <NotificationBarAlert>{error}</NotificationBarAlert>}

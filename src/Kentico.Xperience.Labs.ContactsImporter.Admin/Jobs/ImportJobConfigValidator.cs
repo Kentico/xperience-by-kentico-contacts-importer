@@ -11,10 +11,10 @@ internal static class ImportJobConfigValidator
     internal const int MaxSourceColumnLength = 1024;
     internal const int MaxDateFormatLength = 64;
 
-    internal const string ConsentColumnsMissingError = "Consent from a file column needs a mapped consent column. Map a consent column or choose another consent option.";
+    internal static ImportMessage ConsentColumnsMissingError => ImportMessages.ConsentColumnsMissing;
 
     /// <summary>
-    /// Returns the problems found; empty when the configuration is valid.
+    /// Returns the problems found (messages for the user, without values of the file); empty when the configuration is valid.
     /// </summary>
     /// <param name="job">Configuration to validate.</param>
     /// <param name="fields">Mappable contact fields (the allow-list for mapping targets).</param>
@@ -23,14 +23,14 @@ internal static class ImportJobConfigValidator
     /// Checks the selected recipient list and consent against the database. <c>null</c> = not checked here (the
     /// analysis and the import check them again when they start).
     /// </param>
-    public static IReadOnlyList<string> Validate(ImportJob job, IReadOnlyList<ContactFieldDefinition> fields, ContactsImporterOptions options, IImportAudienceResolver? audience = null)
+    public static IReadOnlyList<ImportMessage> Validate(ImportJob job, IReadOnlyList<ContactFieldDefinition> fields, ContactsImporterOptions options, IImportAudienceResolver? audience = null)
     {
-        var errors = new List<string>();
+        var errors = new List<ImportMessage>();
         var fieldsByName = fields.ToDictionary(f => f.Name, StringComparer.Ordinal);
 
         if (job.JobId == Guid.Empty)
         {
-            errors.Add("The job ID is empty.");
+            errors.Add(ImportMessages.JobIdEmpty);
         }
 
         ValidateFile(job.File, options, errors);
@@ -38,7 +38,7 @@ internal static class ImportJobConfigValidator
 
         if (job.DateFormat.Length is 0 or > MaxDateFormatLength)
         {
-            errors.Add("The date format is missing or too long.");
+            errors.Add(ImportMessages.DateFormatInvalid);
         }
 
         ValidateConsentMapping(job, errors);
@@ -58,33 +58,33 @@ internal static class ImportJobConfigValidator
         return errors;
     }
 
-    private static void ValidateFile(ImportFileDescriptor file, ContactsImporterOptions options, List<string> errors)
+    private static void ValidateFile(ImportFileDescriptor file, ContactsImporterOptions options, List<ImportMessage> errors)
     {
         if (string.IsNullOrWhiteSpace(file.Name) || file.Name.Length > MaxFileNameLength)
         {
-            errors.Add("The file name is missing or too long.");
+            errors.Add(ImportMessages.FileNameInvalid);
         }
 
         if (file.Size <= 0)
         {
-            errors.Add("The file is empty.");
+            errors.Add(ImportMessages.FileEmpty);
         }
         else if (file.Size > options.MaxFileSizeBytes)
         {
-            errors.Add($"The file is larger than the allowed {options.MaxFileSizeBytes} bytes.");
+            errors.Add(ImportMessages.FileTooLarge(options.MaxFileSizeBytes));
         }
 
         if (file.Fingerprint.Length is 0 or > MaxFingerprintLength || !file.Fingerprint.All(char.IsAsciiHexDigit))
         {
-            errors.Add("The file fingerprint is not a hex string.");
+            errors.Add(ImportMessages.FingerprintInvalid);
         }
     }
 
-    private static void ValidateMapping(ImportJob job, Dictionary<string, ContactFieldDefinition> fieldsByName, List<string> errors)
+    private static void ValidateMapping(ImportJob job, Dictionary<string, ContactFieldDefinition> fieldsByName, List<ImportMessage> errors)
     {
         if (job.Mapping.Count == 0)
         {
-            errors.Add("No columns are mapped.");
+            errors.Add(ImportMessages.NoMapping);
         }
 
         var targets = new HashSet<string>(StringComparer.Ordinal);
@@ -92,34 +92,34 @@ internal static class ImportJobConfigValidator
         {
             if (mapping.Source.Length is 0 or > MaxSourceColumnLength)
             {
-                errors.Add("A mapped source column name is missing or too long.");
+                errors.Add(ImportMessages.SourceColumnInvalid);
             }
 
             if (!fieldsByName.TryGetValue(mapping.Target, out var field))
             {
-                errors.Add($"'{Shorten(mapping.Target)}' is not an importable contact field.");
+                errors.Add(ImportMessages.FieldNotImportable(Shorten(mapping.Target)));
             }
             else if (!targets.Add(mapping.Target))
             {
-                errors.Add($"Contact field '{mapping.Target}' is mapped more than once.");
+                errors.Add(ImportMessages.FieldMappedTwice(mapping.Target));
             }
             else if (!field.IsSupported)
             {
-                errors.Add($"Contact field '{mapping.Target}' has a data type that cannot be imported.");
+                errors.Add(ImportMessages.FieldTypeNotSupported(mapping.Target));
             }
         }
 
         if (!targets.Contains(job.KeyField))
         {
-            errors.Add("The key field must be one of the mapped contact fields.");
+            errors.Add(ImportMessages.KeyFieldNotMapped);
         }
         else if (!fieldsByName[job.KeyField].CanBeKey)
         {
-            errors.Add($"Contact field '{job.KeyField}' cannot be the key field: only text, whole number and GUID fields can.");
+            errors.Add(ImportMessages.KeyFieldNotAllowed(job.KeyField));
         }
     }
 
-    private static void ValidateConsentMapping(ImportJob job, List<string> errors)
+    private static void ValidateConsentMapping(ImportJob job, List<ImportMessage> errors)
     {
         if (job.ConsentMapping is not { } consent)
         {
@@ -128,27 +128,27 @@ internal static class ImportJobConfigValidator
 
         if (consent.Agreed is null && consent.Date is null)
         {
-            errors.Add("The consent columns are set without a column.");
+            errors.Add(ImportMessages.ConsentColumnsEmpty);
             return;
         }
 
         if (consent.Agreed is { Length: 0 or > MaxSourceColumnLength } || consent.Date is { Length: 0 or > MaxSourceColumnLength })
         {
-            errors.Add("A consent source column name is missing or too long.");
+            errors.Add(ImportMessages.ConsentColumnInvalid);
         }
 
         if (consent.Agreed is not null && string.Equals(consent.Agreed, consent.Date, StringComparison.Ordinal))
         {
-            errors.Add("The consent given and consent date columns must be different columns.");
+            errors.Add(ImportMessages.ConsentColumnsSame);
         }
 
         if (job.Mapping.Any(m => string.Equals(m.Source, consent.Agreed, StringComparison.Ordinal) || string.Equals(m.Source, consent.Date, StringComparison.Ordinal)))
         {
-            errors.Add("A consent column cannot also be mapped to a contact field.");
+            errors.Add(ImportMessages.ConsentColumnMapped);
         }
     }
 
-    private static void ValidateOptions(ImportOptions options, Dictionary<string, ContactFieldDefinition> fieldsByName, List<string> errors)
+    private static void ValidateOptions(ImportOptions options, Dictionary<string, ContactFieldDefinition> fieldsByName, List<ImportMessage> errors)
     {
         bool enumsDefined = Enum.IsDefined(options.NewContacts)
             && Enum.IsDefined(options.ExistingContacts)
@@ -162,17 +162,17 @@ internal static class ImportJobConfigValidator
             && Enum.IsDefined(options.SourceStamp);
         if (!enumsDefined)
         {
-            errors.Add("An option has an unknown value.");
+            errors.Add(ImportMessages.OptionUnknown);
         }
 
         if (options.RecipientListId is <= 0)
         {
-            errors.Add("The recipient list is not valid.");
+            errors.Add(ImportMessages.RecipientListInvalid);
         }
 
         if (options.ConsentId is <= 0 || (options.Consent != ConsentMode.None && options.ConsentId is null))
         {
-            errors.Add("A consent must be selected when consent agreements are recorded.");
+            errors.Add(ImportMessages.ConsentNotSelected);
         }
 
         if (options.SourceField is null)
@@ -182,11 +182,11 @@ internal static class ImportJobConfigValidator
 
         if (!fieldsByName.TryGetValue(options.SourceField, out var sourceField) || !sourceField.IsText)
         {
-            errors.Add("The import source field must be a text contact field.");
+            errors.Add(ImportMessages.SourceFieldNotText);
         }
         else if (string.IsNullOrWhiteSpace(options.SourceValue) || options.SourceValue.Length > (sourceField.MaxLength ?? int.MaxValue))
         {
-            errors.Add("The import source value is missing or too long for the field.");
+            errors.Add(ImportMessages.SourceValueInvalid);
         }
     }
 

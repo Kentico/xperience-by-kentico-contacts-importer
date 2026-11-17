@@ -3,13 +3,10 @@ import type { TableRow } from '@kentico/xperience-admin-components';
 import React, { useMemo } from 'react';
 
 import type { AggregatesDto, FieldDto } from '../shared/commands';
-import { formatNumber } from '../shared/format';
-import { Strings } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { TestIds, stringCell, textColumn } from '../shared/ui';
 
 import { fieldLabel } from './model';
-
-const S = Strings.counts;
 
 type CountKey = Exclude<keyof AggregatesDto, 'fields'>;
 
@@ -17,36 +14,36 @@ type CountKey = Exclude<keyof AggregatesDto, 'fields'>;
  * Count rows in display order. Rows marked `optional` show only when a value is not zero. Rows of a
  * `group` that are not optional show when the import uses a recipient list / records consent.
  */
-const COUNT_ROWS: readonly { key: CountKey; optional?: boolean; group?: 'list' | 'consent' }[] = [
-  { key: 'rows' },
-  { key: 'created' },
-  { key: 'updated' },
-  { key: 'contactsUpdated', optional: true },
-  { key: 'unchanged' },
-  { key: 'skipped' },
-  { key: 'skippedNew', optional: true },
-  { key: 'skippedExisting', optional: true },
-  { key: 'skippedMultipleMatches', optional: true },
-  { key: 'skippedInvalidEmail', optional: true },
-  { key: 'skippedInvalidValue', optional: true },
-  { key: 'duplicateRows', optional: true },
-  { key: 'multipleMatches', optional: true },
-  { key: 'importedWithoutEmail', optional: true },
-  { key: 'listAdded', group: 'list' },
-  { key: 'listAlreadySubscribed', group: 'list', optional: true },
-  { key: 'listKeptUnsubscribed', group: 'list', optional: true },
-  { key: 'listResubscribed', group: 'list', optional: true },
-  { key: 'listSkippedBounced', group: 'list', optional: true },
-  { key: 'listSkippedNoEmail', group: 'list', optional: true },
-  { key: 'bouncedHard', group: 'list', optional: true },
-  { key: 'bouncedSoftOverLimit', group: 'list', optional: true },
-  { key: 'bouncedSoftUnderLimit', group: 'list', optional: true },
-  { key: 'consentRecorded', group: 'consent' },
-  { key: 'consentAlreadyAgreed', group: 'consent', optional: true },
-  { key: 'consentKeptRevoked', group: 'consent', optional: true },
-  { key: 'consentReAgreed', group: 'consent', optional: true },
-  { key: 'consentNotGiven', group: 'consent', optional: true },
-  { key: 'consentSkippedFutureDate', group: 'consent', optional: true },
+const COUNT_ROWS: readonly { key: CountKey; text: string; optional?: boolean; group?: 'list' | 'consent' }[] = [
+  { key: 'rows', text: 'contactsimporter.counts.rows' },
+  { key: 'created', text: 'contactsimporter.counts.created' },
+  { key: 'updated', text: 'contactsimporter.counts.updated' },
+  { key: 'contactsUpdated', text: 'contactsimporter.counts.contactsupdated', optional: true },
+  { key: 'unchanged', text: 'contactsimporter.counts.unchanged' },
+  { key: 'skipped', text: 'contactsimporter.counts.skipped' },
+  { key: 'skippedNew', text: 'contactsimporter.counts.skippednew', optional: true },
+  { key: 'skippedExisting', text: 'contactsimporter.counts.skippedexisting', optional: true },
+  { key: 'skippedMultipleMatches', text: 'contactsimporter.counts.skippedmultiplematches', optional: true },
+  { key: 'skippedInvalidEmail', text: 'contactsimporter.counts.skippedinvalidemail', optional: true },
+  { key: 'skippedInvalidValue', text: 'contactsimporter.counts.skippedinvalidvalue', optional: true },
+  { key: 'duplicateRows', text: 'contactsimporter.counts.duplicaterows', optional: true },
+  { key: 'multipleMatches', text: 'contactsimporter.counts.multiplematches', optional: true },
+  { key: 'importedWithoutEmail', text: 'contactsimporter.counts.importedwithoutemail', optional: true },
+  { key: 'listAdded', text: 'contactsimporter.counts.listadded', group: 'list' },
+  { key: 'listAlreadySubscribed', text: 'contactsimporter.counts.listalreadysubscribed', group: 'list', optional: true },
+  { key: 'listKeptUnsubscribed', text: 'contactsimporter.counts.listkeptunsubscribed', group: 'list', optional: true },
+  { key: 'listResubscribed', text: 'contactsimporter.counts.listresubscribed', group: 'list', optional: true },
+  { key: 'listSkippedBounced', text: 'contactsimporter.counts.listskippedbounced', group: 'list', optional: true },
+  { key: 'listSkippedNoEmail', text: 'contactsimporter.counts.listskippednoemail', group: 'list', optional: true },
+  { key: 'bouncedHard', text: 'contactsimporter.counts.bouncedhard', group: 'list', optional: true },
+  { key: 'bouncedSoftOverLimit', text: 'contactsimporter.counts.bouncedsoftoverlimit', group: 'list', optional: true },
+  { key: 'bouncedSoftUnderLimit', text: 'contactsimporter.counts.bouncedsoftunderlimit', group: 'list', optional: true },
+  { key: 'consentRecorded', text: 'contactsimporter.counts.consentrecorded', group: 'consent' },
+  { key: 'consentAlreadyAgreed', text: 'contactsimporter.counts.consentalreadyagreed', group: 'consent', optional: true },
+  { key: 'consentKeptRevoked', text: 'contactsimporter.counts.consentkeptrevoked', group: 'consent', optional: true },
+  { key: 'consentReAgreed', text: 'contactsimporter.counts.consentreagreed', group: 'consent', optional: true },
+  { key: 'consentNotGiven', text: 'contactsimporter.counts.consentnotgiven', group: 'consent', optional: true },
+  { key: 'consentSkippedFutureDate', text: 'contactsimporter.counts.consentskippedfuturedate', group: 'consent', optional: true },
 ];
 
 /** A count of the aggregates; 0 when the server did not send it. */
@@ -81,13 +78,14 @@ export interface AggregatesTableProps {
  * aggregates; nothing is computed here.
  */
 export const AggregatesTable = ({ expected, actual, usesList = false, usesConsent = false }: AggregatesTableProps) => {
+  const { t, number } = useText();
   const columns = useMemo(
     () => [
-      textColumn('count', S.column, 40, 70),
-      ...(expected ? [textColumn('expected', S.expected, 14, 20)] : []),
-      ...(actual ? [textColumn('actual', S.actual, 14, 20)] : []),
+      textColumn('count', t('contactsimporter.counts.column'), 40, 70),
+      ...(expected ? [textColumn('expected', t('contactsimporter.counts.expected'), 14, 20)] : []),
+      ...(actual ? [textColumn('actual', t('contactsimporter.counts.actual'), 14, 20)] : []),
     ],
-    [expected, actual],
+    [expected, actual, t],
   );
 
   const visible = COUNT_ROWS.filter(({ key, optional, group }) => {
@@ -101,13 +99,13 @@ export const AggregatesTable = ({ expected, actual, usesList = false, usesConsen
     return countOf(expected, key) !== 0 || countOf(actual, key) !== 0;
   });
 
-  const rows: TableRow[] = visible.map(({ key }) => ({
+  const rows: TableRow[] = visible.map(({ key, text }) => ({
     identifier: key,
     disabled: false,
     cells: [
-      stringCell('count', S[key]),
-      ...(expected ? [stringCell('expected', formatNumber(countOf(expected, key)))] : []),
-      ...(actual ? [stringCell('actual', formatNumber(countOf(actual, key)))] : []),
+      stringCell('count', t(text)),
+      ...(expected ? [stringCell('expected', number(countOf(expected, key)))] : []),
+      ...(actual ? [stringCell('actual', number(countOf(actual, key)))] : []),
     ],
   }));
 
@@ -132,9 +130,14 @@ export interface FieldChangesTableProps {
 
 /** Per contact field: how many contacts get a new value, and how many of those lose their value. */
 export const FieldChangesTable = ({ aggregates, fields }: FieldChangesTableProps) => {
+  const { t, number } = useText();
   const columns = useMemo(
-    () => [textColumn('field', S.field, 30, 60), textColumn('changed', S.fieldChanged, 16, 24), textColumn('cleared', S.fieldCleared, 16, 24)],
-    [],
+    () => [
+      textColumn('field', t('contactsimporter.counts.field'), 30, 60),
+      textColumn('changed', t('contactsimporter.counts.fieldchanged'), 16, 24),
+      textColumn('cleared', t('contactsimporter.counts.fieldcleared'), 16, 24),
+    ],
+    [t],
   );
   const rows: TableRow[] = aggregates.fields.map((change) => {
     const field = fields.find((candidate) => candidate.name === change.field);
@@ -144,8 +147,8 @@ export const FieldChangesTable = ({ aggregates, fields }: FieldChangesTableProps
       disabled: false,
       cells: [
         stringCell('field', field ? fieldLabel(field) : change.field),
-        stringCell('changed', formatNumber(change.changed)),
-        stringCell('cleared', formatNumber(change.cleared)),
+        stringCell('changed', number(change.changed)),
+        stringCell('cleared', number(change.cleared)),
       ],
     };
   });

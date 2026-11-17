@@ -217,10 +217,10 @@ public class FieldValueConverterTests
 
     private static void AssertRefused(ImportJob job, string expectedMessagePart)
     {
-        bool created = ImportProcessingContext.TryCreate(job, Fields, out var context, out string? error);
+        bool created = ImportProcessingContext.TryCreate(job, Fields, out var context, out var error);
 
         Assert.That(created, Is.False);
         Assert.That(context, Is.Null);
-        Assert.That(error, Does.Contain(expectedMessagePart));
+        Assert.That(error?.ToString(), Does.Contain(expectedMessagePart));
     }
 }

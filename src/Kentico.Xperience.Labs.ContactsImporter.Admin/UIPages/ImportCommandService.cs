@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Kentico.Xperience.Labs.ContactsImporter.Admin;
@@ -87,7 +88,8 @@ internal sealed class ImportCommandService(
     IImportChoiceProvider choices,
     IImportAudienceResolver audience,
     IOptions<ContactsImporterOptions> options,
-    TimeProvider timeProvider) : IImportCommandService
+    TimeProvider timeProvider,
+    ILogger<ImportCommandService>? logger = null) : IImportCommandService
 {
     /// <summary>Chunk uploads the browser runs at the same time.</summary>
     internal const int ParallelUploads = 3;
@@ -218,12 +220,12 @@ internal sealed class ImportCommandService(
         var utcNow = UtcNow();
         if (!AcceptsOptions(status.State))
         {
-            return JobFailed(ImportCommandCodes.INVALID_STATE, ImportTextKeys.INVALID_STATE, EffectiveState(status, utcNow));
+            return JobFailed(ImportCommandCodes.INVALID_STATE, ImportMessages.InvalidState(EffectiveState(status, utcNow)));
         }
 
         var job = existing with { Options = newOptions };
         // The resolver checks the chosen recipient list (exists, is a recipient list, not being deleted) and consent.
-        var errors = new List<string>(ImportJobConfigValidator.Validate(job, schemaProvider.GetMappableFields(), options.Value, audience));
+        var errors = ImportJobConfigValidator.Validate(job, schemaProvider.GetMappableFields(), options.Value, audience).Select(error => texts.Get(error)).ToList();
         errors.AddRange(ValidateAudience(job));
         if (newOptions.SourceField is { } sourceField && job.Mapping.Any(m => string.Equals(m.Target, sourceField, StringComparison.Ordinal)))
         {
@@ -270,7 +272,7 @@ internal sealed class ImportCommandService(
 
             if (!applied)
             {
-                return JobFailed(ImportCommandCodes.INVALID_STATE, ImportTextKeys.INVALID_STATE, EffectiveState(updated, utcNow));
+                return JobFailed(ImportCommandCodes.INVALID_STATE, ImportMessages.InvalidState(EffectiveState(updated, utcNow)));
             }
 
             // What was confirmed no longer matches what will run: the confirmation is asked again.
@@ -394,7 +396,7 @@ internal sealed class ImportCommandService(
             ImportConfirmOutcome.AttestationRequired => JobResponse(ImportCommandCodes.ATTESTATION_REQUIRED, job, status) with { Message = texts.Get(ImportTextKeys.ATTESTATION_REQUIRED) },
             ImportConfirmOutcome.InvalidState or ImportConfirmOutcome.JobNotFound or _ => JobResponse(ImportCommandCodes.INVALID_STATE, job, status) with
             {
-                Message = texts.Get(ImportTextKeys.INVALID_STATE, EffectiveState(status, UtcNow())),
+                Message = texts.Get(ImportMessages.InvalidState(EffectiveState(status, UtcNow()))),
             },
         };
     }
@@ -481,7 +483,7 @@ internal sealed class ImportCommandService(
         var errors = ImportJobConfigValidator.Validate(job, fields, options.Value);
         if (errors.Count > 0)
         {
-            return new SaveConfigResponse { Code = ImportCommandCodes.INVALID_CONFIG, Message = texts.Get(ImportTextKeys.INVALID_CONFIG), Errors = errors };
+            return new SaveConfigResponse { Code = ImportCommandCodes.INVALID_CONFIG, Message = texts.Get(ImportTextKeys.INVALID_CONFIG), Errors = [.. errors.Select(error => texts.Get(error))] };
         }
 
         if (isNew)
@@ -494,7 +496,7 @@ internal sealed class ImportCommandService(
             var applied = ImportJobStateMachine.ApplyConfigChange(status!, change, utcNow);
             if (ImportJobStateMachine.IsTerminal(status!.State) || !applied.Allowed)
             {
-                return SaveFailed(ImportCommandCodes.INVALID_STATE, ImportTextKeys.INVALID_STATE, EffectiveState(status, utcNow));
+                return SaveFailed(ImportCommandCodes.INVALID_STATE, ImportMessages.InvalidState(EffectiveState(status, utcNow)));
             }
 
             if (change != ImportConfigChange.None)
@@ -539,7 +541,7 @@ internal sealed class ImportCommandService(
         {
             ChunkIngestOutcome.Stored => new UploadChunkResponse { Code = ImportCommandCodes.STORED },
             ChunkIngestOutcome.AlreadyStored => new UploadChunkResponse { Code = ImportCommandCodes.ALREADY_STORED },
-            ChunkIngestOutcome.Rejected => ChunkRejected(result.Reason ?? ChunkRejectReason.InvalidPayload, result.Message, result.RowNumber),
+            ChunkIngestOutcome.Rejected => RejectedByIngest(id, payload.Index, result),
             _ => ChunkRejected(ChunkRejectReason.InvalidPayload, texts.Get(ImportTextKeys.INVALID_REQUEST)),
         };
     }
@@ -566,7 +568,7 @@ internal sealed class ImportCommandService(
             return new TruncateChunksResponse
             {
                 Code = ImportCommandCodes.INVALID_STATE,
-                Message = texts.Get(ImportTextKeys.INVALID_STATE, EffectiveState(status, UtcNow())),
+                Message = texts.Get(ImportMessages.InvalidState(EffectiveState(status, UtcNow()))),
             };
         }
 
@@ -614,19 +616,24 @@ internal sealed class ImportCommandService(
         }
 
         var result = ingest.CompleteUpload(id, profile);
+        if (result.Outcome != UploadCompletionOutcome.Completed)
+        {
+            // The user gets a message per outcome; the detailed reason (English, no values of the file) goes to the log.
+            logger?.LogWarning("Contact import {JobId}: the upload could not be completed ({Outcome}): {Reason}", id, result.Outcome, result.Message);
+        }
 
         return result.Outcome switch
         {
             UploadCompletionOutcome.Completed => new CompleteUploadResponse { Code = ImportCommandCodes.OK, Status = ToDto(id, result.Status!) },
-            UploadCompletionOutcome.JobNotFound => new CompleteUploadResponse { Code = ImportCommandCodes.JOB_NOT_FOUND, Message = result.Message },
-            UploadCompletionOutcome.InvalidState => new CompleteUploadResponse { Code = ImportCommandCodes.INVALID_STATE, Message = result.Message },
+            UploadCompletionOutcome.JobNotFound => new CompleteUploadResponse { Code = ImportCommandCodes.JOB_NOT_FOUND, Message = texts.Get(ImportTextKeys.JOB_NOT_FOUND) },
+            UploadCompletionOutcome.InvalidState => new CompleteUploadResponse { Code = ImportCommandCodes.INVALID_STATE, Message = texts.Get(ImportTextKeys.UPLOAD_NOT_COMPLETABLE) },
             UploadCompletionOutcome.Inconsistent => new CompleteUploadResponse
             {
                 Code = ImportCommandCodes.INCONSISTENT,
-                Message = result.Message,
+                Message = texts.Get(ImportTextKeys.UPLOAD_INCONSISTENT),
                 MissingChunks = result.MissingChunks ?? [],
             },
-            _ => new CompleteUploadResponse { Code = ImportCommandCodes.INVALID_STATE, Message = result.Message },
+            _ => new CompleteUploadResponse { Code = ImportCommandCodes.INVALID_STATE, Message = texts.Get(ImportTextKeys.UPLOAD_NOT_COMPLETABLE) },
         };
     }
 
@@ -647,7 +654,7 @@ internal sealed class ImportCommandService(
         return result.Outcome switch
         {
             ImportCancelOutcome.Cancelled when result.Status is not null => new ImportActionResponse { Code = ImportCommandCodes.OK, Status = ToDto(id, result.Status) },
-            ImportCancelOutcome.AlreadyFinished => ActionFailed(ImportCommandCodes.INVALID_STATE, ImportTextKeys.INVALID_STATE, EffectiveState(result.Status ?? status, UtcNow())),
+            ImportCancelOutcome.AlreadyFinished => ActionFailed(ImportCommandCodes.INVALID_STATE, ImportMessages.InvalidState(EffectiveState(result.Status ?? status, UtcNow()))),
             ImportCancelOutcome.JobNotFound or _ => ActionFailed(ImportCommandCodes.JOB_NOT_FOUND, ImportTextKeys.JOB_NOT_FOUND),
         };
     }
@@ -874,7 +881,7 @@ internal sealed class ImportCommandService(
         Fields = [.. aggregates.Fields.Select(f => new ImportFieldChangeDto(f.Field, f.Changed, f.Cleared))],
     };
 
-    private static ImportProgressDto ProgressDto(ImportProgress progress) => new()
+    private ImportProgressDto ProgressDto(ImportProgress progress) => new()
     {
         Outcome = JsonNamingPolicy.CamelCase.ConvertName(progress.Outcome.ToString()),
         Phase = ImportReportFormat.PhaseName(progress.Phase),
@@ -885,7 +892,7 @@ internal sealed class ImportCommandService(
         Aggregates = AggregatesDto(progress.Aggregates),
         Analysis = progress.Analysis is null ? null : AggregatesDto(progress.Analysis),
         AnalyzedUtc = progress.AnalyzedUtc,
-        Error = progress.Error,
+        Error = progress.Error is null ? null : texts.Get(progress.Error),
     };
 
     /// <summary>Suggested source stamp: <c>import-{date the import was created}-{file name}</c>.</summary>
@@ -953,7 +960,7 @@ internal sealed class ImportCommandService(
             Aggregates = ImportAggregates.From(status.Aggregates),
             Analysis = status.Analysis is null ? null : ImportAggregates.From(status.Analysis.Aggregates),
             AnalyzedUtc = status.Analysis?.FinishedUtc,
-            Error = status.Error,
+            Error = status.ErrorMessage,
         };
 
         return new ImportJobResponse
@@ -969,8 +976,10 @@ internal sealed class ImportCommandService(
         };
     }
 
-    private ImportJobResponse JobFailed(string code, string textKey, params object[] arguments) =>
-        new() { Code = code, Message = texts.Get(textKey, arguments) };
+    private ImportJobResponse JobFailed(string code, string textKey) => JobFailed(code, new ImportMessage(textKey));
+
+    private ImportJobResponse JobFailed(string code, ImportMessage message) =>
+        new() { Code = code, Message = texts.Get(message) };
 
     private static IReadOnlyList<ImportChunkDto> ToDto(IReadOnlyList<ImportChunkInfo> chunks) =>
         [.. chunks.Select(c => new ImportChunkDto(c.Index, c.Sha256, c.Rows))];
@@ -979,6 +988,18 @@ internal sealed class ImportCommandService(
 
     private static UploadChunkResponse ChunkRejected(ChunkRejectReason reason, string? message, long? rowNumber = null) =>
         new() { Code = ImportCommandCodes.REJECTED, Reason = ToCamelCase(reason), Message = message, RowNumber = rowNumber };
+
+    /// <summary>
+    /// A chunk the ingest refused: the user gets the message of the reason; the detailed reason (English, names fields
+    /// and rows but no values) goes to the log.
+    /// </summary>
+    private UploadChunkResponse RejectedByIngest(Guid jobId, int chunkIndex, ChunkIngestResult result)
+    {
+        var reason = result.Reason ?? ChunkRejectReason.InvalidPayload;
+        logger?.LogWarning("Contact import {JobId}: uploaded chunk {Chunk} was refused ({Reason}): {Detail}", jobId, chunkIndex, reason, result.Message);
+
+        return ChunkRejected(reason, texts.Get(ImportTextKeys.ChunkRejected(reason)), result.RowNumber);
+    }
 
     private ImportStatusDto ToDto(Guid jobId, ImportJobStatus status) => new()
     {
@@ -993,14 +1014,18 @@ internal sealed class ImportCommandService(
             ChunkCount = status.Profile.ChunkCount,
         },
         UpdatedUtc = status.UpdatedUtc,
-        Error = status.Error,
+        Error = status.ErrorMessage is { } error ? texts.Get(error) : null,
     };
 
-    private SaveConfigResponse SaveFailed(string code, string textKey, params object[] arguments) =>
-        new() { Code = code, Message = texts.Get(textKey, arguments) };
+    private SaveConfigResponse SaveFailed(string code, string textKey) => SaveFailed(code, new ImportMessage(textKey));
 
-    private ImportActionResponse ActionFailed(string code, string textKey, params object[] arguments) =>
-        new() { Code = code, Message = texts.Get(textKey, arguments) };
+    private SaveConfigResponse SaveFailed(string code, ImportMessage message) =>
+        new() { Code = code, Message = texts.Get(message) };
+
+    private ImportActionResponse ActionFailed(string code, string textKey) => ActionFailed(code, new ImportMessage(textKey));
+
+    private ImportActionResponse ActionFailed(string code, ImportMessage message) =>
+        new() { Code = code, Message = texts.Get(message) };
 
     private ImportJobState EffectiveState(ImportJobStatus status, DateTime utcNow) =>
         ImportJobStateMachine.GetEffectiveState(status, utcNow, options.Value.HeartbeatStale);

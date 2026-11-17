@@ -5,7 +5,7 @@ import {
   openRecordSource,
   profileSample,
 } from '../import-core';
-import type { PipelineProgress } from '../import-core';
+import type { ImportErrorParams, PipelineProgress } from '../import-core';
 
 import type {
   ProfileRequest,
@@ -154,9 +154,9 @@ export class ImportWorkerSession {
   }
 }
 
-function describeError(error: unknown): { code: WorkerErrorCode; message: string } {
+function describeError(error: unknown): { code: WorkerErrorCode; message: string; params?: ImportErrorParams } {
   if (error instanceof ImportError) {
-    return { code: error.code, message: error.message };
+    return { code: error.code, message: error.message, params: error.params };
   }
   if (error instanceof Error && error.name === 'AbortError') {
     return { code: 'aborted', message: error.message };

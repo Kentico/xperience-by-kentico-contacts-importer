@@ -4,6 +4,7 @@ import type {
   EncodedChunk,
   FieldMapping,
   FileLike,
+  ImportErrorParams,
   OpenSourceOptions,
   PipelineProgress,
   PipelineResult,
@@ -114,16 +115,24 @@ export interface ErrorEvent {
   type: 'error';
   requestId: number;
   code: WorkerErrorCode;
+  /** Developer text (English); for `failed` the message of the unexpected error. */
   message: string;
+  /** `ImportError.params` of the import core. */
+  params?: ImportErrorParams;
 }
 
-/** Error of a worker request, as seen by the page. */
+/**
+ * Error of a worker request, as seen by the page. The UI shows a text of its own for `code` and
+ * `params` (see `workerErrorMessage`); `message` is developer text.
+ */
 export class ImportWorkerError extends Error {
   readonly code: WorkerErrorCode;
+  readonly params: ImportErrorParams;
 
-  constructor(code: WorkerErrorCode, message: string) {
+  constructor(code: WorkerErrorCode, message: string, params: ImportErrorParams = {}) {
     super(message);
     this.name = 'ImportWorkerError';
     this.code = code;
+    this.params = params;
   }
 }

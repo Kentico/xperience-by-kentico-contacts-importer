@@ -143,7 +143,7 @@ test.describe("contacts importer", () => {
     await importPage.expectCount("rows-uploaded", rows);
     test.info().annotations.push({ type: "chunk uploads before the interruption", description: String(passed) });
     if (passed > 0) {
-      await expect(page.getByText(/parts? were already on the server/)).toBeVisible();
+      await expect(page.getByText(/(parts were|part was) already on the server/)).toBeVisible();
     }
 
     await importsList.goto();

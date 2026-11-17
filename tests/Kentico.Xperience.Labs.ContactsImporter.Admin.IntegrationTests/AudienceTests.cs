@@ -189,7 +189,7 @@ public class AudienceTests : ImportIntegrationTest
         var status = harness.Store.ReadStatus(jobId)!;
         Assert.Multiple(() =>
         {
-            Assert.That(progress.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), progress.Error);
+            Assert.That(progress.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), progress.Error?.ToString());
             Assert.That(afterAnalysis, Is.EqualTo(before), "The analysis writes nothing.");
             Assert.That(AudienceCounts(status.Aggregates), Is.EquivalentTo(new Dictionary<string, long>
             {
@@ -473,7 +473,7 @@ public class AudienceTests : ImportIntegrationTest
         Assert.Multiple(() =>
         {
             Assert.That(second.RowsProcessed, Is.EqualTo(8));
-            Assert.That(final.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), final.Error);
+            Assert.That(final.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), final.Error?.ToString());
             Assert.That(Rows(), Is.EqualTo((10, rowsAfterSecond.Confirmations + 2, rowsAfterSecond.Agreements + 2)), "Only rows 9-10 add rows after the re-run of rows 5-8.");
             Assert.That(Rows(), Is.EqualTo((10, 2 + 10, 2 + 10)));
             Assert.That(IntegrationDatabase.Scalar<int>("SELECT COUNT(*) FROM (SELECT [ContactGroupMemberRelatedID] FROM [OM_ContactGroupMember] GROUP BY [ContactGroupMemberRelatedID] HAVING COUNT(*) > 1) d"), Is.Zero);

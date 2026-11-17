@@ -129,7 +129,7 @@ internal sealed record ImportProgress
     public DateTime? AnalyzedUtc { get; init; }
 
     /// <summary>Problem description without contact data, for a failed job or a temporary error.</summary>
-    public string? Error { get; init; }
+    public ImportMessage? Error { get; init; }
 }
 
 internal enum ImportConfirmOutcome

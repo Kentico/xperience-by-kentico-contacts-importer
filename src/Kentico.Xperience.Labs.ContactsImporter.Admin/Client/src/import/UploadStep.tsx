@@ -22,23 +22,21 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useBlocker } from 'react-router';
 
-import type { PipelineResult, TargetField } from '../import-core';
+import type { PipelineResult, RejectReason, TargetField } from '../import-core';
 import { Commands } from '../shared/commands';
 import type { ExecuteCommand, ImportActionResponse, ImportJobResponse, JobDto, LimitsDto, StatusDto } from '../shared/commands';
-import { formatBytes, formatDuration, formatNumber, formatPercent } from '../shared/format';
 import { useIsMounted } from '../shared/hooks';
-import { downloadTextFile, rejectedRowsCsv, reportFileName, suspectRowsCsv } from '../shared/reports';
-import { Strings, format } from '../shared/strings';
+import { useText } from '../shared/i18n';
+import { downloadTextFile, rejectReasonKey, rejectedRowsCsv, reportFileName, suspectRowsCsv } from '../shared/reports';
 import { TestIds, Text, testId } from '../shared/ui';
 import { RateEstimator, estimateTotalRows, percent } from '../upload/progress';
+import { uploadFailureMessage } from '../upload/upload-messages';
 import { UploadSessionError, startUploadSession } from '../upload/upload-session';
 import type { UploadProgress, UploadSession } from '../upload/upload-session';
 import type { ImportWorkerClient } from '../worker/client';
 
 import { chunkSizes, toOpenOptions } from './model';
 import type { SourceSettings } from './model';
-
-const S = Strings.upload;
 
 type Phase = 'idle' | 'running' | 'paused' | 'failed' | 'done';
 
@@ -80,6 +78,7 @@ export const UploadStep = ({
   onSelectFile,
   onNext,
 }: UploadStepProps) => {
+  const { t, m, bytes, percent: formatPercent } = useText();
   const isMounted = useIsMounted();
   const sessionRef = useRef<UploadSession | null>(null);
   const estimatorRef = useRef(new RateEstimator());
@@ -190,12 +189,12 @@ export const UploadStep = ({
         if (failure.kind === 'aborted') {
           setPhase('paused');
         } else {
-          setError(describeFailure(failure));
+          setError(m(uploadFailureMessage(failure)));
           setPhase('failed');
         }
       },
     );
-  }, [execute, file, isMounted, job, limits, onStatus, settings, status, targetFields, worker]);
+  }, [execute, file, isMounted, job, limits, m, onStatus, settings, status, targetFields, worker]);
 
   const pause = useCallback(() => {
     if (startingRef.current) {
@@ -233,12 +232,12 @@ export const UploadStep = ({
     }
 
     const original = document.title;
-    document.title = `${formatPercent(completed)} % · ${job.file.name}`;
+    document.title = t('contactsimporter.run.title', { percent: formatPercent(completed), fileName: job.file.name });
 
     return () => {
       document.title = original;
     };
-  }, [running, completed, job.file.name]);
+  }, [running, completed, formatPercent, job.file.name, t]);
 
   // Warn before the tab closes or reloads mid-upload.
   useEffect(() => {
@@ -271,28 +270,29 @@ export const UploadStep = ({
     if (response?.code === 'ok' && response.status) {
       onStatus(response.status);
     } else {
-      setError(response?.message ?? S.cancelFailed);
+      setError(response?.message ?? t('contactsimporter.upload.cancelfailed'));
       setPhase('failed');
     }
-  }, [execute, isMounted, onStatus]);
+  }, [execute, isMounted, onStatus, t]);
 
   const profile = result?.profile ?? pipeline?.profile ?? (phase === 'done' ? status.profile : undefined);
   const fromEarlierVisit = phase === 'done' && !result;
 
   return (
     <Stack spacing={Spacing.L}>
-      <Headline size={HeadlineSize.M}>{phase === 'done' ? S.doneHeadline : S.headline}</Headline>
+      <Headline size={HeadlineSize.M}>{phase === 'done' ? t('contactsimporter.upload.doneheadline') : t('contactsimporter.upload.headline')}</Headline>
 
       <Text data-testid={TestIds.uploadStatus} data-upload-phase={phase} data-job-state={status.state}>
-        {phase === 'running' && (progress?.phase === 'completing' ? S.completing : S.working)}
-        {phase === 'paused' && S.paused}
-        {phase === 'idle' && (file ? S.paused : S.selectFile)}
-        {phase === 'done' && format(fromEarlierVisit ? S.doneTextPrevious : S.doneText, formatNumber(status.profile.rowsValid))}
+        {phase === 'running' && (progress?.phase === 'completing' ? t('contactsimporter.upload.completing') : t('contactsimporter.upload.working'))}
+        {phase === 'paused' && t('contactsimporter.upload.paused')}
+        {phase === 'idle' && (file ? t('contactsimporter.upload.paused') : t('contactsimporter.upload.selectfile'))}
+        {phase === 'done' &&
+          t(fromEarlierVisit ? 'contactsimporter.upload.donetextprevious' : 'contactsimporter.upload.donetext', { amount: status.profile.rowsValid })}
       </Text>
 
       {running && (
         <Callout type={CalloutType.QuickTip} placement={CalloutPlacementType.OnDesk}>
-          {S.keepOpen}
+          {t('contactsimporter.upload.keepopen')}
         </Callout>
       )}
 
@@ -300,25 +300,24 @@ export const UploadStep = ({
         <Stack spacing={Spacing.S}>
           <ProgressBar completed={completed} />
           <Text>
-            {format(S.progress, formatBytes(pipeline.bytesRead), formatBytes(pipeline.totalBytes), formatPercent(completed))}
+            {t('contactsimporter.upload.progress', { read: bytes(pipeline.bytesRead), total: bytes(pipeline.totalBytes), percent: formatPercent(completed) })}
           </Text>
         </Stack>
       )}
 
       {progress?.retry && running && (
         <NotificationBarWarning>
-          {format(
-            S.retrying,
-            progress.retry.index + 1,
-            Math.ceil(progress.retry.delayMs / 1000),
-            progress.retry.attempt + 1,
-            progress.retry.maxAttempts,
-          )}
+          {t('contactsimporter.upload.retrying', {
+            part: progress.retry.index + 1,
+            seconds: Math.ceil(progress.retry.delayMs / 1000),
+            attempt: progress.retry.attempt + 1,
+            maxAttempts: progress.retry.maxAttempts,
+          })}
         </NotificationBarWarning>
       )}
-      {progress?.truncatedFrom !== null && progress?.truncatedFrom !== undefined && <NotificationBarInfo>{S.truncated}</NotificationBarInfo>}
+      {progress?.truncatedFrom !== null && progress?.truncatedFrom !== undefined && <NotificationBarInfo>{t('contactsimporter.upload.truncated')}</NotificationBarInfo>}
       {progress && progress.stats.skippedChunks > 0 && (
-        <NotificationBarInfo>{format(S.resumed, formatNumber(progress.stats.skippedChunks))}</NotificationBarInfo>
+        <NotificationBarInfo>{t('contactsimporter.upload.resumed', { count: progress.stats.skippedChunks, amount: progress.stats.skippedChunks })}</NotificationBarInfo>
       )}
       {error && <NotificationBarAlert>{error}</NotificationBarAlert>}
 
@@ -336,11 +335,11 @@ export const UploadStep = ({
         <Callout
           type={CalloutType.FriendlyWarning}
           placement={CalloutPlacementType.OnDesk}
-          headline={format(S.duplicatesHeadline, formatNumber(profile.likelyDuplicates))}
+          headline={t('contactsimporter.upload.duplicatesheadline', { amount: profile.likelyDuplicates })}
           actionButton={
             result && result.suspectRows.length > 0 ? (
               <Button
-                label={S.downloadDuplicates}
+                label={t('contactsimporter.upload.downloadduplicates')}
                 color={ButtonColor.Secondary}
                 dataTestId={testId(TestIds.downloadDuplicates)}
                 onClick={() =>
@@ -350,8 +349,8 @@ export const UploadStep = ({
             ) : undefined
           }
         >
-          {S.duplicatesText}
-          {result?.suspectRowsTruncated ? ` ${format(S.listTruncated, formatNumber(result.suspectRows.length))}` : ''}
+          {t('contactsimporter.upload.duplicatestext')}
+          {result?.suspectRowsTruncated ? ` ${t('contactsimporter.upload.listtruncated', { amount: result.suspectRows.length })}` : ''}
         </Callout>
       )}
 
@@ -359,42 +358,47 @@ export const UploadStep = ({
         <Callout
           type={CalloutType.FriendlyWarning}
           placement={CalloutPlacementType.OnDesk}
-          headline={format(S.rejectedHeadline, formatNumber(result.profile.rowsRejected))}
+          headline={t('contactsimporter.upload.rejectedheadline', { amount: result.profile.rowsRejected })}
           actionButton={
             <Button
-              label={S.downloadRejected}
+              label={t('contactsimporter.upload.downloadrejected')}
               color={ButtonColor.Secondary}
               dataTestId={testId(TestIds.downloadRejected)}
-              onClick={() => downloadTextFile(reportFileName(job.file.name, 'skipped-rows'), rejectedRowsCsv(result.rejectedRows))}
+              onClick={() =>
+                downloadTextFile(
+                  reportFileName(job.file.name, 'skipped-rows'),
+                  rejectedRowsCsv(result.rejectedRows, (reason) => t(rejectReasonKey(reason))),
+                )
+              }
             />
           }
         >
           <RejectReasons result={result} />
-          {S.rejectedText}
-          {result.rejectedRowsTruncated ? ` ${format(S.listTruncated, formatNumber(result.rejectedRows.length))}` : ''}
+          {t('contactsimporter.upload.rejectedtext')}
+          {result.rejectedRowsTruncated ? ` ${t('contactsimporter.upload.listtruncated', { amount: result.rejectedRows.length })}` : ''}
         </Callout>
       )}
 
       <Inline spacing={Spacing.M}>
         {phase === 'done' && (
-            <Button label={S.next} color={ButtonColor.Primary} dataTestId={testId(TestIds.uploadNext)} onClick={onNext} />
+            <Button label={t('contactsimporter.upload.next')} color={ButtonColor.Primary} dataTestId={testId(TestIds.uploadNext)} onClick={onNext} />
         )}
         {running && (
-            <Button label={S.pause} color={ButtonColor.Secondary} dataTestId={testId(TestIds.uploadPause)} onClick={pause} />
+            <Button label={t('contactsimporter.upload.pause')} color={ButtonColor.Secondary} dataTestId={testId(TestIds.uploadPause)} onClick={pause} />
         )}
         {(phase === 'paused' || phase === 'failed' || phase === 'idle') && (
             <Button
-              label={!file ? Strings.file.select : phase === 'failed' ? S.retry : phase === 'paused' ? S.resume : S.start}
+              label={!file ? t('contactsimporter.file.select') : phase === 'failed' ? t('contactsimporter.upload.retry') : phase === 'paused' ? t('contactsimporter.upload.resume') : t('contactsimporter.upload.start')}
               color={ButtonColor.Primary}
               dataTestId={testId(TestIds.uploadResume)}
               onClick={file ? () => void start() : onSelectFile}
             />
         )}
         {phase !== 'running' && (
-            <Button label={S.backToMap} color={ButtonColor.Secondary} onClick={file ? onBackToMap : onSelectFile} />
+            <Button label={t('contactsimporter.upload.backtomap')} color={ButtonColor.Secondary} onClick={file ? onBackToMap : onSelectFile} />
         )}
           <Button
-            label={S.cancelImport}
+            label={t('contactsimporter.upload.cancelimport')}
             color={ButtonColor.Secondary}
             destructive={true}
             dataTestId={testId(TestIds.cancelImport)}
@@ -404,52 +408,31 @@ export const UploadStep = ({
 
       <Dialog
         isOpen={cancelOpen}
-        headline={S.cancelHeadline}
-        headerCloseButton={{ tooltipText: Strings.leave.close }}
+        headline={t('contactsimporter.upload.cancelheadline')}
+        headerCloseButton={{ tooltipText: t('contactsimporter.leave.close') }}
         isDismissable={!cancelling}
         actionInProgress={cancelling}
         onClose={() => setCancelOpen(false)}
-        confirmAction={{ label: S.cancelConfirm, destructive: true, onClick: () => void cancelImport() }}
-        cancelAction={{ label: S.cancelKeep, onClick: () => setCancelOpen(false) }}
+        confirmAction={{ label: t('contactsimporter.upload.cancelconfirm'), destructive: true, onClick: () => void cancelImport() }}
+        cancelAction={{ label: t('contactsimporter.upload.cancelkeep'), onClick: () => setCancelOpen(false) }}
       >
-        <Text>{S.cancelMessage}</Text>
+        <Text>{t('contactsimporter.upload.cancelmessage')}</Text>
       </Dialog>
 
       <Dialog
         isOpen={blocker.state === 'blocked'}
-        headline={Strings.leave.headline}
-        headerCloseButton={{ tooltipText: Strings.leave.close }}
+        headline={t('contactsimporter.leave.headline')}
+        headerCloseButton={{ tooltipText: t('contactsimporter.leave.close') }}
         isDismissable={true}
         onClose={() => blocker.reset?.()}
-        confirmAction={{ label: Strings.leave.leave, onClick: () => blocker.proceed?.() }}
-        cancelAction={{ label: Strings.leave.stay, onClick: () => blocker.reset?.() }}
+        confirmAction={{ label: t('contactsimporter.leave.leave'), onClick: () => blocker.proceed?.() }}
+        cancelAction={{ label: t('contactsimporter.leave.stay'), onClick: () => blocker.reset?.() }}
       >
-        <Text>{Strings.leave.message}</Text>
+        <Text>{t('contactsimporter.leave.message')}</Text>
       </Dialog>
     </Stack>
   );
 };
-
-function describeFailure(failure: UploadSessionError): string {
-  switch (failure.kind) {
-    case 'rejected':
-      if (failure.reason === 'uploadTooLarge') {
-        return S.errors.tooLarge;
-      }
-
-      return failure.rowNumber !== undefined
-        ? format(S.errors.rejectedRow, failure.message, failure.rowNumber)
-        : format(S.errors.rejected, failure.message);
-    case 'network':
-      return S.errors.network;
-    case 'noRows':
-      return S.errors.noRows;
-    case 'complete':
-      return format(S.errors.complete, failure.message);
-    default:
-      return format(S.errors.worker, failure.message);
-  }
-}
 
 interface CardsProps {
   readonly profile: { rowsRead: number; rowsValid: number; rowsRejected: number; likelyDuplicates: number; chunkCount: number };
@@ -460,7 +443,7 @@ interface CardsProps {
 }
 
 const Cards = ({ profile, progress, estimator, done, elapsedSeconds }: CardsProps) => {
-  const C = S.cards;
+  const { t, number, bytes, duration } = useText();
   const pipeline = progress?.pipeline;
   const totalRows = pipeline ? estimateTotalRows(profile.rowsRead, pipeline.bytesRead, pipeline.totalBytes) : profile.rowsRead;
   const wholeFileRead = done || !pipeline || pipeline.bytesRead >= pipeline.totalBytes;
@@ -469,11 +452,11 @@ const Cards = ({ profile, progress, estimator, done, elapsedSeconds }: CardsProp
   const stored = stats ? stats.uploadedChunks + stats.skippedChunks : profile.chunkCount;
   const created = progress ? Math.max(progress.chunksCreated, stored) : profile.chunkCount;
 
-  let speedDetail: string = C.speedDetailUnknown;
+  let speedDetail: string = t('contactsimporter.upload.cards.speeddetailunknown');
   if (done) {
-    speedDetail = elapsedSeconds !== null ? format(C.speedDetailDone, formatDuration(elapsedSeconds)) : '';
+    speedDetail = elapsedSeconds !== null ? t('contactsimporter.upload.cards.speeddetaildone', { duration: duration(elapsedSeconds) }) : '';
   } else if (estimate.etaSeconds !== null) {
-    speedDetail = format(C.speedDetail, formatDuration(estimate.etaSeconds));
+    speedDetail = t('contactsimporter.upload.cards.speeddetail', { duration: duration(estimate.etaSeconds) });
   }
 
   return (
@@ -481,31 +464,31 @@ const Cards = ({ profile, progress, estimator, done, elapsedSeconds }: CardsProp
       <Column cols={Cols.Col3}>
         <Count name="rows-read" value={profile.rowsRead} />
         <InfoCard
-          caption={C.rows}
-          tooltip={C.rowsTooltip}
-          text={formatNumber(profile.rowsRead)}
-          details={wholeFileRead ? C.rowsDetailExact : format(C.rowsDetail, formatNumber(totalRows))}
+          caption={t('contactsimporter.upload.cards.rows')}
+          tooltip={t('contactsimporter.upload.cards.rowstooltip')}
+          text={number(profile.rowsRead)}
+          details={wholeFileRead ? t('contactsimporter.upload.cards.rowsdetailexact') : t('contactsimporter.upload.cards.rowsdetail', { total: totalRows })}
         />
       </Column>
       <Column cols={Cols.Col3}>
         <Count name="rows-uploaded" value={profile.rowsValid} />
         <InfoCard
-          caption={C.chunks}
-          tooltip={C.chunksTooltip}
-          text={formatNumber(profile.rowsValid)}
+          caption={t('contactsimporter.upload.cards.chunks')}
+          tooltip={t('contactsimporter.upload.cards.chunkstooltip')}
+          text={number(profile.rowsValid)}
           details={
             stats
-              ? format(C.chunksDetail, formatNumber(stored), formatNumber(created), formatBytes(stats.uploadedBytes))
-              : format(C.chunksDetailStored, formatNumber(stored))
+              ? t('contactsimporter.upload.cards.chunksdetail', { stored, created, sent: bytes(stats.uploadedBytes) })
+              : t('contactsimporter.upload.cards.chunksdetailstored', { count: stored, stored })
           }
         />
       </Column>
       {progress && (
         <Column cols={Cols.Col2}>
           <InfoCard
-            caption={C.speed}
-            tooltip={C.speedTooltip}
-            text={done || estimate.ratePerSecond <= 0 ? '–' : `${formatBytes(estimate.ratePerSecond)}/s`}
+            caption={t('contactsimporter.upload.cards.speed')}
+            tooltip={t('contactsimporter.upload.cards.speedtooltip')}
+            text={done || estimate.ratePerSecond <= 0 ? '–' : t('contactsimporter.upload.cards.speedvalue', { rate: bytes(estimate.ratePerSecond) })}
             details={speedDetail}
           />
         </Column>
@@ -513,15 +496,20 @@ const Cards = ({ profile, progress, estimator, done, elapsedSeconds }: CardsProp
       <Column cols={Cols.Col2}>
         <Count name="rows-skipped" value={profile.rowsRejected} />
         <InfoCard
-          caption={C.rejected}
-          tooltip={C.rejectedTooltip}
-          text={formatNumber(profile.rowsRejected)}
-          details={format(C.rejectedDetail, formatNumber(profile.rowsValid))}
+          caption={t('contactsimporter.upload.cards.rejected')}
+          tooltip={t('contactsimporter.upload.cards.rejectedtooltip')}
+          text={number(profile.rowsRejected)}
+          details={t('contactsimporter.upload.cards.rejecteddetail', { amount: profile.rowsValid })}
         />
       </Column>
       <Column cols={Cols.Col2}>
         <Count name="likely-duplicates" value={profile.likelyDuplicates} />
-        <InfoCard caption={C.duplicates} tooltip={C.duplicatesTooltip} text={formatNumber(profile.likelyDuplicates)} details={C.duplicatesDetail} />
+        <InfoCard
+          caption={t('contactsimporter.upload.cards.duplicates')}
+          tooltip={t('contactsimporter.upload.cards.duplicatestooltip')}
+          text={number(profile.likelyDuplicates)}
+          details={t('contactsimporter.upload.cards.duplicatesdetail')}
+        />
       </Column>
     </Row>
   );
@@ -533,7 +521,8 @@ const Count = ({ name, value }: { readonly name: string; readonly value: number 
 );
 
 const RejectReasons = ({ result }: { readonly result: PipelineResult }) => {
-  const entries = Object.entries(result.rejectedByReason) as [keyof typeof S.reasons, number][];
+  const { t, number } = useText();
+  const entries = Object.entries(result.rejectedByReason) as [RejectReason, number][];
   if (entries.length === 0) {
     return null;
   }
@@ -542,7 +531,7 @@ const RejectReasons = ({ result }: { readonly result: PipelineResult }) => {
     <ul style={{ margin: `0 0 ${Spacing.S} 0`, paddingLeft: Spacing.XL }}>
       {entries.map(([reason, count]) => (
         <li key={reason}>
-          {S.reasons[reason] ?? reason}: {formatNumber(count)}
+          {t(rejectReasonKey(reason))}: {number(count)}
         </li>
       ))}
     </ul>

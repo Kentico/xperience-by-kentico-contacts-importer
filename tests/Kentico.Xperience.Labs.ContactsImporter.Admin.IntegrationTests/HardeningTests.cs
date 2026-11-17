@@ -160,7 +160,7 @@ public class HardeningTests : ImportIntegrationTest
         {
             Assert.That(errors, Is.Empty);
             Assert.That(uploadable, Is.True, uploadError);
-            Assert.That(ownedErrors, Is.EqualTo(new[] { "'ContactGUID' is not an importable contact field." }));
+            Assert.That(ownedErrors, Is.EqualTo(new[] { ImportMessages.FieldNotImportable("ContactGUID") }));
         });
     }
 
@@ -244,7 +244,7 @@ public class HardeningTests : ImportIntegrationTest
             Assert.That(rejected.Outcome, Is.EqualTo(ImportProcessOutcome.Failed));
             Assert.That(rejected.State, Is.EqualTo(ImportJobState.Uploaded));
             Assert.That(status.State, Is.EqualTo(ImportJobState.Uploaded));
-            Assert.That(status.Error, Is.EqualTo("The import source field is not a text contact field."));
+            Assert.That(status.ErrorMessage, Is.EqualTo(ImportMessages.SourceFieldNotText));
             Assert.That(chunksKept, Is.True);
             Assert.That(import.Aggregates.Created, Is.EqualTo(3));
             Assert.That(Contacts().Select(c => c[IntegrationDatabase.SourceField]), Is.All.EqualTo("import-1"));

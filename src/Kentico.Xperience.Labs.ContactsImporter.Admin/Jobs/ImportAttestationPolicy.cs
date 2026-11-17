@@ -11,9 +11,13 @@ internal static class ImportAttestationPolicy
     /// statement must be confirmed again. The text is resx key <c>contactsimporter.attestation.statement</c>
     /// (<see cref="ImportTextKeys.ATTESTATION_STATEMENT"/>): bump this version whenever that text changes.
     /// </summary>
+    /// <remarks>
+    /// The version identifies the en-US text. A translation of the statement (a resx of another admin UI culture) says
+    /// the same and is attested under the same version; the culture the user saw is not stored.
+    /// </remarks>
     public const string StatementVersion = "1";
 
-    internal const string MissingError = "The import changes recipient list subscriptions or consent agreements and must be confirmed with the consent statement. Run the analysis and confirm the import again.";
+    internal static ImportMessage MissingError => ImportMessages.AttestationMissing;
 
     /// <summary>
     /// An import that adds contacts to a recipient list (which includes resubscribing) or records consent agreements

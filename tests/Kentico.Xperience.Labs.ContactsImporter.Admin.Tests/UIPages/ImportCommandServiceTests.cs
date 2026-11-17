@@ -885,7 +885,8 @@ internal class ImportCommandServiceTests
         Assert.Multiple(() =>
         {
             Assert.That(service.GetJob("x").Message, Is.EqualTo("The import ID is not valid."));
-            Assert.That(texts.Get(ImportTextKeys.INVALID_STATE, "Uploaded"), Is.EqualTo("This action is not possible while the import is Uploaded."));
+            Assert.That(texts.Get(ImportMessages.InvalidState(ImportJobState.Uploaded)), Is.EqualTo("This action is not possible while the import is Uploaded."));
+            Assert.That(texts.Get(new ImportMessage("English text stored by an earlier version.")), Is.EqualTo("English text stored by an earlier version."));
             foreach (string key in new[]
             {
                 ImportTextKeys.INVALID_JOB_ID, ImportTextKeys.JOB_NOT_FOUND, ImportTextKeys.JOB_UNREADABLE, ImportTextKeys.INVALID_REQUEST,

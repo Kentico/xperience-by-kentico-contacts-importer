@@ -17,17 +17,14 @@ import React, { useCallback, useState } from 'react';
 
 import { Commands } from '../shared/commands';
 import type { ExecuteCommand, FieldDto, ImportActionResponse } from '../shared/commands';
-import { formatNumber } from '../shared/format';
 import { useIsMounted } from '../shared/hooks';
-import { Strings, format } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { TestIds, Text, testId } from '../shared/ui';
 
 import { AggregatesTable, FieldChangesTable } from './Aggregates';
 import { ConsentSummary } from './ConsentSummary';
 import type { JobView } from './model';
 import { ReportButton } from './ReportButton';
-
-const S = Strings.results;
 
 export interface ResultsStepProps {
   readonly execute: ExecuteCommand;
@@ -44,6 +41,7 @@ export interface ResultsStepProps {
  * reports, and what is left for the marketer to do (contact groups, cache).
  */
 export const ResultsStep = ({ execute, view, fields, onOpenContactGroups, onBackToList, onReload }: ResultsStepProps) => {
+  const { t } = useText();
   const isMounted = useIsMounted();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -75,41 +73,48 @@ export const ResultsStep = ({ execute, view, fields, onOpenContactGroups, onBack
       setDeleted(true);
       onReload();
     } else {
-      setError(response?.message ?? S.deleteFailed);
+      setError(response?.message ?? t('contactsimporter.results.deletefailed'));
     }
-  }, [execute, isMounted, onReload]);
+  }, [execute, isMounted, onReload, t]);
 
   let summary: string;
   if (imported === null) {
-    summary = S.notStarted;
+    summary = t('contactsimporter.results.notstarted');
   } else if (state === 'Completed') {
-    summary = format(S.completed, formatNumber(imported.rows));
+    summary = t('contactsimporter.results.completed', { count: imported.rows, rows: imported.rows });
   } else {
-    summary = format(state === 'Failed' ? S.failedPartial : S.cancelledPartial, formatNumber(imported.rows), formatNumber(progress.rowsTotal));
+    summary = t(state === 'Failed' ? 'contactsimporter.results.failedpartial' : 'contactsimporter.results.cancelledpartial', {
+      done: imported.rows,
+      total: progress.rowsTotal,
+    });
   }
 
   return (
     <Stack spacing={Spacing.L}>
       <Headline size={HeadlineSize.M}>
-        {state === 'Completed' ? S.headlineCompleted : state === 'Failed' ? S.headlineFailed : S.headlineCancelled}
+        {state === 'Completed'
+          ? t('contactsimporter.results.headlinecompleted')
+          : state === 'Failed'
+            ? t('contactsimporter.results.headlinefailed')
+            : t('contactsimporter.results.headlinecancelled')}
       </Headline>
       <Text data-testid={TestIds.resultsStatus} data-job-state={state} data-import-started={imported !== null}>
         {summary}
       </Text>
-      {state === 'Failed' && status.error && <NotificationBarAlert>{format(S.error, status.error)}</NotificationBarAlert>}
+      {state === 'Failed' && status.error && <NotificationBarAlert>{t('contactsimporter.results.error', { reason: status.error })}</NotificationBarAlert>}
       {error && <NotificationBarAlert onDismiss={() => setError(null)}>{error}</NotificationBarAlert>}
-      {deleted && <NotificationBarInfo onDismiss={() => setDeleted(false)}>{S.deleted}</NotificationBarInfo>}
+      {deleted && <NotificationBarInfo onDismiss={() => setDeleted(false)}>{t('contactsimporter.results.deleted')}</NotificationBarInfo>}
 
       {(imported !== null || progress.analysis !== null) && (
         <>
-          <Headline size={HeadlineSize.S}>{S.tableHeadline}</Headline>
+          <Headline size={HeadlineSize.S}>{t('contactsimporter.results.tableheadline')}</Headline>
           <AggregatesTable expected={progress.analysis} actual={imported} usesList={usesList} usesConsent={usesConsent} />
         </>
       )}
       {showConsentSummary && <ConsentSummary job={job} />}
       {imported !== null && imported.fields.length > 0 && (
         <>
-          <Headline size={HeadlineSize.S}>{Strings.review.fieldsHeadline}</Headline>
+          <Headline size={HeadlineSize.S}>{t('contactsimporter.review.fieldsheadline')}</Headline>
           <FieldChangesTable aggregates={imported} fields={fields} />
         </>
       )}
@@ -118,33 +123,34 @@ export const ResultsStep = ({ execute, view, fields, onOpenContactGroups, onBack
         <Callout
           type={CalloutType.QuickTip}
           placement={CalloutPlacementType.OnDesk}
-          headline={S.groupsHeadline}
+          headline={t('contactsimporter.results.groupsheadline')}
           actionButton={
-            <Button label={S.groupsLink} color={ButtonColor.Secondary} dataTestId={testId(TestIds.contactGroupsLink)} onClick={onOpenContactGroups} />
+            <Button
+                label={t('contactsimporter.results.groupslink')} color={ButtonColor.Secondary} dataTestId={testId(TestIds.contactGroupsLink)} onClick={onOpenContactGroups} />
           }
         >
-          {S.groupsText}
+          {t('contactsimporter.results.groupstext')}
         </Callout>
       )}
       {imported !== null && state !== 'Completed' && (
-        <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={S.cacheHeadline}>
-          {S.cacheText}
+        <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={t('contactsimporter.results.cacheheadline')}>
+          {t('contactsimporter.results.cachetext')}
         </Callout>
       )}
 
-      <Headline size={HeadlineSize.S}>{S.reportsHeadline}</Headline>
-      {!hasReports && <Text hint={true}>{S.noReports}</Text>}
-      {hasReports && <Text hint={true}>{reports.includesKey ? Strings.review.reportHintKey : Strings.review.reportHint}</Text>}
+      <Headline size={HeadlineSize.S}>{t('contactsimporter.results.reportsheadline')}</Headline>
+      {!hasReports && <Text hint={true}>{t('contactsimporter.results.noreports')}</Text>}
+      {hasReports && <Text hint={true}>{reports.includesKey ? t('contactsimporter.review.reporthintkey') : t('contactsimporter.review.reporthint')}</Text>}
       <Inline spacing={Spacing.M}>
-        {reports.execute && <ReportButton execute={execute} phase="execute" label={S.downloadImportReport} />}
-        {reports.analyze && <ReportButton execute={execute} phase="analyze" label={S.downloadCheckReport} />}
+        {reports.execute && <ReportButton execute={execute} phase="execute" label={t('contactsimporter.results.downloadimportreport')} />}
+        {reports.analyze && <ReportButton execute={execute} phase="analyze" label={t('contactsimporter.results.downloadcheckreport')} />}
       </Inline>
 
       <Inline spacing={Spacing.M}>
-        <Button label={Strings.app.backToList} color={ButtonColor.Secondary} onClick={onBackToList} />
+        <Button label={t('contactsimporter.app.backtolist')} color={ButtonColor.Secondary} onClick={onBackToList} />
         {hasReports && (
           <Button
-            label={S.deleteFiles}
+            label={t('contactsimporter.results.deletefiles')}
             color={ButtonColor.Secondary}
             destructive={true}
             dataTestId={testId(TestIds.deleteFiles)}
@@ -155,15 +161,15 @@ export const ResultsStep = ({ execute, view, fields, onOpenContactGroups, onBack
 
       <Dialog
         isOpen={deleteOpen}
-        headline={S.deleteHeadline}
-        headerCloseButton={{ tooltipText: Strings.leave.close }}
+        headline={t('contactsimporter.results.deleteheadline')}
+        headerCloseButton={{ tooltipText: t('contactsimporter.leave.close') }}
         isDismissable={!deleting}
         actionInProgress={deleting}
         onClose={() => setDeleteOpen(false)}
-        confirmAction={{ label: S.deleteConfirm, destructive: true, onClick: () => void deleteFiles() }}
-        cancelAction={{ label: Strings.leave.cancel, onClick: () => setDeleteOpen(false) }}
+        confirmAction={{ label: t('contactsimporter.results.deleteconfirm'), destructive: true, onClick: () => void deleteFiles() }}
+        cancelAction={{ label: t('contactsimporter.leave.cancel'), onClick: () => setDeleteOpen(false) }}
       >
-        <Text>{S.deleteMessage}</Text>
+        <Text>{t('contactsimporter.results.deletemessage')}</Text>
       </Dialog>
     </Stack>
   );

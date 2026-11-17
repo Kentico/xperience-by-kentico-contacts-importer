@@ -18,14 +18,13 @@ import {
   Spacing,
   Stack,
 } from '@kentico/xperience-admin-components';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { FinishReason } from '../process/process-loop';
 import { Commands } from '../shared/commands';
 import type { AggregatesDto, ConfirmImportRequest, ExecuteCommand, FieldDto, ImportJobResponse } from '../shared/commands';
-import { formatDateTime, formatNumber } from '../shared/format';
 import { useIsMounted } from '../shared/hooks';
-import { Strings, format } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { TestIds, Text, testId } from '../shared/ui';
 
 import { AggregatesTable, Count, FieldChangesTable, bouncedContacts, clearedValues } from './Aggregates';
@@ -34,10 +33,9 @@ import { ConsentSummary } from './ConsentSummary';
 import { CONFIRM_TYPING_THRESHOLD, progressFor } from './model';
 import type { JobView } from './model';
 import { ProcessPanel } from './ProcessPanel';
+import type { CountCardTexts } from './ProcessPanel';
 import { ReportButton } from './ReportButton';
 import { useProcessLoop } from './useProcessLoop';
-
-const S = Strings.review;
 
 export interface ReviewStepProps {
   readonly execute: ExecuteCommand;
@@ -62,6 +60,24 @@ export const ReviewStep = (props: ReviewStepProps) =>
   props.view.status.state === 'Analyzed' ? <Summary {...props} /> : <Analyzing {...props} />;
 
 const Analyzing = ({ execute, view, notice, onBackToOptions, onReload }: ReviewStepProps) => {
+  const { t } = useText();
+  const cards = useMemo<CountCardTexts>(
+    () => ({
+      created: t('contactsimporter.review.cards.created'),
+      createdDetail: t('contactsimporter.review.cards.createddetail'),
+      createdTooltip: t('contactsimporter.review.cards.createdtooltip'),
+      updated: t('contactsimporter.review.cards.updated'),
+      updatedDetail: t('contactsimporter.review.cards.updateddetail'),
+      updatedTooltip: t('contactsimporter.review.cards.updatedtooltip'),
+      unchanged: t('contactsimporter.review.cards.unchanged'),
+      unchangedDetail: t('contactsimporter.review.cards.unchangeddetail'),
+      unchangedTooltip: t('contactsimporter.review.cards.unchangedtooltip'),
+      skipped: t('contactsimporter.review.cards.skipped'),
+      skippedDetail: t('contactsimporter.review.cards.skippeddetail'),
+      skippedTooltip: t('contactsimporter.review.cards.skippedtooltip'),
+    }),
+    [t],
+  );
   const loop = useProcessLoop({
     jobId: view.job.jobId,
     phase: 'analyze',
@@ -79,22 +95,22 @@ const Analyzing = ({ execute, view, notice, onBackToOptions, onReload }: ReviewS
 
   return (
     <Stack spacing={Spacing.L}>
-      <Headline size={HeadlineSize.M}>{S.headlineRunning}</Headline>
+      <Headline size={HeadlineSize.M}>{t('contactsimporter.review.headlinerunning')}</Headline>
       {notice && <NotificationBarInfo>{notice}</NotificationBarInfo>}
       <ProcessPanel
         view={loop}
-        runningText={S.running}
-        cards={S.cards}
+        runningText={t('contactsimporter.review.running')}
+        cards={cards}
         titleName={view.job.file.name}
         usesList={view.job.options.recipientListId !== null}
         usesConsent={view.job.options.consent !== 'none'}
         actions={
           <>
-            <Button label={S.back} color={ButtonColor.Secondary} dataTestId={testId(TestIds.reviewBack)} onClick={onBackToOptions} />
+            <Button label={t('contactsimporter.review.back')} color={ButtonColor.Secondary} dataTestId={testId(TestIds.reviewBack)} onClick={onBackToOptions} />
             <CancelImport
               execute={execute}
-              message={Strings.upload.cancelMessage}
-              keepLabel={Strings.upload.cancelKeep}
+              message={t('contactsimporter.upload.cancelmessage')}
+              keepLabel={t('contactsimporter.upload.cancelkeep')}
               onBeforeCancel={loop.pause}
               onCancelled={onReload}
             />
@@ -106,6 +122,7 @@ const Analyzing = ({ execute, view, notice, onBackToOptions, onReload }: ReviewS
 };
 
 const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, onReload, onConfirmed }: ReviewStepProps) => {
+  const { t, number, dateTime } = useText();
   const isMounted = useIsMounted();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -117,7 +134,8 @@ const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, on
   const analysis: AggregatesDto = progress.analysis ?? progress.aggregates;
   const cleared = clearedValues(analysis);
   const mustType = analysis.contactsUpdated > CONFIRM_TYPING_THRESHOLD;
-  const typedOk = !mustType || typed.trim().toUpperCase() === S.confirmWord;
+  const confirmWord = t('contactsimporter.review.confirmword');
+  const typedOk = !mustType || typed.trim().toUpperCase() === confirmWord.toUpperCase();
   const usesList = job.options.recipientListId !== null;
   const usesConsent = job.options.consent !== 'none';
   // Decided by the server from the saved options; the statement and its version come from there too.
@@ -144,50 +162,70 @@ const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, on
     } else if (response?.code === 'attestationRequired') {
       // The options or the statement changed since this page loaded them: show the current ones.
       setConfirmOpen(false);
-      setError(S.confirmStatementChanged);
+      setError(t('contactsimporter.review.confirmstatementchanged'));
       onReload();
     } else if (response?.code === 'consentPermissionRequired') {
-      setError(response.message ?? S.confirmNoPermission);
+      setError(response.message ?? t('contactsimporter.review.confirmnopermission'));
     } else {
-      setError(format(S.confirmFailed, response?.message ?? ''));
+      setError(t('contactsimporter.review.confirmfailed', { reason: response?.message ?? '' }));
     }
-  }, [execute, isMounted, job.attestationVersion, mustAttest, onConfirmed, onReload]);
+  }, [execute, isMounted, job.attestationVersion, mustAttest, onConfirmed, onReload, t]);
 
   return (
     <Stack spacing={Spacing.L}>
-      <Headline size={HeadlineSize.M}>{S.headlineDone}</Headline>
+      <Headline size={HeadlineSize.M}>{t('contactsimporter.review.headlinedone')}</Headline>
       <Text data-testid={TestIds.processStatus} data-process-status="finished" data-process-phase="analyze" data-job-state={status.state}>
-        {S.done}
-        {progress.analyzedUtc ? ` ${format(S.analyzedAt, formatDateTime(progress.analyzedUtc))}` : ''}
+        {t('contactsimporter.review.done')}
+        {progress.analyzedUtc ? ` ${t('contactsimporter.review.analyzedat', { time: dateTime(progress.analyzedUtc) })}` : ''}
       </Text>
 
       <Row spacing={Spacing.L}>
         <Column cols={Cols.Col3}>
           <Count name="review-created" value={analysis.created} />
-          <InfoCard caption={S.cards.created} tooltip={S.cards.createdTooltip} text={formatNumber(analysis.created)} details={S.cards.createdDetail} />
+          <InfoCard
+            caption={t('contactsimporter.review.cards.created')}
+            tooltip={t('contactsimporter.review.cards.createdtooltip')}
+            text={number(analysis.created)}
+            details={t('contactsimporter.review.cards.createddetail')}
+          />
         </Column>
         <Column cols={Cols.Col3}>
           <Count name="review-updated" value={analysis.contactsUpdated} />
-          <InfoCard caption={S.cards.updated} tooltip={S.cards.updatedTooltip} text={formatNumber(analysis.contactsUpdated)} details={S.cards.updatedDetail} />
+          <InfoCard
+            caption={t('contactsimporter.review.cards.updated')}
+            tooltip={t('contactsimporter.review.cards.updatedtooltip')}
+            text={number(analysis.contactsUpdated)}
+            details={t('contactsimporter.review.cards.updateddetail')}
+          />
         </Column>
         <Column cols={Cols.Col3}>
           <Count name="review-unchanged" value={analysis.unchanged} />
-          <InfoCard caption={S.cards.unchanged} tooltip={S.cards.unchangedTooltip} text={formatNumber(analysis.unchanged)} details={S.cards.unchangedDetail} />
+          <InfoCard
+            caption={t('contactsimporter.review.cards.unchanged')}
+            tooltip={t('contactsimporter.review.cards.unchangedtooltip')}
+            text={number(analysis.unchanged)}
+            details={t('contactsimporter.review.cards.unchangeddetail')}
+          />
         </Column>
         <Column cols={Cols.Col3}>
           <Count name="review-skipped" value={analysis.skipped} />
-          <InfoCard caption={S.cards.skipped} tooltip={S.cards.skippedTooltip} text={formatNumber(analysis.skipped)} details={S.cards.skippedDetail} />
+          <InfoCard
+            caption={t('contactsimporter.review.cards.skipped')}
+            tooltip={t('contactsimporter.review.cards.skippedtooltip')}
+            text={number(analysis.skipped)}
+            details={t('contactsimporter.review.cards.skippeddetail')}
+          />
         </Column>
       </Row>
 
       {cleared > 0 && (
-        <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={format(S.clearedHeadline, formatNumber(cleared))}>
-          {S.clearedText}
+        <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={t('contactsimporter.review.clearedheadline', { amount: cleared })}>
+          {t('contactsimporter.review.clearedtext')}
         </Callout>
       )}
       {(analysis.duplicateRows > 0 || status.profile.likelyDuplicates > 0) && (
         <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk}>
-          {format(S.duplicatesText, formatNumber(status.profile.likelyDuplicates))}
+          {t('contactsimporter.review.duplicatestext', { amount: status.profile.likelyDuplicates })}
         </Callout>
       )}
 
@@ -196,30 +234,35 @@ const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, on
         <Callout
           type={CalloutType.QuickTip}
           placement={CalloutPlacementType.OnDesk}
-          headline={format(Strings.consentSummary.bouncedHeadline, formatNumber(bounced))}
+          headline={t('contactsimporter.consentsummary.bouncedheadline', { amount: bounced })}
         >
-          {Strings.consentSummary.bouncedText}
+          {t('contactsimporter.consentsummary.bouncedtext')}
         </Callout>
       )}
 
-      <Headline size={HeadlineSize.S}>{S.detailsHeadline}</Headline>
+      <Headline size={HeadlineSize.S}>{t('contactsimporter.review.detailsheadline')}</Headline>
       <AggregatesTable expected={analysis} actual={null} usesList={usesList} usesConsent={usesConsent} />
 
       {analysis.fields.length > 0 && (
         <>
-          <Headline size={HeadlineSize.S}>{S.fieldsHeadline}</Headline>
+          <Headline size={HeadlineSize.S}>{t('contactsimporter.review.fieldsheadline')}</Headline>
           <FieldChangesTable aggregates={analysis} fields={fields} />
         </>
       )}
 
       {reports.analyze && (
-        <ReportButton execute={execute} phase="analyze" label={S.downloadReport} hint={reports.includesKey ? S.reportHintKey : S.reportHint} />
+        <ReportButton
+          execute={execute}
+          phase="analyze"
+          label={t('contactsimporter.review.downloadreport')}
+          hint={reports.includesKey ? t('contactsimporter.review.reporthintkey') : t('contactsimporter.review.reporthint')}
+        />
       )}
 
       <Inline spacing={Spacing.M}>
-        <Button label={S.back} color={ButtonColor.Secondary} dataTestId={testId(TestIds.reviewBack)} onClick={onBackToOptions} />
+        <Button label={t('contactsimporter.review.back')} color={ButtonColor.Secondary} dataTestId={testId(TestIds.reviewBack)} onClick={onBackToOptions} />
         <Button
-          label={S.run}
+          label={t('contactsimporter.review.run')}
           color={ButtonColor.Primary}
           dataTestId={testId(TestIds.reviewRun)}
           onClick={() => {
@@ -228,62 +271,70 @@ const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, on
             setConfirmOpen(true);
           }}
         />
-        <CancelImport execute={execute} message={Strings.upload.cancelMessage} keepLabel={Strings.upload.cancelKeep} onCancelled={onReload} />
+        <CancelImport
+          execute={execute}
+          message={t('contactsimporter.upload.cancelmessage')}
+          keepLabel={t('contactsimporter.upload.cancelkeep')}
+          onCancelled={onReload}
+        />
       </Inline>
 
       <Dialog
         isOpen={confirmOpen}
-        headline={S.confirmHeadline}
-        headerCloseButton={{ tooltipText: Strings.leave.close }}
+        headline={t('contactsimporter.review.confirmheadline')}
+        headerCloseButton={{ tooltipText: t('contactsimporter.leave.close') }}
         isDismissable={!confirming}
         actionInProgress={confirming}
         onClose={() => setConfirmOpen(false)}
         confirmAction={{
-          label: S.confirmRun,
+          label: t('contactsimporter.review.confirmrun'),
           disabled: !typedOk || blockedByPermission,
           onClick: () => void confirm(),
         }}
-        cancelAction={{ label: S.confirmCancel, onClick: () => setConfirmOpen(false) }}
+        cancelAction={{ label: t('contactsimporter.review.confirmcancel'), onClick: () => setConfirmOpen(false) }}
       >
         <Stack spacing={Spacing.M}>
           {error && <NotificationBarAlert>{error}</NotificationBarAlert>}
           <Text strong={true}>
-            {format(S.confirmText, formatNumber(analysis.created), formatNumber(analysis.contactsUpdated), formatNumber(analysis.skipped))}
+            {t('contactsimporter.review.confirmtext', { created: analysis.created, updated: analysis.contactsUpdated, skipped: analysis.skipped })}
           </Text>
-          <Text>{format(Strings.steps.fileLine, job.file.name)}</Text>
-          <Text>{S.confirmNoUndo}</Text>
+          <Text>{t('contactsimporter.steps.fileline', { fileName: job.file.name })}</Text>
+          <Text>{t('contactsimporter.review.confirmnoundo')}</Text>
           {mustAttest && (
             <>
               {usesList && (
-                <Text>{format(S.confirmListAdded, job.recipientListName ?? '', formatNumber(analysis.listAdded ?? 0))}</Text>
+                <Text>{t('contactsimporter.review.confirmlistadded', { list: job.recipientListName ?? '', amount: analysis.listAdded ?? 0 })}</Text>
               )}
               {usesList && job.options.unsubscribed === 'resubscribe' && (
-                <Text>{format(S.confirmListResubscribed, formatNumber(analysis.listResubscribed ?? 0))}</Text>
+                <Text>{t('contactsimporter.review.confirmlistresubscribed', { amount: analysis.listResubscribed ?? 0 })}</Text>
               )}
               {usesConsent && (
                 <Text>
-                  {format(S.confirmConsentRecorded, job.consentName ?? '', formatNumber((analysis.consentRecorded ?? 0) + (analysis.consentReAgreed ?? 0)))}
+                  {t('contactsimporter.review.confirmconsentrecorded', {
+                    consent: job.consentName ?? '',
+                    amount: (analysis.consentRecorded ?? 0) + (analysis.consentReAgreed ?? 0),
+                  })}
                 </Text>
               )}
               {usesConsent && job.options.revokedConsent === 'reAgree' && (
-                <Text>{format(S.confirmConsentReAgreed, formatNumber(analysis.consentReAgreed ?? 0))}</Text>
+                <Text>{t('contactsimporter.review.confirmconsentreagreed', { amount: analysis.consentReAgreed ?? 0 })}</Text>
               )}
               {blockedByPermission ? (
-                <NotificationBarAlert dataTestId={testId(TestIds.attestationNoPermission)}>{S.confirmNoPermission}</NotificationBarAlert>
+                <NotificationBarAlert dataTestId={testId(TestIds.attestationNoPermission)}>{t('contactsimporter.review.confirmnopermission')}</NotificationBarAlert>
               ) : (
-                <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnPaper} headline={S.confirmStatementHeadline}>
+                <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnPaper} headline={t('contactsimporter.review.confirmstatementheadline')}>
                   <div data-testid={TestIds.attestationStatement} data-statement-version={job.attestationVersion}>
                     {job.attestationStatement}
                   </div>
-                  <div style={{ marginTop: Spacing.S }}>{S.confirmStatementHint}</div>
+                  <div style={{ marginTop: Spacing.S }}>{t('contactsimporter.review.confirmstatementhint')}</div>
                 </Callout>
               )}
             </>
           )}
           {mustType && (
             <Input
-              label={S.confirmTypeLabel}
-              explanationText={format(S.confirmType, S.confirmWord)}
+              label={t('contactsimporter.review.confirmtypelabel')}
+              explanationText={t('contactsimporter.review.confirmtype', { word: confirmWord })}
               value={typed}
               dataTestId={testId(TestIds.confirmInput)}
               onChange={(event) => setTyped(event.target.value)}

@@ -352,7 +352,7 @@ public class ReferenceFieldTests
         public ImportProgress Analyze(Guid jobId)
         {
             var analysis = Run(jobId, ImportPhase.Analyze);
-            Assert.That(analysis.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), analysis.Error);
+            Assert.That(analysis.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), analysis.Error?.ToString());
             Assert.That(Processor.Confirm(jobId).Outcome, Is.EqualTo(ImportConfirmOutcome.Confirmed));
 
             return analysis;
@@ -397,7 +397,7 @@ public class ReferenceFieldTests
         string[] executeReport = fixture.Report(jobId, ImportPhase.Execute);
         Assert.Multiple(() =>
         {
-            Assert.That(import.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), import.Error);
+            Assert.That(import.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), import.Error?.ToString());
             Assert.That(import.State, Is.EqualTo(ImportJobState.Completed));
             Assert.That(contactsAfterAnalysis, Is.Zero);
             Assert.That(import.Aggregates.Rows, Is.EqualTo(5));
@@ -438,7 +438,7 @@ public class ReferenceFieldTests
         string[] report = fixture.Report(jobId, ImportPhase.Execute);
         Assert.Multiple(() =>
         {
-            Assert.That(import.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), import.Error);
+            Assert.That(import.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), import.Error?.ToString());
             Assert.That(import.State, Is.EqualTo(ImportJobState.Completed));
             Assert.That(import.Aggregates.Created, Is.EqualTo(2));
             Assert.That(import.Aggregates.SkippedInvalidValue, Is.EqualTo(3));

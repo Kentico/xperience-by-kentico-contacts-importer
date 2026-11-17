@@ -8,7 +8,7 @@ using Kentico.Xperience.Labs.ContactsImporter.Admin;
     parentType: typeof(ContactsImporterApplicationPage),
     slug: ImportsListPage.SLUG,
     uiPageType: typeof(ImportsListPage),
-    name: "Imports",
+    name: "{$" + ImportTextKeys.PAGE_IMPORTS + "$}",
     templateName: ImportsListPage.TEMPLATE_NAME,
     order: 100,
     Icon = Icons.ArrowUpLine)]

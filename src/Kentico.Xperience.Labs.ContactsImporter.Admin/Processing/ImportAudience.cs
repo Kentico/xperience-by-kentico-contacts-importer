@@ -31,7 +31,7 @@ internal sealed record ImportAudience(int? RecipientListId = null, int? ConsentI
 
 /// <param name="Audience">The checked recipient list and consent; <c>null</c> when <paramref name="Error"/> is set.</param>
 /// <param name="Error">Why the options cannot be used, without contact data; <c>null</c> when they can.</param>
-internal sealed record ImportAudienceResolution(ImportAudience? Audience, string? Error = null);
+internal sealed record ImportAudienceResolution(ImportAudience? Audience, ImportMessage? Error = null);
 
 /// <summary>
 /// Checks the recipient list and consent selected in the import options against the database.
@@ -51,9 +51,9 @@ internal interface IImportAudienceResolver
 /// </summary>
 internal sealed class ImportAudienceResolver(IOptionsMonitor<BouncedEmailsGlobalOptions> bounceOptions) : IImportAudienceResolver
 {
-    internal const string RecipientListMissingError = "The selected recipient list does not exist, is not a recipient list or is being deleted. Select another recipient list.";
-    internal const string ConsentMissingError = "The selected consent does not exist. Select another consent.";
-    internal const string ConsentNotSelectedError = "A consent must be selected when consent agreements are recorded.";
+    internal static ImportMessage RecipientListMissingError => ImportMessages.RecipientListMissing;
+    internal static ImportMessage ConsentMissingError => ImportMessages.ConsentMissing;
+    internal static ImportMessage ConsentNotSelectedError => ImportMessages.ConsentNotSelected;
 
     public ImportAudienceResolution Resolve(ImportOptions options)
     {

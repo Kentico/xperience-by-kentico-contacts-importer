@@ -175,7 +175,7 @@ public class ReferenceFieldsTests : ImportIntegrationTest
         ]);
 
         var analysis = harness.Run(jobId, ImportPhase.Analyze);
-        Assert.That(analysis.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), analysis.Error);
+        Assert.That(analysis.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), analysis.Error?.ToString());
         int contactsAfterAnalysis = ContactCount();
         Assert.That(harness.Processor.Confirm(jobId).Outcome, Is.EqualTo(ImportConfirmOutcome.Confirmed));
         var import = harness.Run(jobId, ImportPhase.Execute);
@@ -184,7 +184,7 @@ public class ReferenceFieldsTests : ImportIntegrationTest
         string[] executeReport = harness.ReadReport(jobId, ImportPhase.Execute);
         Assert.Multiple(() =>
         {
-            Assert.That(import.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), import.Error);
+            Assert.That(import.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), import.Error?.ToString());
             Assert.That(import.State, Is.EqualTo(ImportJobState.Completed));
             Assert.That(contactsAfterAnalysis, Is.EqualTo(1));
             Assert.That(import.Aggregates.Rows, Is.EqualTo(8));
@@ -335,7 +335,7 @@ public class ReferenceFieldsTests : ImportIntegrationTest
         ]);
 
         var analysis = harness.Run(jobId, ImportPhase.Analyze);
-        Assert.That(analysis.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), analysis.Error);
+        Assert.That(analysis.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), analysis.Error?.ToString());
         Assert.That(harness.Processor.Confirm(jobId).Outcome, Is.EqualTo(ImportConfirmOutcome.Confirmed));
         var import = harness.Run(jobId, ImportPhase.Execute);
 
@@ -343,7 +343,7 @@ public class ReferenceFieldsTests : ImportIntegrationTest
         Assert.Multiple(() =>
         {
             Assert.That(analysis.Aggregates.Created, Is.EqualTo(3), "The status existed during the analysis.");
-            Assert.That(import.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), import.Error);
+            Assert.That(import.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), import.Error?.ToString());
             Assert.That(import.State, Is.EqualTo(ImportJobState.Completed));
             Assert.That(repository.Writes, Is.EqualTo(2), "The refused write and its repetition.");
             Assert.That(import.Aggregates.Created, Is.EqualTo(1));
@@ -363,7 +363,7 @@ public class ReferenceFieldsTests : ImportIntegrationTest
     {
         var fields = new ContactFieldSchemaProvider().GetMappableFields();
         var job = Tests.TestData.Job(null, Email, Email, Country, IntegrationDatabase.UserField);
-        Assert.That(ImportProcessingContext.TryCreate(job, fields, out var context, out string? error), Is.True, error);
+        Assert.That(ImportProcessingContext.TryCreate(job, fields, out var context, out var error), Is.True, error?.ToString());
         var repository = new ContactImportRepository(Provider<ContactInfo>.Instance);
 
         var missingCountries = repository.FindMissingReferences(context!.Fields[1], [countryId, 987654321, otherCountryId, -5, 0]);

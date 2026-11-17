@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { chunkSizes, fieldLabel, isFinished, stepForState, toOpenOptions, toTargetFields } from '../import/model';
 
 import type { JobState, LimitsDto } from './commands';
-import { formatBytes, formatDateTime, formatDuration, formatNumber, formatPercent } from './format';
-import { csvValue, rejectedRowsCsv, reportFileName, suspectRowsCsv } from './reports';
-import { Strings, format } from './strings';
+import { createFormatters, formatBytes, formatDateTime, formatDuration, formatNumber, formatPercent, localizeParams } from './format';
+import { csvValue, rejectReasonKey, rejectedRowsCsv, reportFileName, suspectRowsCsv } from './reports';
+import { enText } from './test-resources';
 
 const LIMITS: LimitsDto = {
   maxFileSizeBytes: 5 * 1024 ** 3,
@@ -17,10 +17,14 @@ const LIMITS: LimitsDto = {
   parallelUploads: 3,
 };
 
-describe('format', () => {
-  it('fills numbered placeholders and leaves unknown ones', () => {
-    expect(format('{0} of {1} ({0})', 'a', 2)).toBe('a of 2 (a)');
-    expect(format('{0} {1}', 'only')).toBe('only {1}');
+describe('localizeParams', () => {
+  it('formats numbers in the culture and keeps count a number for the plural form', () => {
+    expect(localizeParams({ rows: 1234567, count: 1234567, name: 'x' }, createFormatters('en-US'))).toEqual({
+      rows: '1,234,567',
+      count: 1234567,
+      name: 'x',
+    });
+    expect(localizeParams({ rows: 1234567 }, createFormatters('de-DE'))).toEqual({ rows: '1.234.567' });
   });
 });
 
@@ -38,9 +42,17 @@ describe('formatters', () => {
     expect(formatPercent(3.46, 'en-US')).toBe('3.5');
     expect(formatPercent(42.4, 'en-US')).toBe('42');
     expect(formatPercent(0, 'en-US')).toBe('0');
-    expect(formatDuration(8)).toBe('8 s');
-    expect(formatDuration(75)).toBe('1 min 15 s');
-    expect(formatDuration(3720)).toBe('1 h 2 min');
+    expect(formatDuration(8, 'en-US')).toBe('8 sec');
+    expect(formatDuration(75, 'en-US')).toBe('1 min, 15 sec');
+    expect(formatDuration(3720, 'en-US')).toBe('1 hr, 2 min');
+  });
+
+  it('formats in the culture it is given', () => {
+    expect(formatNumber(1234567, 'de-DE')).toBe('1.234.567');
+    expect(formatBytes(1536, 'de-DE')).toBe('1,5 KB');
+    expect(formatPercent(3.46, 'cs-CZ')).toBe('3,5');
+    expect(formatDuration(75, 'de-DE')).toBe('1 Min., 15 Sek.');
+    expect(formatDateTime('2026-11-16T12:00:00Z', 'de-DE')).not.toBe(formatDateTime('2026-11-16T12:00:00Z', 'en-US'));
   });
 
   it('reads server timestamps as UTC, with or without a zone', () => {
@@ -52,19 +64,22 @@ describe('formatters', () => {
 });
 
 describe('reports', () => {
-  it('builds the skipped rows CSV from row numbers and reasons only', () => {
-    const csv = rejectedRowsCsv([
-      { rowNumber: 3, reason: 'missingKey' },
-      { rowNumber: 9, reason: 'valueTooLong', field: 'ContactFirstName' },
-      { rowNumber: 12, reason: 'parseError', detail: 'unterminatedQuote' },
-    ]);
+  it('builds the skipped rows CSV from row numbers and reasons only, with fixed column names', () => {
+    const csv = rejectedRowsCsv(
+      [
+        { rowNumber: 3, reason: 'missingKey' },
+        { rowNumber: 9, reason: 'valueTooLong', field: 'ContactFirstName' },
+        { rowNumber: 12, reason: 'parseError', detail: 'unterminatedQuote' },
+      ],
+      (reason) => enText(rejectReasonKey(reason)),
+    );
 
     expect(csv).toBe(
       [
         'row,reason,field,detail',
-        `3,${Strings.upload.reasons.missingKey},,`,
-        `9,${Strings.upload.reasons.valueTooLong},ContactFirstName,`,
-        `12,${Strings.upload.reasons.parseError},,unterminatedQuote`,
+        '3,No value in the match field,,',
+        '9,A value is too long for its field,ContactFirstName,',
+        '12,Row could not be parsed,,unterminatedQuote',
         '',
       ].join('\r\n'),
     );

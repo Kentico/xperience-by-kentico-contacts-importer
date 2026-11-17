@@ -54,13 +54,13 @@ public class ThroughputTests : ImportIntegrationTest
         var watch = Stopwatch.StartNew();
         var analysis = harness.Run(jobId, ImportPhase.Analyze);
         var analyze = watch.Elapsed;
-        Assert.That(analysis.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), analysis.Error);
+        Assert.That(analysis.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), analysis.Error?.ToString());
         Assert.That(harness.Processor.Confirm(jobId).Outcome, Is.EqualTo(ImportConfirmOutcome.Confirmed));
 
         watch.Restart();
         var progress = harness.Run(jobId, ImportPhase.Execute);
         var execute = watch.Elapsed;
-        Assert.That(progress.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), progress.Error);
+        Assert.That(progress.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), progress.Error?.ToString());
 
         return (progress, analyze, execute);
     }

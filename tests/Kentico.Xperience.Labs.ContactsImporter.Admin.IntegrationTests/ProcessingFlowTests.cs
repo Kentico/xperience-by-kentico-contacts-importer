@@ -244,7 +244,7 @@ public class ProcessingFlowTests : ImportIntegrationTest
             Assert.That(progress.Outcome, Is.EqualTo(ImportProcessOutcome.Failed));
             Assert.That(progress.State, Is.EqualTo(ImportJobState.Failed));
             Assert.That(progress.Error, Is.EqualTo(ImportProcessor.UnexpectedError));
-            Assert.That(status.Error, Is.EqualTo(ImportProcessor.UnexpectedError));
+            Assert.That(status.ErrorMessage, Is.EqualTo(ImportProcessor.UnexpectedError));
             Assert.That(ContactCount(), Is.EqualTo(2), "The failed batch is rolled back as a whole; earlier batches stay.");
             Assert.That(harness.Store.HasChunks(jobId), Is.False);
             Assert.That(harness.Log, Has.Some.Contains("CONTACT_IMPORT_FAILURE").And.Contains("SqlException (SQL error 2601"));

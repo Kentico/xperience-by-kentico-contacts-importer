@@ -9,7 +9,7 @@ using Kentico.Xperience.Labs.ContactsImporter.Admin;
     parentType: typeof(ImportsListPage),
     slug: PageParameterConstants.PARAMETERIZED_SLUG,
     uiPageType: typeof(ImportPage),
-    name: "Import",
+    name: "{$" + ImportTextKeys.PAGE_IMPORT + "$}",
     templateName: ImportPage.TEMPLATE_NAME,
     order: 100)]
 

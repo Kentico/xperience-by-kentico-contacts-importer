@@ -33,17 +33,15 @@ import {
 } from '../mapping/mapping-state';
 import type { MappingProblem, MappingState, SavedMapping } from '../mapping/mapping-state';
 import type { FieldDto } from '../shared/commands';
-import { Strings, format } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { OptionSelect, TestIds, Text, testId } from '../shared/ui';
 import type { Option } from '../shared/ui';
 
 import { fieldLabel } from './model';
 
-const S = Strings.map;
-
-const PROBLEM_TEXT: Record<Exclude<MappingProblem, 'missingColumn'>, string> = {
-  nothingMapped: S.nothingMapped,
-  noKey: S.noKey,
+const PROBLEM_KEYS: Record<Exclude<MappingProblem, 'missingColumn'>, string> = {
+  nothingMapped: 'contactsimporter.map.nothingmapped',
+  noKey: 'contactsimporter.map.nokey',
 };
 
 export interface MapStepProps {
@@ -84,9 +82,10 @@ export const MapStep = ({
   onBack,
   onSave,
 }: MapStepProps) => {
+  const { t, percent } = useText();
   const fieldOptions = useMemo<Option[]>(
-    () => [{ value: '', label: S.doNotImport }, ...fields.map((field) => ({ value: field.name, label: fieldLabel(field) }))],
-    [fields],
+    () => [{ value: '', label: t('contactsimporter.map.donotimport') }, ...fields.map((field) => ({ value: field.name, label: fieldLabel(field) }))],
+    [fields, t],
   );
   const fieldByName = useMemo(() => new Map(fields.map((field) => [field.name, field])), [fields]);
   const validation = validateMapping(mapping, saved);
@@ -101,36 +100,36 @@ export const MapStep = ({
   const keyField = fieldByName.get(mapping.keyField);
   const keyNotAllowed = keyField !== undefined && !keyField.canBeKey;
   const dateOptions: Option[] = [
-    { value: 'iso', label: S.dateIso },
-    { value: 'dmy', label: S.dateDmy },
-    { value: 'mdy', label: S.dateMdy },
+    { value: 'iso', label: t('contactsimporter.map.dateiso') },
+    { value: 'dmy', label: t('contactsimporter.map.datedmy') },
+    { value: 'mdy', label: t('contactsimporter.map.datemdy') },
   ];
   const mappingChanged = saved !== undefined && !isSameMapping(mapping, saved);
   const consentChoices = consentColumnChoices(mapping);
-  const consentAgreedOptions: Option[] = [{ value: '', label: S.consentAgreedNone }, ...consentChoices.map((name) => ({ value: name, label: name }))];
+  const consentAgreedOptions: Option[] = [{ value: '', label: t('contactsimporter.map.consentagreednone') }, ...consentChoices.map((name) => ({ value: name, label: name }))];
   const consentDateOptions: Option[] = [
-    { value: '', label: S.consentDateNone },
+    { value: '', label: t('contactsimporter.map.consentdatenone') },
     ...consentChoices.filter((name) => name !== mapping.consent.agreed).map((name) => ({ value: name, label: name })),
   ];
 
   return (
     <Stack spacing={Spacing.L}>
-      <Headline size={HeadlineSize.M}>{S.headline}</Headline>
-      <Text>{S.intro}</Text>
+      <Headline size={HeadlineSize.M}>{t('contactsimporter.map.headline')}</Headline>
+      <Text>{t('contactsimporter.map.intro')}</Text>
 
       <Stack spacing={Spacing.S}>
         <Row spacing={Spacing.L}>
           <Column cols={Cols.Col3}>
-            <Text strong={true}>{S.column}</Text>
+            <Text strong={true}>{t('contactsimporter.map.column')}</Text>
           </Column>
           <Column cols={Cols.Col4}>
-            <Text strong={true}>{S.examples}</Text>
+            <Text strong={true}>{t('contactsimporter.map.examples')}</Text>
           </Column>
           <Column cols={Cols.Col1}>
-            <Text strong={true}>{S.filled}</Text>
+            <Text strong={true}>{t('contactsimporter.map.filled')}</Text>
           </Column>
           <Column cols={Cols.Col4}>
-            <Text strong={true}>{S.target}</Text>
+            <Text strong={true}>{t('contactsimporter.map.target')}</Text>
           </Column>
         </Row>
         <Divider orientation={DividerOrientation.Horizontal} />
@@ -149,10 +148,10 @@ export const MapStep = ({
                 </Text>
               </Column>
               <Column cols={Cols.Col1}>
-                <Text style={{ paddingTop: Spacing.S }}>{profile ? `${Math.round(profile.fillRate * 100)} %` : ''}</Text>
+                <Text style={{ paddingTop: Spacing.S }}>{profile ? `${percent(Math.round(profile.fillRate * 100))} %` : ''}</Text>
               </Column>
               <Column cols={Cols.Col4}>
-                <div data-mapping-column={column.source} aria-label={format(S.targetFor, column.source)}>
+                <div data-mapping-column={column.source} aria-label={t('contactsimporter.map.targetfor', { column: column.source })}>
                   <OptionSelect
                     value={column.target}
                     options={fieldOptions}
@@ -170,11 +169,11 @@ export const MapStep = ({
       <Row spacing={Spacing.L}>
         <Column cols={Cols.Col4}>
           <OptionSelect
-            label={S.keyField}
+            label={t('contactsimporter.map.keyfield')}
             value={mapping.keyField}
             options={keyOptions}
             disabled={saving || keyOptions.length === 0}
-            explanationText={S.keyFieldHelp}
+            explanationText={t('contactsimporter.map.keyfieldhelp')}
             dataTestId={TestIds.keyField}
             onChange={(keyField) => onChange(setKeyField(mapping, keyField))}
           />
@@ -182,11 +181,11 @@ export const MapStep = ({
         {hasDateTarget(mapping, targetFields) && (
           <Column cols={Cols.Col4}>
             <OptionSelect
-              label={S.dateFormat}
+              label={t('contactsimporter.map.dateformat')}
               value={mapping.dateFormat}
               options={dateOptions}
               disabled={saving}
-              explanationText={S.dateFormatHelp}
+              explanationText={t('contactsimporter.map.dateformathelp')}
               onChange={(dateFormat) => onChange(setDateFormat(mapping, dateFormat as DateFormat))}
             />
           </Column>
@@ -194,16 +193,16 @@ export const MapStep = ({
       </Row>
 
       <Stack spacing={Spacing.M}>
-        <Headline size={HeadlineSize.S}>{S.consentHeadline}</Headline>
-        <Text>{S.consentIntro}</Text>
+        <Headline size={HeadlineSize.S}>{t('contactsimporter.map.consentheadline')}</Headline>
+        <Text>{t('contactsimporter.map.consentintro')}</Text>
         <Row spacing={Spacing.L}>
           <Column cols={Cols.Col4}>
             <OptionSelect
-              label={S.consentAgreed}
+              label={t('contactsimporter.map.consentagreed')}
               value={mapping.consent.agreed}
               options={consentAgreedOptions}
               disabled={saving}
-              explanationText={S.consentAgreedHelp}
+              explanationText={t('contactsimporter.map.consentagreedhelp')}
               dataTestId={TestIds.consentAgreed}
               onChange={(source) => onChange(setConsentColumn(mapping, 'agreed', source))}
             />
@@ -211,11 +210,11 @@ export const MapStep = ({
           {mapping.consent.agreed !== '' && (
             <Column cols={Cols.Col4}>
               <OptionSelect
-                label={S.consentDate}
+                label={t('contactsimporter.map.consentdate')}
                 value={mapping.consent.date}
                 options={consentDateOptions}
                 disabled={saving}
-                explanationText={S.consentDateHelp}
+                explanationText={t('contactsimporter.map.consentdatehelp')}
                 dataTestId={TestIds.consentDate}
                 onChange={(source) => onChange(setConsentColumn(mapping, 'date', source))}
               />
@@ -226,15 +225,17 @@ export const MapStep = ({
 
       {validation.problems.map((problem) => (
         <NotificationBarAlert key={problem}>
-          {problem === 'missingColumn' ? format(S.missingColumn, validation.missingColumns.join(', ')) : PROBLEM_TEXT[problem]}
+          {problem === 'missingColumn'
+            ? t('contactsimporter.map.missingcolumn', { columns: validation.missingColumns.join(', ') })
+            : t(PROBLEM_KEYS[problem])}
         </NotificationBarAlert>
       ))}
-      {keyNotAllowed && <NotificationBarAlert>{format(S.keyNotAllowed, fieldLabel(keyField))}</NotificationBarAlert>}
-      {validation.notices.includes('customKey') && <NotificationBarWarning>{S.customKey}</NotificationBarWarning>}
-      {validation.notices.includes('emailNotMapped') && <NotificationBarWarning>{S.emailNotMapped}</NotificationBarWarning>}
+      {keyNotAllowed && <NotificationBarAlert>{t('contactsimporter.map.keynotallowed', { field: fieldLabel(keyField) })}</NotificationBarAlert>}
+      {validation.notices.includes('customKey') && <NotificationBarWarning>{t('contactsimporter.map.customkey')}</NotificationBarWarning>}
+      {validation.notices.includes('emailNotMapped') && <NotificationBarWarning>{t('contactsimporter.map.emailnotmapped')}</NotificationBarWarning>}
       {hasUploadedData && (mappingChanged || fileChanged) && (
         <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk}>
-          {fileChanged ? S.replaceUploadedFile : S.replaceUploaded}
+          {fileChanged ? t('contactsimporter.map.replaceuploadedfile') : t('contactsimporter.map.replaceuploaded')}
         </Callout>
       )}
       {error && <NotificationBarAlert>{error}</NotificationBarAlert>}
@@ -243,9 +244,9 @@ export const MapStep = ({
       ))}
 
       <Inline spacing={Spacing.M}>
-          <Button label={S.back} color={ButtonColor.Secondary} disabled={saving} dataTestId={testId(TestIds.mapBack)} onClick={onBack} />
+          <Button label={t('contactsimporter.map.back')} color={ButtonColor.Secondary} disabled={saving} dataTestId={testId(TestIds.mapBack)} onClick={onBack} />
           <Button
-            label={saving ? S.saving : S.next}
+            label={saving ? t('contactsimporter.map.saving') : t('contactsimporter.map.next')}
             color={ButtonColor.Primary}
             disabled={saving || keyNotAllowed || validation.problems.some((problem) => problem !== 'missingColumn')}
             inProgress={saving}

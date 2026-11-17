@@ -173,7 +173,7 @@ internal class ImportJobCleanupServiceTests
             Assert.That(HasReports(jobId), Is.False);
             Assert.That(status.State, Is.EqualTo(ImportJobState.Cancelled));
             Assert.That(status.FinishedUtc, Is.EqualTo(time.UtcNow));
-            Assert.That(status.Error, Is.EqualTo(ImportJobCleanupService.AbandonedError));
+            Assert.That(status.ErrorMessage, Is.EqualTo(ImportJobCleanupService.AbandonedError));
             Assert.That(result.JobsAbandoned, Is.EqualTo(1));
             Assert.That(temp.Store.ReadJob(jobId), Is.Not.Null, "the job stays in the recent imports list");
         });

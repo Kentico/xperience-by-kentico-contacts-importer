@@ -54,7 +54,7 @@ internal sealed class ImportJobCleanupService(
     /// <summary>Shortest time between two lazy sweeps in one application instance.</summary>
     internal static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(10);
 
-    internal const string AbandonedError = "The import was abandoned and its files were deleted.";
+    internal static ImportMessage AbandonedError => ImportMessages.Abandoned;
 
     private readonly Lock sweepLock = new();
     private DateTime? lastSweepUtc;
@@ -195,7 +195,7 @@ internal sealed class ImportJobCleanupService(
             cancelled = !ImportJobStateMachine.IsTerminal(current.State);
 
             return cancelled
-                ? ImportJobStateMachine.Transition(current, ImportJobState.Cancelled, utcNow) with { Error = AbandonedError }
+                ? ImportJobStateMachine.Transition(current, ImportJobState.Cancelled, utcNow).WithError(AbandonedError)
                 : current;
         });
         store.DeleteChunks(jobId);

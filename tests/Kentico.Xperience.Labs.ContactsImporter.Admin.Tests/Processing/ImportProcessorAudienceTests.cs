@@ -104,7 +104,7 @@ public class ImportProcessorAudienceTests
         public ImportProgress AnalyzeAndConfirm(Guid jobId)
         {
             var analysis = Run(jobId, ImportPhase.Analyze);
-            Assert.That(analysis.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), analysis.Error);
+            Assert.That(analysis.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), analysis.Error?.ToString());
             Assert.That(Processor.Confirm(jobId, Attestation()).Outcome, Is.EqualTo(ImportConfirmOutcome.Confirmed));
 
             return analysis;
@@ -205,7 +205,7 @@ public class ImportProcessorAudienceTests
         int created = fixture.Repository.Contacts.Single(c => (string)c.Values[0]! == "new@x.test").Id;
         Assert.Multiple(() =>
         {
-            Assert.That(progress.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), progress.Error);
+            Assert.That(progress.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), progress.Error?.ToString());
             Assert.That(AudienceCounts(fixture.Aggregates(jobId)), Is.EquivalentTo(AudienceCounts(fixture.Store.ReadStatus(jobId)!.Analysis!.Aggregates)));
             Assert.That(progress.Aggregates.ListAdded, Is.EqualTo(2));
             Assert.That(progress.Aggregates.ListResubscribed, Is.EqualTo(1));
@@ -284,7 +284,7 @@ public class ImportProcessorAudienceTests
             Assert.That(first.Outcome, Is.EqualTo(ImportProcessOutcome.TransientError));
             Assert.That(first.RowsProcessed, Is.Zero, "The checkpoint of the written batch was lost.");
             Assert.That((members, subscriptions, agreements), Is.EqualTo((3, 4, 4)));
-            Assert.That(second.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), second.Error);
+            Assert.That(second.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), second.Error?.ToString());
             Assert.That(fixture.Repository.Writes, Is.EqualTo(2));
             Assert.That(fixture.Repository.Members, Has.Count.EqualTo(members));
             Assert.That(fixture.Repository.Subscriptions, Has.Count.EqualTo(subscriptions));
@@ -364,7 +364,7 @@ public class ImportProcessorAudienceTests
         var agreements = fixture.Repository.Agreements.ToDictionary(a => (string)fixture.Repository.Contacts.Single(c => c.Id == a.ContactId).Values[0]!, a => a.Time);
         Assert.Multiple(() =>
         {
-            Assert.That(progress.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), progress.Error);
+            Assert.That(progress.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), progress.Error?.ToString());
             Assert.That(agreements, Is.EquivalentTo(new Dictionary<string, DateTime>
             {
                 ["yes@x.test"] = fixture.LocalNow,
@@ -563,7 +563,7 @@ public class ImportProcessorAudienceTests
         {
             Assert.That(refused.Outcome, Is.EqualTo(ImportProcessOutcome.Failed));
             Assert.That(refused.State, Is.EqualTo(ImportJobState.Uploaded));
-            Assert.That(refused.Error, Does.Contain("could not be checked"));
+            Assert.That(refused.Error?.ToString(), Does.Contain("could not be checked"));
             Assert.That(analyzed.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished));
         });
     }

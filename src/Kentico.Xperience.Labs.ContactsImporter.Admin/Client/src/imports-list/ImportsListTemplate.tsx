@@ -19,10 +19,9 @@ import type { TableAction, TableCell, TableRow } from '@kentico/xperience-admin-
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Commands } from '../shared/commands';
-import type { ImportActionResponse, ImportJobRequest, ImportListItemDto, ImportListResponse } from '../shared/commands';
-import { formatBytes, formatDateTime, formatNumber } from '../shared/format';
+import type { ImportActionResponse, ImportJobRequest, ImportListItemDto, ImportListResponse, JobState } from '../shared/commands';
 import { useAdminNavigate, useExecuteCommand, useIsMounted } from '../shared/hooks';
-import { Strings, format } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { TestIds, Text, actionColumn, stringCell, testId, textColumn } from '../shared/ui';
 
 /** Client properties of `ImportsListPage` (UIPages/ImportsListPage.cs). */
@@ -35,7 +34,20 @@ interface ImportsListProps {
 const OPEN_ACTION = 'open';
 const DELETE_ACTION = 'delete';
 
-const S = Strings.list;
+/** Text of each job state. */
+const STATE_KEYS: Record<JobState, string> = {
+  Configuring: 'contactsimporter.states.configuring',
+  Uploading: 'contactsimporter.states.uploading',
+  Uploaded: 'contactsimporter.states.uploaded',
+  Analyzing: 'contactsimporter.states.analyzing',
+  Analyzed: 'contactsimporter.states.analyzed',
+  Confirmed: 'contactsimporter.states.confirmed',
+  Running: 'contactsimporter.states.running',
+  Paused: 'contactsimporter.states.paused',
+  Completed: 'contactsimporter.states.completed',
+  Failed: 'contactsimporter.states.failed',
+  Cancelled: 'contactsimporter.states.cancelled',
+};
 
 /**
  * Recent imports with "New import", continue and "Delete files". The import page is a child
@@ -48,6 +60,7 @@ export const ImportsListTemplate = (props: ImportsListProps) => (
 );
 
 const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: ImportsListProps) => {
+  const { t, bytes, dateTime, number } = useText();
   const execute = useExecuteCommand();
   const navigate = useAdminNavigate();
   const isMounted = useIsMounted();
@@ -63,7 +76,7 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
       return;
     }
     if (!result) {
-      setError(S.loadFailed);
+      setError(t('contactsimporter.list.loadfailed'));
       setImports((current) => current ?? []);
 
       return;
@@ -72,7 +85,7 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
     setError(null);
     setImports(result.imports);
     setTruncated(result.truncated);
-  }, [execute, isMounted]);
+  }, [execute, isMounted, t]);
 
   useEffect(() => {
     void load();
@@ -97,26 +110,26 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
     setDeleting(false);
     setToDelete(null);
     if (!result || result.code !== 'ok') {
-      setError(result?.message ?? S.deleteFailed);
+      setError(result?.message ?? t('contactsimporter.list.deletefailed'));
     }
     await load();
-  }, [execute, isMounted, load, toDelete]);
+  }, [execute, isMounted, load, t, toDelete]);
 
   const columns = useMemo(
     () => [
-      textColumn('file', S.columns.file, 24, 60),
-      textColumn('size', S.columns.size, 10, 14),
-      textColumn('created', S.columns.created, 18, 24),
-      textColumn('createdBy', S.columns.createdBy, 14, 24),
-      textColumn('state', S.columns.state, 16, 24),
-      textColumn('rows', S.columns.rows, 12, 16),
-      textColumn('contactsCreated', S.columns.contactsCreated, 12, 16),
-      textColumn('contactsUpdated', S.columns.contactsUpdated, 12, 16),
-      textColumn('recipientList', S.columns.recipientList, 12, 24),
-      textColumn('consent', S.columns.consent, 12, 24),
-      ...(canImport ? [actionColumn('actions', S.columns.actions, 10, 14)] : []),
+      textColumn('file', t('contactsimporter.list.columns.file'), 24, 60),
+      textColumn('size', t('contactsimporter.list.columns.size'), 10, 14),
+      textColumn('created', t('contactsimporter.list.columns.created'), 18, 24),
+      textColumn('createdBy', t('contactsimporter.list.columns.createdby'), 14, 24),
+      textColumn('state', t('contactsimporter.list.columns.state'), 16, 24),
+      textColumn('rows', t('contactsimporter.list.columns.rows'), 12, 16),
+      textColumn('contactsCreated', t('contactsimporter.list.columns.contactscreated'), 12, 16),
+      textColumn('contactsUpdated', t('contactsimporter.list.columns.contactsupdated'), 12, 16),
+      textColumn('recipientList', t('contactsimporter.list.columns.recipientlist'), 12, 24),
+      textColumn('consent', t('contactsimporter.list.columns.consent'), 12, 24),
+      ...(canImport ? [actionColumn('actions', t('contactsimporter.list.columns.actions'), 10, 14)] : []),
     ],
-    [canImport],
+    [canImport, t],
   );
 
   const rows = useMemo<TableRow[] | undefined>(
@@ -124,13 +137,13 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
       imports?.map((item) => {
         const cells: TableCell[] = [
           stringCell('file', item.fileName),
-          stringCell('size', formatBytes(item.fileSize)),
-          stringCell('created', formatDateTime(item.createdUtc)),
+          stringCell('size', bytes(item.fileSize)),
+          stringCell('created', dateTime(item.createdUtc)),
           stringCell('createdBy', item.createdBy),
-          stringCell('state', Strings.states[item.state] ?? item.state),
-          stringCell('rows', item.rowsValid > 0 ? formatNumber(item.rowsValid) : ''),
-          stringCell('contactsCreated', item.importStarted ? formatNumber(item.created) : ''),
-          stringCell('contactsUpdated', item.importStarted ? formatNumber(item.updated) : ''),
+          stringCell('state', STATE_KEYS[item.state] ? t(STATE_KEYS[item.state]) : item.state),
+          stringCell('rows', item.rowsValid > 0 ? number(item.rowsValid) : ''),
+          stringCell('contactsCreated', item.importStarted ? number(item.created) : ''),
+          stringCell('contactsUpdated', item.importStarted ? number(item.updated) : ''),
           stringCell('recipientList', item.recipientListName ?? ''),
           stringCell('consent', item.consentName ?? ''),
         ];
@@ -138,14 +151,14 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
           const actions: TableAction[] = [
             {
               identifier: OPEN_ACTION,
-              label: item.canContinue ? S.continue : S.open,
+              label: item.canContinue ? t('contactsimporter.list.continue') : t('contactsimporter.list.open'),
               icon: 'xp-arrow-right-top-square',
               disabled: false,
               destructive: false,
             },
             {
               identifier: DELETE_ACTION,
-              label: S.deleteFiles,
+              label: t('contactsimporter.list.deletefiles'),
               icon: 'xp-bin',
               disabled: !item.hasFiles && !item.canContinue,
               destructive: true,
@@ -169,19 +182,19 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
 
         return { identifier: item.jobId, cells, disabled: false };
       }),
-    [imports, canImport, openImport],
+    [imports, canImport, openImport, t, bytes, dateTime, number],
   );
 
   return (
     <Box spacing={Spacing.XL}>
       <Stack spacing={Spacing.L}>
-        <Headline size={HeadlineSize.L}>{S.headline}</Headline>
-        <Text>{S.intro}</Text>
+        <Headline size={HeadlineSize.L}>{t('contactsimporter.list.headline')}</Headline>
+        <Text>{t('contactsimporter.list.intro')}</Text>
         {error && <NotificationBarAlert onDismiss={() => setError(null)}>{error}</NotificationBarAlert>}
         {canImport ? (
           <div>
             <Button
-              label={S.newImport}
+              label={t('contactsimporter.list.newimport')}
               color={ButtonColor.Primary}
               icon="xp-plus"
               dataTestId={testId(TestIds.newImport)}
@@ -190,10 +203,10 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
           </div>
         ) : (
           <Callout type={CalloutType.QuickTip} placement={CalloutPlacementType.OnDesk} dataTestId={testId(TestIds.noPermission)}>
-            {Strings.app.noPermission}
+            {t('contactsimporter.app.nopermission')}
           </Callout>
         )}
-        {rows !== undefined && rows.length === 0 && !error && <Text>{S.empty}</Text>}
+        {rows !== undefined && rows.length === 0 && !error && <Text>{t('contactsimporter.list.empty')}</Text>}
         {(rows === undefined || rows.length > 0) && (
           <Table
             columns={columns}
@@ -202,19 +215,19 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
             onRowClick={canImport ? (identifier) => openImport(String(identifier)) : undefined}
           />
         )}
-        {truncated && <Text hint={true}>{S.truncated}</Text>}
+        {truncated && <Text hint={true}>{t('contactsimporter.list.truncated')}</Text>}
       </Stack>
       <Dialog
         isOpen={toDelete !== null}
-        headline={S.deleteHeadline}
-        headerCloseButton={{ tooltipText: S.close }}
+        headline={t('contactsimporter.list.deleteheadline')}
+        headerCloseButton={{ tooltipText: t('contactsimporter.list.close') }}
         isDismissable={!deleting}
         actionInProgress={deleting}
         onClose={() => setToDelete(null)}
-        confirmAction={{ label: S.deleteConfirm, destructive: true, onClick: () => void confirmDelete() }}
-        cancelAction={{ label: S.cancel, onClick: () => setToDelete(null) }}
+        confirmAction={{ label: t('contactsimporter.list.deleteconfirm'), destructive: true, onClick: () => void confirmDelete() }}
+        cancelAction={{ label: t('contactsimporter.list.cancel'), onClick: () => setToDelete(null) }}
       >
-        <Text>{format(S.deleteMessage, toDelete?.fileName ?? '')}</Text>
+        <Text>{t('contactsimporter.list.deletemessage', { fileName: toDelete?.fileName ?? '' })}</Text>
       </Dialog>
     </Box>
   );

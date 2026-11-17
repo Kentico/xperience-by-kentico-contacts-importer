@@ -69,7 +69,7 @@ export class ImportWorkerClient {
     worker.onmessage = (event) => this.receive(event.data);
     worker.onerror = (event) => {
       event.preventDefault?.();
-      this.failAll(new ImportWorkerError('failed', event.message || 'The import worker failed.'));
+      this.failAll(new ImportWorkerError('failed', event.message ?? ''));
     };
   }
 
@@ -175,7 +175,7 @@ export class ImportWorkerClient {
         break;
       case 'error':
         this.pending.delete(event.requestId);
-        pending.reject(new ImportWorkerError(event.code, event.message));
+        pending.reject(new ImportWorkerError(event.code, event.message, event.params));
         break;
       default:
         this.pending.delete(event.requestId);

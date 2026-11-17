@@ -22,7 +22,7 @@ Implementation in progress (PLAN.md DRAFT v0.10 + decisions D36a, D40–D46). Sl
 
 After slice 3: all contact fields mappable again except `ContactID`, `ContactGUID`, `ContactCreated`, `ContactLastModified`; missing references skip the row (D42).
 
-Last full verification (parent rerun, 2026-11-17): NUnit 944 (after typed event payload), Vitest 362, integration 67 (+1 env-gated throughput skipped), admin e2e 15 passed + 1 skipped (permission spec needs viewer user), `dotnet format` clean, client + DancingGoat build OK.
+Last full verification (parent rerun, 2026-11-17, after localization): NUnit 952, Vitest 374, integration 67 (+1 env-gated throughput skipped), admin e2e 15 passed + 1 skipped (permission spec needs viewer user), `dotnet format` clean, client + DancingGoat build OK.
 
 Working end to end in admin: upload CSV/TSV/NDJSON(.gz) → map → options → dry run → review → run → results, resume/takeover/cancel, report download. Recipient list add (subscribed, no DOI email), keep/resubscribe unsubscribed, bounce counts/skip, consent agreements, attestation on Run.
 
@@ -40,7 +40,8 @@ MVP deliverable (D38): README "Limitations" + Usage guide limitations section po
   - `Schema/` mappable contact fields (`IsSupported`, `CanBeKey`)
   - `Cleanup/` chunk delete, retention, lazy sweep
   - `Processing/` processor (analyze/execute, job DB lock), batch planner, SQL builder, repository, report, aggregates, cache invalidator
-  - `UIPages/` app, imports list, import page, command service, report pager, permissions; `Resources/` resx
+  - `UIPages/` app, imports list, import page, command service, report pager, permissions
+  - `Resources/` admin UI localization (en-US): `ContactsImporterResources.resx` (server, `LocalizationTarget.Server`, keys = `ImportTextKeys`, arguments via `ImportMessages`) and `ContactsImporterClientResources.resx` (client, `LocalizationTarget.Client`, read with `useText()` → `react-i18next`). Plain string keys `contactsimporter.*`; coverage tests: `Client/src/shared/resources.test.ts`, `ImportResourcesTests`. Services return `ImportMessage` (key + args); the job status stores the key in `Error` + `ErrorArguments` (older jobs: English text, shown as is). Numbers, sizes, durations, dates use the admin UI culture (`uiLocale`). Report CSV headers and reason/outcome codes stay fixed machine names.
   - `build/*.targets` — excludes default storage folder from host project Content (D40)
   - `Client/src` — `import-core`, `worker`, `upload`, `mapping`, `process`, `options`, `import` (steps), `imports-list`, `shared`
 - `tests/fixtures/normalization.json` — TS↔C# parity vectors
@@ -58,7 +59,7 @@ MVP deliverable (D38): README "Limitations" + Usage guide limitations section po
 
 Decide (Sean):
 
-- Review consent / double opt-in UI texts (D14): `Client/src/shared/strings.ts` blocks `listOptions`, `consentOptions`, `consentSummary`, `review.confirm*` + resx `contactsimporter.attestation.statement` (version "1" in `Jobs/ImportAttestationPolicy.cs`; bump on text change).
+- Review consent / double opt-in UI texts (D14): client resx keys `contactsimporter.listoptions.*`, `contactsimporter.consentoptions.*`, `contactsimporter.consentsummary.*`, `contactsimporter.review.confirm*` (`Resources/ContactsImporterClientResources.resx`) + server resx `contactsimporter.attestation.statement` (version "1" in `Jobs/ImportAttestationPolicy.cs`; bump on en-US text change; translations attested under the same version, culture not stored).
 
 - Invalid date in a mapped date field → row rejected client-side (alternative: server decides). Date formats `iso | dmy | mdy`; no time zone conversion.
 - Upload bound = 2 × `MaxFileSizeBytes` of stored gzipped chunks.
@@ -67,7 +68,7 @@ Decide (Sean):
 Fix / verify later:
 
 - Reference fields take IDs only (country/state/status names in a file → row skipped). `ContactStateID` not checked against `ContactCountryID`. Composite / disabled FKs not checked. `GetMappableFields()` runs an uncached `sys.foreign_keys` query per call (each chunk ingest, each `PROCESS_NEXT`). `ContactBounces` / `ContactSalesForce*` writable; whether Xperience later overwrites them not investigated. Map UI does not label reference fields yet (`isReference` in DTO).
-- Slice 4: list/consent "not found" messages from audience resolver are English constants, not resx. e2e seeds unsubscribe/revoke via SQL script (`tests/e2e/scripts/Invoke-E2ESql.ps1`, `System.Data.SqlClient` under pwsh) — untested on Linux CI. Bounce scenarios + ConfirmConsent-denied path not in e2e (NUnit only). Throughput impact of per-batch audience query + inserts not measured. Event handlers run sync-over-async on request thread (not load-tested).
+- Slice 4: e2e seeds unsubscribe/revoke via SQL script (`tests/e2e/scripts/Invoke-E2ESql.ps1`, `System.Data.SqlClient` under pwsh) — untested on Linux CI. Bounce scenarios + ConfirmConsent-denied path not in e2e (NUnit only). Throughput impact of per-batch audience query + inserts not measured. Event handlers run sync-over-async on request thread (not load-tested).
 - Cancel during run: batch in flight is written + reported but not counted → results undercount by ≤ 1 batch.
 - CI workflow changes (client tests, mssql service + integration DB, e2e) never executed. Permission e2e spec skipped without a viewer user.
 - Release build / `dotnet pack -c Release` not run since targets file was added.

@@ -67,13 +67,24 @@ export type ImportErrorCode =
   | 'invalidConfig'
   | 'sourceConsumed';
 
-/** Fatal error of the import core (as opposed to a rejected row). */
+/**
+ * Values that describe an `ImportError`: `encoding` (`unsupportedEncoding`), `record` (CSV) or
+ * `line` (NDJSON) and `maxChars` (`recordTooLarge`). Never values of the file.
+ */
+export type ImportErrorParams = Readonly<Record<string, string | number>>;
+
+/**
+ * Fatal error of the import core (as opposed to a rejected row). `message` is for developers
+ * (English, for logs and tests); the UI shows its own text for `code` and `params`.
+ */
 export class ImportError extends Error {
   readonly code: ImportErrorCode;
+  readonly params: ImportErrorParams;
 
-  constructor(code: ImportErrorCode, message: string) {
+  constructor(code: ImportErrorCode, message: string, params: ImportErrorParams = {}) {
     super(message);
     this.name = 'ImportError';
     this.code = code;
+    this.params = params;
   }
 }

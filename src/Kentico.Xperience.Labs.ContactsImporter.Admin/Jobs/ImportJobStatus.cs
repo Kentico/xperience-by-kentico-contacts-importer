@@ -46,7 +46,19 @@ internal sealed record ImportJobStatus
     /// </summary>
     public DateTime? FinishedUtc { get; init; }
 
+    /// <summary>
+    /// Why the job failed or cannot start: the resource key of the message (<see cref="ImportTextKeys"/>); the UI pages
+    /// show it in the user's admin UI language. Jobs of earlier versions hold English text here. Read and write it
+    /// with <see cref="ErrorMessage"/> and <see cref="WithError"/>.
+    /// </summary>
     public string? Error { get; init; }
+
+    /// <summary>Arguments of the <see cref="Error"/> message; <c>null</c> when it has none.</summary>
+    public IReadOnlyList<string>? ErrorArguments { get; init; }
+
+    /// <summary><see cref="Error"/> with its arguments.</summary>
+    [JsonIgnore]
+    public ImportMessage? ErrorMessage => ImportMessage.FromStored(Error, ErrorArguments);
 
     /// <summary>
     /// Number of times the status was changed through <see cref="IImportJobStore.UpdateStatus"/>. Part of the check
@@ -67,6 +79,10 @@ internal sealed record ImportJobStatus
     /// driver take over in the middle of a batch.
     /// </summary>
     public double LongestBatchSeconds { get; init; }
+
+    /// <summary>The status with <paramref name="error"/> as <see cref="Error"/> and <see cref="ErrorArguments"/>.</summary>
+    public ImportJobStatus WithError(ImportMessage? error) =>
+        this with { Error = error?.Key, ErrorArguments = error is { Arguments.Count: > 0 } ? error.Arguments : null };
 }
 
 /// <summary>

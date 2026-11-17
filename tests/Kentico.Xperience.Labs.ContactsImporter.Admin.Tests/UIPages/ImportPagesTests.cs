@@ -92,7 +92,10 @@ internal class ImportPagesTests
             }));
             // The admin rejects application permission names longer than 50 characters at startup.
             Assert.That(permissions.Select(p => p.Name), Has.All.Length.LessThanOrEqualTo(50));
-            Assert.That(permissions.Where(p => p.Name != SystemPermissions.VIEW).Select(p => p.DisplayName), Has.All.Not.Empty);
+            Assert.That(permissions.Where(p => p.Name != SystemPermissions.VIEW).Select(p => p.DisplayName), Is.EquivalentTo(new[]
+            {
+                "{$contactsimporter.permission.import$}", "{$contactsimporter.permission.confirmconsent$}",
+            }));
         });
     }
 
@@ -104,7 +107,9 @@ internal class ImportPagesTests
         Assert.Multiple(() =>
         {
             Assert.That(application.Type, Is.EqualTo(typeof(ContactsImporterApplicationPage)));
-            Assert.That(application.Name, Is.EqualTo("Contacts Importer (Labs)"));
+            // A localization expression; the admin shows the text of the user's admin UI language.
+            Assert.That(application.Name, Is.EqualTo("{$contactsimporter.application.name$}"));
+            Assert.That(new ResourceImportTexts().Get(ImportTextKeys.APPLICATION_NAME), Is.EqualTo("Contacts Importer (Labs)"));
             Assert.That(application.Slug, Is.EqualTo("contacts-importer"));
             Assert.That(application.Category, Is.EqualTo(BaseApplicationCategories.DIGITAL_MARKETING));
         });

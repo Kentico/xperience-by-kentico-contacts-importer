@@ -151,10 +151,10 @@ internal sealed class ImportHarness : IDisposable
     public ImportProgress Import(Guid jobId)
     {
         var analysis = Run(jobId, ImportPhase.Analyze);
-        Assert.That(analysis.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), analysis.Error);
+        Assert.That(analysis.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), analysis.Error?.ToString());
         Assert.That(Confirm(jobId).Outcome, Is.EqualTo(ImportConfirmOutcome.Confirmed));
         var import = Run(jobId, ImportPhase.Execute);
-        Assert.That(import.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), import.Error);
+        Assert.That(import.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished), import.Error?.ToString());
 
         return import;
     }

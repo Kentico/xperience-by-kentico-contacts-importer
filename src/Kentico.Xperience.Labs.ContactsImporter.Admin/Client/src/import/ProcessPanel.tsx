@@ -19,15 +19,22 @@ import {
 import React, { useEffect } from 'react';
 
 import type { AggregatesDto } from '../shared/commands';
-import { formatDateTime, formatDuration, formatNumber, formatPercent } from '../shared/format';
-import { Strings, format } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { TestIds, Text, testId } from '../shared/ui';
 import { percent } from '../upload/progress';
 
 import { Count } from './Aggregates';
 import type { ProcessLoopView } from './useProcessLoop';
 
-const S = Strings.process;
+/** Text of each reason the work waits for the user. */
+const PAUSE_KEYS = {
+  user: 'contactsimporter.process.paused.user',
+  network: 'contactsimporter.process.paused.network',
+  server: 'contactsimporter.process.paused.server',
+  activeElsewhere: 'contactsimporter.process.paused.activeelsewhere',
+  stale: 'contactsimporter.process.paused.stale',
+  takenOver: 'contactsimporter.process.paused.takenover',
+} as const;
 
 /** The four running counts of a phase; texts differ between the check and the import. */
 export interface CountCardTexts {
@@ -65,6 +72,7 @@ export interface ProcessPanelProps {
  * time left, running counts from the server, and why the work waits when it does.
  */
 export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = false, usesConsent = false, actions }: ProcessPanelProps) => {
+  const { t, number, percent: formatPercent, dateTime } = useText();
   const { snapshot, rate, lockedByOtherTab } = view;
   const progress = snapshot.progress;
   const done = progress?.rowsProcessed ?? 0;
@@ -81,12 +89,12 @@ export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = f
     }
 
     const original = document.title;
-    document.title = format(Strings.run.title, formatPercent(completed), titleName);
+    document.title = t('contactsimporter.run.title', { percent: formatPercent(completed), fileName: titleName });
 
     return () => {
       document.title = original;
     };
-  }, [active, completed, titleName]);
+  }, [active, completed, formatPercent, t, titleName]);
 
   return (
     <Stack spacing={Spacing.L}>
@@ -99,44 +107,43 @@ export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = f
         data-calls={snapshot.calls}
         data-answers={snapshot.processedCalls}
       >
-        {snapshot.status === 'pausing' ? S.pausing : active ? runningText : ''}
+        {snapshot.status === 'pausing' ? t('contactsimporter.process.pausing') : active ? runningText : ''}
       </Text>
 
       {active && (
         <Callout type={CalloutType.QuickTip} placement={CalloutPlacementType.OnDesk}>
-          {S.keepOpen}
+          {t('contactsimporter.process.keepopen')}
         </Callout>
       )}
 
       <Stack spacing={Spacing.S}>
         <ProgressBar completed={completed} />
-        <Text>{format(S.progress, formatNumber(done), formatNumber(total), formatPercent(completed))}</Text>
+        <Text>{t('contactsimporter.process.progress', { done, total, percent: formatPercent(completed) })}</Text>
       </Stack>
 
       {snapshot.retry && active && (
         <NotificationBarWarning>
-          {format(
-            snapshot.retry.kind === 'network' ? S.retryNetwork : S.retryServer,
-            Math.ceil(snapshot.retry.delayMs / 1000),
-            snapshot.retry.attempt,
-            snapshot.retry.maxAttempts,
-          )}
+          {t(snapshot.retry.kind === 'network' ? 'contactsimporter.process.retrynetwork' : 'contactsimporter.process.retryserver', {
+            seconds: Math.ceil(snapshot.retry.delayMs / 1000),
+            attempt: snapshot.retry.attempt,
+            maxAttempts: snapshot.retry.maxAttempts,
+          })}
         </NotificationBarWarning>
       )}
 
       {pauseReason !== null &&
         (pauseReason === 'user' ? (
-          <NotificationBarInfo>{S.paused.user}</NotificationBarInfo>
+          <NotificationBarInfo>{t(PAUSE_KEYS.user)}</NotificationBarInfo>
         ) : pauseReason === 'network' || pauseReason === 'server' ? (
           <NotificationBarAlert>
-            {S.paused[pauseReason]}
+            {t(PAUSE_KEYS[pauseReason])}
             {snapshot.error ? ` ${snapshot.error}` : ''}
           </NotificationBarAlert>
         ) : (
-          <NotificationBarWarning>{S.paused[pauseReason]}</NotificationBarWarning>
+          <NotificationBarWarning>{t(PAUSE_KEYS[pauseReason])}</NotificationBarWarning>
         ))}
       {waitsForUser && snapshot.lastAnswerAtMs !== null && (
-        <Text hint={true}>{format(S.lastProgress, formatDateTime(new Date(snapshot.lastAnswerAtMs).toISOString()))}</Text>
+        <Text hint={true}>{t('contactsimporter.process.lastprogress', { time: dateTime(new Date(snapshot.lastAnswerAtMs).toISOString()) })}</Text>
       )}
 
       {progress && <CountCards aggregates={progress.aggregates} cards={cards} ratePerSecond={active ? rate.ratePerSecond : 0} etaSeconds={active ? rate.etaSeconds : null} />}
@@ -146,10 +153,10 @@ export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = f
             <Column cols={Cols.Col3}>
               <Count name="running-list" value={(progress.aggregates.listAdded ?? 0) + (progress.aggregates.listResubscribed ?? 0)} />
               <InfoCard
-                caption={Strings.run.listCard}
-                tooltip={Strings.run.listCardTooltip}
-                text={formatNumber((progress.aggregates.listAdded ?? 0) + (progress.aggregates.listResubscribed ?? 0))}
-                details={Strings.run.listCardDetail}
+                caption={t('contactsimporter.run.listcard')}
+                tooltip={t('contactsimporter.run.listcardtooltip')}
+                text={number((progress.aggregates.listAdded ?? 0) + (progress.aggregates.listResubscribed ?? 0))}
+                details={t('contactsimporter.run.listcarddetail')}
               />
             </Column>
           )}
@@ -157,10 +164,10 @@ export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = f
             <Column cols={Cols.Col3}>
               <Count name="running-consent" value={(progress.aggregates.consentRecorded ?? 0) + (progress.aggregates.consentReAgreed ?? 0)} />
               <InfoCard
-                caption={Strings.run.consentCard}
-                tooltip={Strings.run.consentCardTooltip}
-                text={formatNumber((progress.aggregates.consentRecorded ?? 0) + (progress.aggregates.consentReAgreed ?? 0))}
-                details={Strings.run.consentCardDetail}
+                caption={t('contactsimporter.run.consentcard')}
+                tooltip={t('contactsimporter.run.consentcardtooltip')}
+                text={number((progress.aggregates.consentRecorded ?? 0) + (progress.aggregates.consentReAgreed ?? 0))}
+                details={t('contactsimporter.run.consentcarddetail')}
               />
             </Column>
           )}
@@ -170,7 +177,7 @@ export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = f
       <Inline spacing={Spacing.M}>
         {active && (
           <Button
-            label={S.pause}
+            label={t('contactsimporter.process.pause')}
             color={ButtonColor.Secondary}
             disabled={snapshot.status === 'pausing'}
             dataTestId={testId(TestIds.processPause)}
@@ -179,7 +186,7 @@ export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = f
         )}
         {waitsForUser && (
           <Button
-            label={pauseReason === 'stale' || pauseReason === 'activeElsewhere' || pauseReason === 'takenOver' ? S.takeOver : S.continue}
+            label={pauseReason === 'stale' || pauseReason === 'activeElsewhere' || pauseReason === 'takenOver' ? t('contactsimporter.process.takeover') : t('contactsimporter.process.continue')}
             color={ButtonColor.Primary}
             dataTestId={testId(TestIds.processContinue)}
             onClick={() => view.start(pauseReason === 'stale' || pauseReason === 'activeElsewhere' || pauseReason === 'takenOver')}
@@ -198,31 +205,41 @@ interface CountCardsProps {
   readonly etaSeconds: number | null;
 }
 
-const CountCards = ({ aggregates, cards, ratePerSecond, etaSeconds }: CountCardsProps) => (
+const CountCards = ({ aggregates, cards, ratePerSecond, etaSeconds }: CountCardsProps) => {
+  const { t, number, duration } = useText();
+
+  return (
   <Row spacing={Spacing.L}>
     <Column cols={Cols.Col2}>
       <Count name="running-created" value={aggregates.created} />
-      <InfoCard caption={cards.created} tooltip={cards.createdTooltip} text={formatNumber(aggregates.created)} details={cards.createdDetail} />
+      <InfoCard caption={cards.created} tooltip={cards.createdTooltip} text={number(aggregates.created)} details={cards.createdDetail} />
     </Column>
     <Column cols={Cols.Col2}>
       <Count name="running-updated" value={aggregates.contactsUpdated} />
-      <InfoCard caption={cards.updated} tooltip={cards.updatedTooltip} text={formatNumber(aggregates.contactsUpdated)} details={cards.updatedDetail} />
+      <InfoCard caption={cards.updated} tooltip={cards.updatedTooltip} text={number(aggregates.contactsUpdated)} details={cards.updatedDetail} />
     </Column>
     <Column cols={Cols.Col2}>
       <Count name="running-unchanged" value={aggregates.unchanged} />
-      <InfoCard caption={cards.unchanged} tooltip={cards.unchangedTooltip} text={formatNumber(aggregates.unchanged)} details={cards.unchangedDetail} />
+      <InfoCard caption={cards.unchanged} tooltip={cards.unchangedTooltip} text={number(aggregates.unchanged)} details={cards.unchangedDetail} />
     </Column>
     <Column cols={Cols.Col2}>
       <Count name="running-skipped" value={aggregates.skipped} />
-      <InfoCard caption={cards.skipped} tooltip={cards.skippedTooltip} text={formatNumber(aggregates.skipped)} details={cards.skippedDetail} />
+      <InfoCard caption={cards.skipped} tooltip={cards.skippedTooltip} text={number(aggregates.skipped)} details={cards.skippedDetail} />
     </Column>
     <Column cols={Cols.Col3}>
       <InfoCard
-        caption={S.speed}
-        tooltip={S.speedTooltip}
-        text={ratePerSecond > 0 ? format(S.speedValue, formatNumber(ratePerSecond)) : '–'}
-        details={etaSeconds !== null ? format(S.speedDetail, formatDuration(etaSeconds)) : ratePerSecond > 0 ? S.speedDetailUnknown : ''}
+        caption={t('contactsimporter.process.speed')}
+        tooltip={t('contactsimporter.process.speedtooltip')}
+        text={ratePerSecond > 0 ? t('contactsimporter.process.speedvalue', { rate: ratePerSecond }) : '–'}
+        details={
+          etaSeconds !== null
+            ? t('contactsimporter.process.speeddetail', { duration: duration(etaSeconds) })
+            : ratePerSecond > 0
+              ? t('contactsimporter.process.speeddetailunknown')
+              : ''
+        }
       />
     </Column>
   </Row>
-);
+  );
+};

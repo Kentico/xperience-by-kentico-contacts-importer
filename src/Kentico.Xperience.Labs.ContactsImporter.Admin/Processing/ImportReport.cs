@@ -22,6 +22,11 @@ internal readonly record struct ImportReportColumns(bool List, bool Consent, boo
 /// Row number, outcome and reason codes are no personal data; the key is.
 /// </summary>
 /// <remarks>
+/// Column names and codes are fixed machine names in every admin UI language (they are not localized), so scripts and
+/// spreadsheets that read the reports keep working. The skipped rows report the browser builds uses the same rule for
+/// its column names (<c>Client/src/shared/reports.ts</c>).
+/// </remarks>
+/// <remarks>
 /// <c>list</c> and <c>consent</c> hold the codes of <see cref="ImportAudienceOutcomes"/> for the contact of the row;
 /// they are empty for skipped rows and for rows merged into a later row with the same key.
 /// </remarks>

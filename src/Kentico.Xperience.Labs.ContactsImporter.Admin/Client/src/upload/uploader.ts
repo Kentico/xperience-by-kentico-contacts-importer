@@ -60,11 +60,13 @@ export class UploadError extends Error {
   readonly reason?: string;
   /** Source row number the server named. */
   readonly rowNumber?: number;
+  /** The server's message (in the admin UI language), when it sent one. `message` is developer text. */
+  readonly serverMessage?: string;
 
   constructor(
     code: UploadErrorCode,
     message: string,
-    details: { index?: number; reason?: string; rowNumber?: number } = {},
+    details: { index?: number; reason?: string; rowNumber?: number; serverMessage?: string } = {},
   ) {
     super(message);
     this.name = 'UploadError';
@@ -72,6 +74,7 @@ export class UploadError extends Error {
     this.index = details.index;
     this.reason = details.reason;
     this.rowNumber = details.rowNumber;
+    this.serverMessage = details.serverMessage;
   }
 }
 
@@ -184,10 +187,11 @@ export class ChunkUploader {
       }
 
       if (response.code === 'rejected') {
-        throw new UploadError('rejected', response.message ?? 'The server rejected the uploaded data.', {
+        throw new UploadError('rejected', 'The server rejected the uploaded data.', {
           index,
           reason: response.reason ?? undefined,
           rowNumber: response.rowNumber ?? undefined,
+          serverMessage: response.message ?? undefined,
         });
       }
 
@@ -238,7 +242,7 @@ export class ChunkUploader {
         signal,
       });
       if (response.code !== 'ok') {
-        throw new UploadError('truncateFailed', response.message ?? 'Stored data could not be replaced.');
+        throw new UploadError('truncateFailed', 'Stored data could not be replaced.', { serverMessage: response.message ?? undefined });
       }
 
       this.emit({ type: 'truncated', fromIndex, deleted: response.deleted });

@@ -1,11 +1,21 @@
 import { Icon, Spacing } from '@kentico/xperience-admin-components';
 import React from 'react';
 
-import { Strings } from '../shared/strings';
+import { useText } from '../shared/i18n';
 import { TestIds } from '../shared/ui';
 
 import { STEPS } from './model';
 import type { Step } from './model';
+
+const STEP_KEYS: Record<Step, string> = {
+  file: 'contactsimporter.steps.file',
+  map: 'contactsimporter.steps.map',
+  upload: 'contactsimporter.steps.upload',
+  options: 'contactsimporter.steps.options',
+  review: 'contactsimporter.steps.review',
+  run: 'contactsimporter.steps.run',
+  results: 'contactsimporter.steps.results',
+};
 
 export interface StepHeaderProps {
   readonly current: Step;
@@ -17,10 +27,11 @@ export interface StepHeaderProps {
  * is marked with `aria-current="step"`.
  */
 export const StepHeader = ({ current }: StepHeaderProps) => {
+  const { t } = useText();
   const currentIndex = STEPS.indexOf(current);
 
   return (
-    <nav aria-label={Strings.steps.label} data-testid={TestIds.steps}>
+    <nav aria-label={t('contactsimporter.steps.label')} data-testid={TestIds.steps}>
       <ol style={{ display: 'flex', flexWrap: 'wrap', gap: Spacing.M, listStyle: 'none', margin: 0, padding: 0 }}>
           {STEPS.map((step, index) => {
             const isCurrent = index === currentIndex;
@@ -41,7 +52,7 @@ export const StepHeader = ({ current }: StepHeaderProps) => {
                 }}
               >
                 {isDone ? <Icon name="xp-check-circle" /> : <span>{index + 1}.</span>}
-                <span>{Strings.steps[step]}</span>
+                <span>{t(STEP_KEYS[step])}</span>
                 {index < STEPS.length - 1 && <Icon name="xp-chevron-right" />}
               </li>
             );
