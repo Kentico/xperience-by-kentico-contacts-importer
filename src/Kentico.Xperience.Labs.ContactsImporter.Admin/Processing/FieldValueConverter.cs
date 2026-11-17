@@ -207,6 +207,17 @@ internal static class FieldValueConverter
         return result;
     }
 
+    /// <summary>
+    /// Parses a date or date and time the way date fields are parsed (ISO formats, wall-clock time, an offset is dropped).
+    /// </summary>
+    public static bool TryParseDateTime(string raw, out DateTime value)
+    {
+        bool parsed = TryConvertDateTime(raw, dateOnly: false, out object converted);
+        value = parsed ? (DateTime)converted : default;
+
+        return parsed;
+    }
+
     private static bool TryConvertDateTime(string raw, bool dateOnly, out object value)
     {
         value = raw;

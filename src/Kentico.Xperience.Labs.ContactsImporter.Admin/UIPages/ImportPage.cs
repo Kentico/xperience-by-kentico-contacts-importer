@@ -20,7 +20,8 @@ namespace Kentico.Xperience.Labs.ContactsImporter.Admin;
 /// browser picks it for a new import and the job is created on the first <c>SAVE_CONFIG</c>.
 /// </summary>
 /// <remarks>
-/// Every command needs <see cref="ContactsImporterPermissions.IMPORT"/>. Imports are not private to their
+/// Every command needs <see cref="ContactsImporterPermissions.IMPORT"/>; confirming an import that affects consent
+/// also needs <see cref="ContactsImporterPermissions.CONFIRM_CONSENT"/>. Imports are not private to their
 /// creator: any user with the permission can open, continue, cancel or delete any import.
 /// </remarks>
 [UIEvaluatePermission(SystemPermissions.VIEW)]
@@ -43,6 +44,8 @@ internal sealed class ImportPage(
         properties.JobId = ImportJobId.TryParse(JobId, out var jobId) ? ImportJobId.Format(jobId) : "";
         properties.ImportsListPath = pageLinkGenerator.GetPath<ImportsListPage>();
         properties.ContactGroupsPath = pageLinkGenerator.GetPath<ContactGroupsApplication>();
+        // UI hint only: CONFIRM_IMPORT checks the permission itself.
+        properties.CanConfirmConsent = (await permissionEvaluator.Evaluate(ContactsImporterPermissions.CONFIRM_CONSENT)).Succeeded;
 
         return properties;
     }
@@ -84,24 +87,37 @@ internal sealed class ImportPage(
     /// cancellation token stops it after the current batch when the browser goes away.
     /// </summary>
     [PageCommand(CommandName = ImportCommands.PROCESS_NEXT, Permission = ContactsImporterPermissions.IMPORT)]
-    public Task<ICommandResponse<ImportProgressDto>> ProcessNext(ProcessNextRequest request, CancellationToken cancellationToken) =>
-        Task.FromResult(ResponseFrom(commands.ProcessNext(JobId, request, cancellationToken)));
+    public async Task<ICommandResponse<ImportProgressDto>> ProcessNext(ProcessNextRequest request, CancellationToken cancellationToken) =>
+        ResponseFrom(commands.ProcessNext(JobId, request, await CurrentUserId(), cancellationToken));
 
+    /// <summary>
+    /// Needs <see cref="ContactsImporterPermissions.IMPORT"/>; an import that changes recipient list subscriptions or
+    /// records consent also needs <see cref="ContactsImporterPermissions.CONFIRM_CONSENT"/>, evaluated here for the
+    /// signed-in user and enforced by the command service.
+    /// </summary>
     [PageCommand(CommandName = ImportCommands.CONFIRM_IMPORT, Permission = ContactsImporterPermissions.IMPORT)]
-    public Task<ICommandResponse<ImportJobResponse>> Confirm() =>
-        Task.FromResult(ResponseFrom(commands.Confirm(JobId)));
+    public async Task<ICommandResponse<ImportJobResponse>> Confirm(ConfirmImportRequest request)
+    {
+        var user = await authenticatedUserAccessor.Get();
+        bool canConfirmConsent = (await permissionEvaluator.Evaluate(ContactsImporterPermissions.CONFIRM_CONSENT)).Succeeded;
+
+        return ResponseFrom(commands.Confirm(JobId, request, user?.UserID ?? 0, canConfirmConsent));
+    }
 
     [PageCommand(CommandName = ImportCommands.GET_REPORT, Permission = ContactsImporterPermissions.IMPORT)]
     public Task<ICommandResponse<GetReportResponse>> GetReport(GetReportRequest request, CancellationToken cancellationToken) =>
         Task.FromResult(ResponseFrom(commands.GetReport(JobId, request, cancellationToken)));
 
     [PageCommand(CommandName = ImportCommands.CANCEL_IMPORT, Permission = ContactsImporterPermissions.IMPORT)]
-    public Task<ICommandResponse<ImportActionResponse>> Cancel() =>
-        Task.FromResult(ResponseFrom(commands.Cancel(JobId)));
+    public async Task<ICommandResponse<ImportActionResponse>> Cancel() =>
+        ResponseFrom(commands.Cancel(JobId, await CurrentUserId()));
 
     [PageCommand(CommandName = ImportCommands.DELETE_FILES, Permission = ContactsImporterPermissions.IMPORT)]
-    public Task<ICommandResponse<ImportActionResponse>> DeleteFiles() =>
-        Task.FromResult(ResponseFrom(commands.DeleteFiles(JobId)));
+    public async Task<ICommandResponse<ImportActionResponse>> DeleteFiles() =>
+        ResponseFrom(commands.DeleteFiles(JobId, await CurrentUserId()));
+
+    /// <summary>Signed-in user, for the event log and the job; 0 when unknown.</summary>
+    private async Task<int> CurrentUserId() => (await authenticatedUserAccessor.Get())?.UserID ?? 0;
 }
 
 internal sealed class ImportClientProperties : TemplateClientProperties
@@ -117,4 +133,10 @@ internal sealed class ImportClientProperties : TemplateClientProperties
 
     /// <summary>Admin path of the Contact groups application (results screen guidance).</summary>
     public string ContactGroupsPath { get; set; } = "";
+
+    /// <summary>
+    /// The user has <see cref="ContactsImporterPermissions.CONFIRM_CONSENT"/>. Without it the Run dialog of an import
+    /// that affects consent explains what is missing; the server refuses such a confirmation in any case.
+    /// </summary>
+    public bool CanConfirmConsent { get; set; }
 }

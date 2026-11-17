@@ -68,6 +68,8 @@ export const RunStep = ({ execute, view, onReload }: RunStepProps) => {
         runningText={loop.snapshot.calls === 0 ? S.starting : S.running}
         cards={S.cards}
         titleName={view.job.file.name}
+        usesList={view.job.options.recipientListId !== null}
+        usesConsent={view.job.options.consent !== 'none'}
         actions={
           <CancelImport execute={execute} message={S.cancelMessage} keepLabel={S.cancelKeep} onBeforeCancel={loop.pause} onCancelled={onReload} />
         }

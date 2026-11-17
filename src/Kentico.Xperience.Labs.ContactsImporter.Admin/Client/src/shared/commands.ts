@@ -1,4 +1,4 @@
-import type { DateFormat, FieldMapping, ImportProfile, JobFile } from '../import-core';
+import type { ConsentMapping, DateFormat, FieldMapping, ImportProfile, JobFile } from '../import-core';
 
 /**
  * Page commands of the importer pages and their DTOs. Keep in sync with
@@ -40,7 +40,11 @@ export type CommandCode =
   | 'invalidState'
   | 'invalidConfig'
   | 'inconsistent'
-  | 'analysisExpired';
+  | 'analysisExpired'
+  /** `CONFIRM_IMPORT`: the import needs the consent confirmation and the request did not carry the current statement version. */
+  | 'attestationRequired'
+  /** `CONFIRM_IMPORT`: the user lacks the "Confirm consent" permission the import needs. */
+  | 'consentPermissionRequired';
 
 /** Job states (PLAN §4). `Paused` is derived by the server from a stale heartbeat. */
 export type JobState =
@@ -81,9 +85,27 @@ export interface LimitsDto {
   parallelUploads: number;
 }
 
+/** A recipient list or a consent the Options step offers. */
+export interface ChoiceDto {
+  id: number;
+  name: string;
+}
+
 export interface ImportConfigResponse {
   fields: FieldDto[];
   limits: LimitsDto;
+  /** Existing recipient lists, by name. */
+  recipientLists: ChoiceDto[];
+  /** Existing consents, by name. */
+  consents: ChoiceDto[];
+}
+
+/** Who confirmed the import and which consent statement they saw. */
+export interface AttestationDto {
+  /** User name; empty when the user no longer exists. */
+  userName: string;
+  utc: string;
+  statementVersion: string;
 }
 
 export interface JobDto {
@@ -92,6 +114,8 @@ export interface JobDto {
   keyField: string;
   mapping: FieldMapping[];
   dateFormat: DateFormat;
+  /** File columns that say whether and when a contact gave consent; `null` when none. */
+  consentMapping: ConsentMapping | null;
   createdUtc: string;
   options: OptionsDto;
   /** The email field is mapped and is not the match field. */
@@ -99,6 +123,17 @@ export interface JobDto {
   /** Text contact fields that can hold the import source stamp. */
   sourceFields: FieldDto[];
   defaultSourceValue: string;
+  /** Name of the recipient list of the saved options; `null` when none is chosen or it no longer exists. */
+  recipientListName: string | null;
+  /** Name of the consent of the saved options; `null` when none is chosen or it no longer exists. */
+  consentName: string | null;
+  /** The saved options change recipient list subscriptions or record consent: running needs the consent confirmation. */
+  attestationRequired: boolean;
+  /** Statement the user confirms by running such an import. Text and version come from the server only. */
+  attestationStatement: string;
+  attestationVersion: string;
+  /** The stored confirmation; `null` until the import is confirmed with the statement. */
+  attestation: AttestationDto | null;
 }
 
 /** Contact options of the Options step (PLAN §8); the values are the server option names. */
@@ -112,6 +147,14 @@ export interface OptionsDto {
   sourceValue: string | null;
   sourceStamp: 'createdOnly' | 'createdAndUpdated';
   reportIncludesKey: boolean;
+  /** Recipient list contacts are added to as subscribed; `null` = recipient lists are not changed. */
+  recipientListId: number | null;
+  unsubscribed: 'keep' | 'resubscribe';
+  bouncedAddress: 'addAndReport' | 'skipAndReport';
+  consent: 'none' | 'blanket' | 'blanketWithColumnOverride';
+  /** Consent agreements are recorded for; `null` when `consent` is `none`. */
+  consentId: number | null;
+  revokedConsent: 'keep' | 'reAgree';
 }
 
 export type ProcessPhase = 'analyze' | 'execute';
@@ -153,6 +196,27 @@ export interface AggregatesDto {
   duplicateRows: number;
   multipleMatches: number;
   importedWithoutEmail: number;
+  /** Recipient list: contacts added as subscribed. */
+  listAdded: number;
+  listAlreadySubscribed: number;
+  listKeptUnsubscribed: number;
+  listResubscribed: number;
+  /** Not added because emails to the address bounced and the option says to skip them. */
+  listSkippedBounced: number;
+  listSkippedNoEmail: number;
+  /** Contacts whose address had a hard bounce. */
+  bouncedHard: number;
+  /** Contacts whose address reached the soft bounce limit. */
+  bouncedSoftOverLimit: number;
+  /** Contacts whose address has soft bounces below the limit (emails are still sent). */
+  bouncedSoftUnderLimit: number;
+  consentRecorded: number;
+  consentAlreadyAgreed: number;
+  consentKeptRevoked: number;
+  consentReAgreed: number;
+  /** Column override: the row does not say the contact agreed. */
+  consentNotGiven: number;
+  consentSkippedFutureDate: number;
   fields: FieldChangeDto[];
 }
 
@@ -232,6 +296,13 @@ export interface SaveConfigRequest {
   keyField: string;
   mapping: FieldMapping[];
   dateFormat: DateFormat;
+  consentMapping: ConsentMapping | null;
+}
+
+/** `CONFIRM_IMPORT` data. */
+export interface ConfirmImportRequest {
+  /** Version of the consent statement the user saw; `null` when the import needs no consent confirmation. */
+  statementVersion: string | null;
 }
 
 export interface SaveConfigResponse {
@@ -296,6 +367,10 @@ export interface ImportListItemDto {
   updated: number;
   canContinue: boolean;
   hasFiles: boolean;
+  /** Name of the recipient list the import adds contacts to; `null` when none (or it no longer exists). */
+  recipientListName: string | null;
+  /** Name of the consent the import records agreements for; `null` when none (or it no longer exists). */
+  consentName: string | null;
 }
 
 export interface ImportListResponse {

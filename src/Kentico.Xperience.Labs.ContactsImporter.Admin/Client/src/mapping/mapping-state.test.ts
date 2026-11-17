@@ -3,13 +3,16 @@ import { describe, expect, it } from 'vitest';
 import type { TargetField } from '../import-core';
 
 import {
+  consentColumnChoices,
   createMappingState,
   hasDateTarget,
   isSameMapping,
   mappedTargets,
   setColumnTarget,
+  setConsentColumn,
   setDateFormat,
   setKeyField,
+  toConsentMapping,
   toFieldMapping,
   validateMapping,
 } from './mapping-state';
@@ -137,6 +140,120 @@ describe('hasDateTarget', () => {
 
     state = setColumnTarget(state, 3, 'ContactBirthday');
     expect(hasDateTarget(state, FIELDS)).toBe(true);
+  });
+});
+
+describe('consent columns', () => {
+  const COLUMNS_WITH_CONSENT = [...COLUMNS, 'Opt in', 'Opt in date'];
+
+  it('are never suggested: a new mapping has none', () => {
+    const state = createMappingState(COLUMNS_WITH_CONSENT, FIELDS, SUGGESTIONS);
+
+    expect(state.consent).toEqual({ agreed: '', date: '' });
+    expect(toConsentMapping(state)).toBeNull();
+  });
+
+  it('are chosen from the file columns, each name once', () => {
+    expect(consentColumnChoices(createMappingState(['Email', 'Opt in', 'Email'], FIELDS, SUGGESTIONS))).toEqual(['Email', 'Opt in']);
+  });
+
+  it('a consent column is no longer imported as a contact field', () => {
+    let state = createMappingState(COLUMNS_WITH_CONSENT, FIELDS, SUGGESTIONS);
+    state = setColumnTarget(state, 5, 'ContactLastName');
+
+    state = setConsentColumn(state, 'agreed', 'Opt in');
+
+    expect(state.columns[5]).toEqual({ source: 'Opt in', target: '' });
+    expect(state.consent).toEqual({ agreed: 'Opt in', date: '' });
+    expect(toConsentMapping(state)).toEqual({ agreed: 'Opt in', date: null });
+  });
+
+  it('a consent column that is the key moves the key to another mapped field', () => {
+    let state = createMappingState(COLUMNS_WITH_CONSENT, FIELDS, SUGGESTIONS);
+
+    state = setConsentColumn(state, 'agreed', 'Email');
+
+    expect(state.keyField).toBe('ContactFirstName');
+  });
+
+  it('mapping a consent column to a contact field removes it from the consent columns', () => {
+    let state = createMappingState(COLUMNS_WITH_CONSENT, FIELDS, SUGGESTIONS);
+    state = setConsentColumn(state, 'agreed', 'Opt in');
+    state = setConsentColumn(state, 'date', 'Opt in date');
+
+    const dateMapped = setColumnTarget(state, 6, 'ContactBirthday');
+    expect(dateMapped.consent).toEqual({ agreed: 'Opt in', date: '' });
+
+    // without the "consent given" column there is no consent date either
+    const agreedMapped = setColumnTarget(state, 5, 'ContactLastName');
+    expect(agreedMapped.consent).toEqual({ agreed: '', date: '' });
+    expect(toConsentMapping(agreedMapped)).toBeNull();
+  });
+
+  it('the date column needs the "consent given" column and must be another column', () => {
+    const initial = createMappingState(COLUMNS_WITH_CONSENT, FIELDS, SUGGESTIONS);
+    expect(setConsentColumn(initial, 'date', 'Opt in date').consent).toEqual({ agreed: '', date: '' });
+
+    let state = setConsentColumn(initial, 'agreed', 'Opt in');
+    expect(setConsentColumn(state, 'date', 'Opt in').consent).toEqual({ agreed: 'Opt in', date: '' });
+    expect(setConsentColumn(state, 'date', 'No such column').consent).toEqual({ agreed: 'Opt in', date: '' });
+
+    state = setConsentColumn(state, 'date', 'Opt in date');
+    expect(toConsentMapping(state)).toEqual({ agreed: 'Opt in', date: 'Opt in date' });
+
+    // choosing the date column as "consent given" clears the date; clearing "consent given" clears both
+    expect(setConsentColumn(state, 'agreed', 'Opt in date').consent).toEqual({ agreed: 'Opt in date', date: '' });
+    expect(setConsentColumn(state, 'agreed', '').consent).toEqual({ agreed: '', date: '' });
+    expect(setConsentColumn(state, 'date', '').consent).toEqual({ agreed: 'Opt in', date: '' });
+  });
+
+  it('a consent date column makes the date format matter', () => {
+    let state = createMappingState(COLUMNS_WITH_CONSENT, FIELDS, SUGGESTIONS);
+    state = setConsentColumn(state, 'agreed', 'Opt in');
+    expect(hasDateTarget(state, FIELDS)).toBe(false);
+
+    expect(hasDateTarget(setConsentColumn(state, 'date', 'Opt in date'), FIELDS)).toBe(true);
+  });
+
+  it('are restored from the saved mapping and part of "same mapping"', () => {
+    const saved: SavedMapping = {
+      keyField: 'ContactEmail',
+      mapping: SUGGESTIONS,
+      dateFormat: 'iso',
+      consentMapping: { agreed: 'Opt in', date: 'Opt in date' },
+    };
+    const state = createMappingState(COLUMNS_WITH_CONSENT, FIELDS, SUGGESTIONS, saved);
+
+    expect(state.consent).toEqual({ agreed: 'Opt in', date: 'Opt in date' });
+    expect(isSameMapping(state, saved)).toBe(true);
+    expect(isSameMapping(setConsentColumn(state, 'date', ''), saved)).toBe(false);
+    expect(isSameMapping(setConsentColumn(state, 'agreed', ''), saved)).toBe(false);
+    expect(isSameMapping(state, { ...saved, consentMapping: null })).toBe(false);
+  });
+
+  it('saved consent columns the file does not have are reported and dropped', () => {
+    const saved: SavedMapping = {
+      keyField: 'ContactEmail',
+      mapping: SUGGESTIONS,
+      dateFormat: 'iso',
+      consentMapping: { agreed: 'Opt in', date: 'Opt in date' },
+    };
+    const state = createMappingState(COLUMNS, FIELDS, SUGGESTIONS, saved);
+
+    expect(state.consent).toEqual({ agreed: '', date: '' });
+    expect(validateMapping(state, saved).missingColumns).toEqual(['Opt in', 'Opt in date']);
+    expect(validateMapping(state, saved).problems).toEqual(['missingColumn']);
+  });
+
+  it('a saved consent column that is also a saved contact field column stays a contact field', () => {
+    const saved: SavedMapping = {
+      keyField: 'ContactEmail',
+      mapping: SUGGESTIONS,
+      dateFormat: 'iso',
+      consentMapping: { agreed: 'First Name', date: null },
+    };
+
+    expect(createMappingState(COLUMNS, FIELDS, SUGGESTIONS, saved).consent).toEqual({ agreed: '', date: '' });
   });
 });
 

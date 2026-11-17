@@ -2,26 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { AggregatesDto, JobState, ProcessNextRequest, ProcessOutcome, ProgressDto } from '../shared/commands';
 
+import { NO_COUNTS } from '../import/model';
+
 import { ProcessLoop, storageTokenStore } from './process-loop';
 import type { LoopSnapshot, ProcessLoopOptions, TokenStore } from './process-loop';
 
-const ZERO: AggregatesDto = {
-  rows: 0,
-  created: 0,
-  updated: 0,
-  unchanged: 0,
-  contactsUpdated: 0,
-  skippedNew: 0,
-  skippedExisting: 0,
-  skippedMultipleMatches: 0,
-  skippedInvalidEmail: 0,
-  skippedInvalidValue: 0,
-  skipped: 0,
-  duplicateRows: 0,
-  multipleMatches: 0,
-  importedWithoutEmail: 0,
-  fields: [],
-};
+const ZERO: AggregatesDto = NO_COUNTS;
 
 function answer(outcome: ProcessOutcome, rows = 0, extra: Partial<ProgressDto> = {}): ProgressDto {
   return {

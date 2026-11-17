@@ -25,6 +25,13 @@ internal sealed record ImportJob
     /// </summary>
     public string DateFormat { get; init; } = "iso";
 
+    /// <summary>
+    /// Source columns that say whether and when a row's contact gave consent. Applied in the browser, like the field
+    /// mapping, so a change needs a new upload. <c>null</c> = no consent columns; uploaded records then have no
+    /// <c>c</c> property, otherwise every record has one. Used only with <see cref="ConsentMode.BlanketWithColumnOverride"/>.
+    /// </summary>
+    public ImportConsentMapping? ConsentMapping { get; init; }
+
     public ImportOptions Options { get; init; } = new();
 
     public ImportAttestation? Attestation { get; init; }
@@ -53,6 +60,19 @@ internal sealed record ImportFieldMapping
     public required string Source { get; init; }
 
     public required string Target { get; init; }
+}
+
+/// <summary>
+/// Source file columns with the consent of each row (wire: <c>"consentMapping": {"agreed": "...", "date": "..."}</c>).
+/// At least one of the columns is set.
+/// </summary>
+internal sealed record ImportConsentMapping
+{
+    /// <summary>Column saying whether consent was given. <c>null</c> = not mapped: every row counts as consent given.</summary>
+    public string? Agreed { get; init; }
+
+    /// <summary>Column with the date (or date and time) the consent was given. <c>null</c> = not mapped: the import time is used.</summary>
+    public string? Date { get; init; }
 }
 
 /// <summary>

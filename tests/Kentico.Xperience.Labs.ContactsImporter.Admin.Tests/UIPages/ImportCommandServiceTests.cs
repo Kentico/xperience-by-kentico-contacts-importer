@@ -49,6 +49,8 @@ internal class ImportCommandServiceTests
             new ImportReportReader(temp.Store),
             new ImportProcessGate(),
             new ResourceImportTexts(),
+            new FakeChoiceProvider(),
+            new FakeChoiceProvider(),
             temp.Options,
             time);
 
@@ -159,8 +161,8 @@ internal class ImportCommandServiceTests
                                                                                        Assert.That(service.UploadChunk(invalidId, TestData.Payload(jobId, 0, Records(1, 1))).Code, Is.EqualTo(ImportCommandCodes.REJECTED));
                                                                                        Assert.That(service.TruncateChunks(invalidId, new TruncateChunksRequest { FromIndex = 0 }).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
                                                                                        Assert.That(service.CompleteUpload(invalidId, Profile(1, 1)).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
-                                                                                       Assert.That(service.Cancel(invalidId).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
-                                                                                       Assert.That(service.DeleteFiles(invalidId).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+                                                                                       Assert.That(service.Cancel(invalidId, UserId).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+                                                                                       Assert.That(service.DeleteFiles(invalidId, UserId).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
                                                                                        Assert.That(Directory.Exists(temp.Root) ? Directory.GetFileSystemEntries(temp.Root) : [], Is.Empty);
                                                                                    });
 
@@ -721,7 +723,7 @@ internal class ImportCommandServiceTests
         StartUpload();
         Upload(0, 1, 3);
 
-        var response = service.Cancel(id);
+        var response = service.Cancel(id, UserId);
 
         Assert.Multiple(() =>
         {
@@ -737,12 +739,12 @@ internal class ImportCommandServiceTests
     public void Cancel_Of_A_Finished_Or_Unknown_Job_Is_Refused()
     {
         StartUpload();
-        service.Cancel(id);
+        service.Cancel(id, UserId);
 
         Assert.Multiple(() =>
         {
-            Assert.That(service.Cancel(id).Code, Is.EqualTo(ImportCommandCodes.INVALID_STATE));
-            Assert.That(service.Cancel(Guid.NewGuid().ToString("D")).Code, Is.EqualTo(ImportCommandCodes.JOB_NOT_FOUND));
+            Assert.That(service.Cancel(id, UserId).Code, Is.EqualTo(ImportCommandCodes.INVALID_STATE));
+            Assert.That(service.Cancel(Guid.NewGuid().ToString("D"), UserId).Code, Is.EqualTo(ImportCommandCodes.JOB_NOT_FOUND));
         });
     }
 
@@ -753,7 +755,7 @@ internal class ImportCommandServiceTests
         Upload(0, 1, 3);
         File.WriteAllText(temp.JobPath(jobId, "report-analyze.csv.gz"), "x");
 
-        var response = service.DeleteFiles(id);
+        var response = service.DeleteFiles(id, UserId);
 
         Assert.Multiple(() =>
         {
@@ -772,13 +774,13 @@ internal class ImportCommandServiceTests
         temp.Store.UpdateStatus(jobId, s => s with { State = ImportJobState.Completed });
         File.WriteAllText(temp.JobPath(jobId, "report-execute.csv.gz"), "x");
 
-        var response = service.DeleteFiles(id);
+        var response = service.DeleteFiles(id, UserId);
 
         Assert.Multiple(() =>
         {
             Assert.That(response.Status!.State, Is.EqualTo("Completed"));
             Assert.That(temp.Store.ListReports(jobId), Is.Empty);
-            Assert.That(service.DeleteFiles(Guid.NewGuid().ToString("D")).Code, Is.EqualTo(ImportCommandCodes.JOB_NOT_FOUND));
+            Assert.That(service.DeleteFiles(Guid.NewGuid().ToString("D"), UserId).Code, Is.EqualTo(ImportCommandCodes.JOB_NOT_FOUND));
         });
     }
 
@@ -796,7 +798,7 @@ internal class ImportCommandServiceTests
         time.Advance(TimeSpan.FromHours(1));
         var third = Guid.NewGuid();
         service.SaveConfig(third.ToString("D"), Config(fileName: "third.csv"), UserId);
-        service.Cancel(third.ToString("D"));
+        service.Cancel(third.ToString("D"), UserId);
 
         var list = service.ListImports();
 

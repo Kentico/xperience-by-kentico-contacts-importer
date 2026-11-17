@@ -1,4 +1,5 @@
 import type {
+  ConsentMapping,
   DateFormat,
   EncodedChunk,
   FieldMapping,
@@ -52,6 +53,8 @@ export interface PipelineConfig {
   keyField: string;
   mapping: FieldMapping[];
   dateFormat: DateFormat;
+  /** Consent columns of the job; `null` or missing = records carry no consent part. */
+  consentMapping?: ConsentMapping | null;
   fields: TargetField[];
   targetChunkBytes: number;
   maxChunkUncompressedBytes: number;

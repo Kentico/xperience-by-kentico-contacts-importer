@@ -13,8 +13,11 @@ const S = Strings.counts;
 
 type CountKey = Exclude<keyof AggregatesDto, 'fields'>;
 
-/** Count rows in display order. Rows marked `optional` show only when a value is not zero. */
-const COUNT_ROWS: readonly { key: CountKey; optional?: boolean }[] = [
+/**
+ * Count rows in display order. Rows marked `optional` show only when a value is not zero. Rows of a
+ * `group` that are not optional show when the import uses a recipient list / records consent.
+ */
+const COUNT_ROWS: readonly { key: CountKey; optional?: boolean; group?: 'list' | 'consent' }[] = [
   { key: 'rows' },
   { key: 'created' },
   { key: 'updated' },
@@ -29,7 +32,32 @@ const COUNT_ROWS: readonly { key: CountKey; optional?: boolean }[] = [
   { key: 'duplicateRows', optional: true },
   { key: 'multipleMatches', optional: true },
   { key: 'importedWithoutEmail', optional: true },
+  { key: 'listAdded', group: 'list' },
+  { key: 'listAlreadySubscribed', group: 'list', optional: true },
+  { key: 'listKeptUnsubscribed', group: 'list', optional: true },
+  { key: 'listResubscribed', group: 'list', optional: true },
+  { key: 'listSkippedBounced', group: 'list', optional: true },
+  { key: 'listSkippedNoEmail', group: 'list', optional: true },
+  { key: 'bouncedHard', group: 'list', optional: true },
+  { key: 'bouncedSoftOverLimit', group: 'list', optional: true },
+  { key: 'bouncedSoftUnderLimit', group: 'list', optional: true },
+  { key: 'consentRecorded', group: 'consent' },
+  { key: 'consentAlreadyAgreed', group: 'consent', optional: true },
+  { key: 'consentKeptRevoked', group: 'consent', optional: true },
+  { key: 'consentReAgreed', group: 'consent', optional: true },
+  { key: 'consentNotGiven', group: 'consent', optional: true },
+  { key: 'consentSkippedFutureDate', group: 'consent', optional: true },
 ];
+
+/** A count of the aggregates; 0 when the server did not send it. */
+function countOf(aggregates: AggregatesDto | null, key: CountKey): number {
+  return aggregates?.[key] ?? 0;
+}
+
+/** Contacts of the file whose email address has bounces (hard, or soft at or under the limit). */
+export function bouncedContacts(aggregates: AggregatesDto): number {
+  return countOf(aggregates, 'bouncedHard') + countOf(aggregates, 'bouncedSoftOverLimit') + countOf(aggregates, 'bouncedSoftUnderLimit');
+}
 
 /** Exact value of a count for tests; the visible number is formatted. */
 export const Count = ({ name, value }: { readonly name: string; readonly value: number }) => (
@@ -41,6 +69,10 @@ export interface AggregatesTableProps {
   readonly expected: AggregatesDto | null;
   /** Counts of the import; `null` hides the column. */
   readonly actual: AggregatesDto | null;
+  /** The import adds contacts to a recipient list: its main count shows also when it is zero. */
+  readonly usesList?: boolean;
+  /** The import records consent agreements: its main count shows also when it is zero. */
+  readonly usesConsent?: boolean;
   readonly dataTestId?: string;
 }
 
@@ -48,7 +80,7 @@ export interface AggregatesTableProps {
  * Counts of the check and of the import next to each other. Every number comes from the server
  * aggregates; nothing is computed here.
  */
-export const AggregatesTable = ({ expected, actual }: AggregatesTableProps) => {
+export const AggregatesTable = ({ expected, actual, usesList = false, usesConsent = false }: AggregatesTableProps) => {
   const columns = useMemo(
     () => [
       textColumn('count', S.column, 40, 70),
@@ -58,15 +90,15 @@ export const AggregatesTable = ({ expected, actual }: AggregatesTableProps) => {
     [expected, actual],
   );
 
-  const visible = COUNT_ROWS.filter(({ key, optional }) => {
-    if (!optional) {
+  const visible = COUNT_ROWS.filter(({ key, optional, group }) => {
+    if (!optional && (group === undefined || (group === 'list' ? usesList : usesConsent))) {
       return true;
     }
     if (key === 'contactsUpdated') {
       return (expected && expected.contactsUpdated !== expected.updated) || (actual && actual.contactsUpdated !== actual.updated);
     }
 
-    return (expected?.[key] ?? 0) !== 0 || (actual?.[key] ?? 0) !== 0;
+    return countOf(expected, key) !== 0 || countOf(actual, key) !== 0;
   });
 
   const rows: TableRow[] = visible.map(({ key }) => ({
@@ -74,8 +106,8 @@ export const AggregatesTable = ({ expected, actual }: AggregatesTableProps) => {
     disabled: false,
     cells: [
       stringCell('count', S[key]),
-      ...(expected ? [stringCell('expected', formatNumber(expected[key]))] : []),
-      ...(actual ? [stringCell('actual', formatNumber(actual[key]))] : []),
+      ...(expected ? [stringCell('expected', formatNumber(countOf(expected, key)))] : []),
+      ...(actual ? [stringCell('actual', formatNumber(countOf(actual, key)))] : []),
     ],
   }));
 
@@ -83,8 +115,8 @@ export const AggregatesTable = ({ expected, actual }: AggregatesTableProps) => {
     <>
       {COUNT_ROWS.map(({ key }) => (
         <React.Fragment key={key}>
-          {expected && <Count name={`expected-${key}`} value={expected[key]} />}
-          {actual && <Count name={`actual-${key}`} value={actual[key]} />}
+          {expected && <Count name={`expected-${key}`} value={countOf(expected, key)} />}
+          {actual && <Count name={`actual-${key}`} value={countOf(actual, key)} />}
         </React.Fragment>
       ))}
       <Table columns={columns} rows={rows} />

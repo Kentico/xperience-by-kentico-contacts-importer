@@ -333,4 +333,80 @@ public class ChunkValidatorTests
             Assert.That(keyError, Does.Contain("not mapped"));
         });
     }
+
+    // Consent columns (property "c").
+
+    private static ChunkValidationContext ConsentContext()
+    {
+        var job = TestData.Job() with { ConsentMapping = new ImportConsentMapping { Agreed = "consent", Date = "consent date" } };
+        Assert.That(ChunkValidationContext.TryCreate(job, TestData.Fields, out var context, out string? error), Is.True, error);
+
+        return context!;
+    }
+
+    private static string ConsentRecord(long row, string consent) =>
+        "{\"r\":" + row + ",\"k\":\"jane@example.com\",\"v\":{\"ContactEmail\":\"jane@example.com\"},\"c\":" + consent + "}";
+
+    [TestCase("""{"a":true}""")]
+    [TestCase("""{"a":false}""")]
+    [TestCase("""{"a":true,"d":"2025-03-01"}""")]
+    [TestCase("""{"d":"2025-03-01T10:20:30","a":false}""")]
+    [TestCase("""{"a":true,"d":"2025-03-01T10:20:30.123Z"}""")]
+    [TestCase("""{"a":true,"d":"2025-03-01T10:20:30+02:00"}""")]
+    [TestCase("""{"a":true,"d":"2999-01-01"}""", Description = "A future date is refused when the row is processed, not at upload.")]
+    [TestCase("""{"a":true,"d":null}""")]
+    public void Consent_Is_Accepted_When_Consent_Columns_Are_Mapped(string consent)
+    {
+        var result = Validate(ConsentContext(), ConsentRecord(1, consent));
+
+        Assert.That(result.IsValid, Is.True, result.Message);
+    }
+
+    [TestCase("""{}""", "without the consent flag 'a'")]
+    [TestCase("""{"d":"2025-03-01"}""", "without the consent flag 'a'")]
+    [TestCase("""{"a":"true"}""", "not true or false")]
+    [TestCase("""{"a":1}""", "not true or false")]
+    [TestCase("""{"a":null}""", "not true or false")]
+    [TestCase("""{"a":true,"a":false}""", "duplicate 'a'")]
+    [TestCase("""{"a":true,"d":"2025-03-01","d":"2025-03-02"}""", "duplicate 'd'")]
+    [TestCase("""{"a":true,"d":""}""", "consent date 'd'")]
+    [TestCase("""{"a":true,"d":"01/03/2025"}""", "consent date 'd'")]
+    [TestCase("""{"a":true,"d":"2025-02-30"}""", "consent date 'd'")]
+    [TestCase("""{"a":true,"d":20250301}""", "consent date 'd'")]
+    [TestCase("""{"a":true,"source":"webinar"}""", "unknown property in consent")]
+    [TestCase("""true""", "not an object")]
+    [TestCase("""[true]""", "not an object")]
+    [TestCase("""null""", "not an object")]
+    public void Invalid_Consent_Rejects_The_Chunk_Without_Quoting_It(string consent, string expectedMessagePart)
+    {
+        var result = Validate(ConsentContext(), ConsentRecord(4, consent));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsValid, Is.False);
+            Assert.That(result.Reason, Is.EqualTo(ChunkRejectReason.InvalidRecord));
+            Assert.That(result.Message, Does.Contain(expectedMessagePart));
+            Assert.That(result.Message, Does.Not.Contain("webinar").And.Not.Contain("01/03/2025").And.Not.Contain("jane@"));
+            Assert.That(result.RowNumber, Is.EqualTo(4));
+        });
+    }
+
+    [Test]
+    public void Consent_Is_Required_On_Every_Record_Exactly_When_Consent_Columns_Are_Mapped()
+    {
+        var missing = Validate(ConsentContext(), ConsentRecord(1, """{"a":true}"""), TestData.Record(2, "joe@example.com"));
+        var unexpected = Validate(Context(), TestData.Record(1, "joe@example.com"), ConsentRecord(2, """{"a":true}"""));
+        var twice = Validate(ConsentContext(), """{"r":1,"k":"jane@example.com","c":{"a":true},"v":{"ContactEmail":"jane@example.com"},"c":{"a":false}}""");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(missing.IsValid, Is.False);
+            Assert.That(missing.Message, Does.Contain("has no consent 'c'"));
+            Assert.That(missing.RowNumber, Is.EqualTo(2));
+            Assert.That(unexpected.IsValid, Is.False);
+            Assert.That(unexpected.Message, Does.Contain("only allowed when consent columns are mapped"));
+            Assert.That(twice.IsValid, Is.False);
+            Assert.That(twice.Message, Does.Contain("duplicate 'c'"));
+        });
+    }
 }

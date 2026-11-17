@@ -23,6 +23,7 @@ import { Strings, format } from '../shared/strings';
 import { TestIds, Text, testId } from '../shared/ui';
 
 import { AggregatesTable, FieldChangesTable } from './Aggregates';
+import { ConsentSummary } from './ConsentSummary';
 import type { JobView } from './model';
 import { ReportButton } from './ReportButton';
 
@@ -49,11 +50,15 @@ export const ResultsStep = ({ execute, view, fields, onOpenContactGroups, onBack
   const [deleted, setDeleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { status, progress, reports } = view;
+  const { job, status, progress, reports } = view;
+  const usesList = job.options.recipientListId !== null;
+  const usesConsent = job.options.consent !== 'none';
   const state = status.state;
   // The import itself ran (at least started): the running counts are what was imported.
   const imported = progress.phase === 'execute' ? progress.aggregates : null;
   const changedContacts = imported !== null && imported.created + imported.contactsUpdated > 0;
+  // Nothing about the list or consent to show for an import that never had either and never started.
+  const showConsentSummary = usesList || usesConsent || job.attestation !== null;
   const hasReports = reports.analyze || reports.execute;
 
   const deleteFiles = useCallback(async () => {
@@ -98,9 +103,10 @@ export const ResultsStep = ({ execute, view, fields, onOpenContactGroups, onBack
       {(imported !== null || progress.analysis !== null) && (
         <>
           <Headline size={HeadlineSize.S}>{S.tableHeadline}</Headline>
-          <AggregatesTable expected={progress.analysis} actual={imported} />
+          <AggregatesTable expected={progress.analysis} actual={imported} usesList={usesList} usesConsent={usesConsent} />
         </>
       )}
+      {showConsentSummary && <ConsentSummary job={job} />}
       {imported !== null && imported.fields.length > 0 && (
         <>
           <Headline size={HeadlineSize.S}>{Strings.review.fieldsHeadline}</Headline>

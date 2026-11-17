@@ -140,6 +140,7 @@ export const UploadStep = ({
         keyField: job.keyField,
         mapping: job.mapping,
         dateFormat: job.dateFormat,
+        consentMapping: job.consentMapping ?? null,
         fields: [...targetFields],
         ...chunkSizes(limits),
       },

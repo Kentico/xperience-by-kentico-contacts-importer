@@ -48,7 +48,9 @@ internal static class ImportRowReasons
 /// <param name="Reason">One of <see cref="ImportRowReasons"/>, or <c>null</c>.</param>
 /// <param name="Field">Contact field the reason is about, when there is one.</param>
 /// <param name="Key">Dedupe key of the row. Personal data: only written to the report when the job asks for it.</param>
-internal readonly record struct ImportRowResult(long Row, ImportRowOutcome Outcome, string? Reason, string? Field, string Key);
+/// <param name="List">Recipient list outcome of the row's contact (<see cref="ImportAudienceOutcomes"/>), or <c>null</c>.</param>
+/// <param name="Consent">Consent outcome of the row's contact (<see cref="ImportAudienceOutcomes"/>), or <c>null</c>.</param>
+internal readonly record struct ImportRowResult(long Row, ImportRowOutcome Outcome, string? Reason, string? Field, string Key, string? List = null, string? Consent = null);
 
 internal enum FieldValueState : byte
 {
@@ -65,7 +67,7 @@ internal enum FieldValueState : byte
 /// <summary>
 /// A row that passed conversion, with typed values by field index.
 /// </summary>
-internal sealed record PreparedRow(int Position, long Row, string Key, FieldValueState[] States, object?[] Values, bool EmailDropped);
+internal sealed record PreparedRow(int Position, long Row, string Key, FieldValueState[] States, object?[] Values, bool EmailDropped, ImportRecordConsent? Consent = null);
 
 /// <summary>
 /// Rows of a batch that share a dedupe key, in file order.
@@ -114,7 +116,14 @@ internal sealed record ContactUpdate(int ContactId, FieldValueState[] States, ob
 /// <summary>
 /// Decisions for one batch: contacts to create and update, the outcome of every row, and the counts.
 /// </summary>
-internal sealed record BatchPlan(IReadOnlyList<ContactCreate> Creates, IReadOnlyList<ContactUpdate> Updates, IReadOnlyList<ImportRowResult> Rows, ImportCounts Counts);
+internal sealed record BatchPlan(IReadOnlyList<ContactCreate> Creates, IReadOnlyList<ContactUpdate> Updates, IReadOnlyList<ImportRowResult> Rows, ImportCounts Counts)
+{
+    /// <summary>
+    /// Contacts the rows resolve to, for the recipient list and consent behaviors: created, updated and unchanged
+    /// contacts and existing contacts that are not updated. Empty when the job has no recipient list and no consent.
+    /// </summary>
+    public IReadOnlyList<AudienceTarget> Targets { get; init; } = [];
+}
 
 /// <summary>
 /// Tells which of the values of a reference field do not exist in the referenced table: positions in
@@ -247,6 +256,7 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
 
         var creates = new List<ContactCreate>();
         var updates = new List<ContactUpdate>();
+        var targets = new List<AudienceTarget>();
         for (int root = 0; root < groupCount; root++)
         {
             if (rowsByRoot[root] is not { } rows)
@@ -255,10 +265,10 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
             }
 
             rows.Sort((x, y) => x.Position.CompareTo(y.Position));
-            ClassifyGroup(batch, rows, matchesByRoot[root]?.Values.ToList() ?? [], creates, updates);
+            ClassifyGroup(batch, rows, matchesByRoot[root]?.Values.ToList() ?? [], creates, updates, targets);
         }
 
-        return new BatchPlan(creates, updates, [.. batch.Results.Select(r => r!.Value)], batch.Counts);
+        return new BatchPlan(creates, updates, [.. batch.Results.Select(r => r!.Value)], batch.Counts) { Targets = targets };
     }
 
     /// <summary>
@@ -386,10 +396,10 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
             values[context.KeyIndex] = record.Key;
         }
 
-        return new PreparedRow(position, record.Row, record.Key, states, values, emailDropped);
+        return new PreparedRow(position, record.Row, record.Key, states, values, emailDropped, record.Consent);
     }
 
-    private void ClassifyGroup(PreparedBatch batch, List<PreparedRow> rows, List<ContactMatch> matches, List<ContactCreate> creates, List<ContactUpdate> updates)
+    private void ClassifyGroup(PreparedBatch batch, List<PreparedRow> rows, List<ContactMatch> matches, List<ContactCreate> creates, List<ContactUpdate> updates, List<AudienceTarget> targets)
     {
         var counts = batch.Counts;
         var (states, values) = MergeRows(rows);
@@ -403,6 +413,7 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
                 creates.Add(new ContactCreate(values));
                 counts.Add(ImportAggregateKeys.Created);
                 outcome = ImportRowOutcome.Created;
+                AddTargets(targets, rows, states, values, [], creates.Count - 1, fieldsWritten: true);
             }
             else
             {
@@ -418,13 +429,20 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
                 counts.Add(ImportAggregateKeys.MultipleMatches);
             }
 
+            // The recipient list and consent behaviors do not depend on whether fields are updated: they apply to
+            // the contacts the multiple matches option chooses, and to none when that option skips the key.
+            bool multipleSkipped = matches.Count > 1 && context.Options.MultipleMatches == MultipleMatchesBehavior.Skip;
             if (context.Options.ExistingContacts == ExistingContactsBehavior.Skip)
             {
                 counts.Add(ImportAggregateKeys.SkippedExisting);
                 outcome = ImportRowOutcome.Skipped;
                 reason = ImportRowReasons.ExistingContactsNotUpdated;
+                if (!multipleSkipped)
+                {
+                    AddTargets(targets, rows, states, values, SelectTargets(matches), -1, fieldsWritten: false);
+                }
             }
-            else if (matches.Count > 1 && context.Options.MultipleMatches == MultipleMatchesBehavior.Skip)
+            else if (multipleSkipped)
             {
                 counts.Add(ImportAggregateKeys.SkippedMultipleMatches);
                 outcome = ImportRowOutcome.Skipped;
@@ -433,6 +451,7 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
             else
             {
                 outcome = PlanUpdates(counts, states, values, matches, updates);
+                AddTargets(targets, rows, states, values, SelectTargets(matches), -1, fieldsWritten: true);
             }
         }
 
@@ -446,6 +465,62 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
                 ?? (row.EmailDropped ? ImportRowReasons.EmailNotImported : null);
             string? field = rowReason == ImportRowReasons.EmailNotImported ? KeyNormalizer.EmailFieldName : null;
             batch.Results[row.Position] = new ImportRowResult(row.Row, outcome, rowReason, field, row.Key);
+        }
+    }
+
+    /// <summary>
+    /// The matching contacts the multiple matches option chooses: the only one, all, or the newest.
+    /// </summary>
+    private List<ContactMatch> SelectTargets(List<ContactMatch> matches) =>
+        matches.Count == 1 || context.Options.MultipleMatches == MultipleMatchesBehavior.UpdateAll
+            ? [.. matches.OrderBy(m => m.ContactId)]
+            : [matches.OrderByDescending(m => m.LastModified).ThenByDescending(m => m.ContactId).First()];
+
+    /// <summary>
+    /// Adds the contacts a key resolves to as targets of the recipient list and consent behaviors.
+    /// </summary>
+    /// <param name="targets">List to add to.</param>
+    /// <param name="rows">Rows with the key, in file order.</param>
+    /// <param name="states">Merged field states of the rows.</param>
+    /// <param name="values">Merged field values of the rows.</param>
+    /// <param name="matches">Chosen existing contacts; empty for a contact that is created.</param>
+    /// <param name="createIndex">Index of the created contact in the creates of the batch, or -1.</param>
+    /// <param name="fieldsWritten">The batch writes the mapped fields of the contacts.</param>
+    private void AddTargets(List<AudienceTarget> targets, List<PreparedRow> rows, FieldValueState[] states, object?[] values, List<ContactMatch> matches, int createIndex, bool fieldsWritten)
+    {
+        if (!context.HasAudience)
+        {
+            return;
+        }
+
+        var last = rows[^1];
+        ImportRecordConsent?[] consents = context.RecordsConsent && context.ConsentFromColumns ? [.. rows.Select(row => row.Consent)] : [];
+
+        // The email the contact has after the batch, when the batch decides it. A new contact has exactly the mapped
+        // email. An existing contact keeps its email unless the email field is written with a value, or cleared.
+        int emailIndex = context.EmailFieldIndex;
+        bool hasPlannedEmail = createIndex >= 0;
+        string? plannedEmail = null;
+        if (emailIndex >= 0 && emailIndex != context.KeyIndex && fieldsWritten)
+        {
+            hasPlannedEmail |= states[emailIndex] == FieldValueState.Value || (states[emailIndex] == FieldValueState.Empty && context.ClearEmptyValues);
+        }
+
+        if (hasPlannedEmail && emailIndex >= 0 && states[emailIndex] == FieldValueState.Value)
+        {
+            plannedEmail = values[emailIndex] as string;
+        }
+
+        if (createIndex >= 0)
+        {
+            targets.Add(new AudienceTarget(null, createIndex, last.Row, last.Position, true, plannedEmail, consents));
+
+            return;
+        }
+
+        foreach (var match in matches)
+        {
+            targets.Add(new AudienceTarget(match.ContactId, -1, last.Row, last.Position, hasPlannedEmail, plannedEmail, consents));
         }
     }
 
@@ -486,12 +561,8 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
 
     private ImportRowOutcome PlanUpdates(ImportCounts counts, FieldValueState[] states, object?[] values, List<ContactMatch> matches, List<ContactUpdate> updates)
     {
-        IEnumerable<ContactMatch> targets = matches.Count == 1 || context.Options.MultipleMatches == MultipleMatchesBehavior.UpdateAll
-            ? matches.OrderBy(m => m.ContactId)
-            : [matches.OrderByDescending(m => m.LastModified).ThenByDescending(m => m.ContactId).First()];
-
         bool anyChanged = false;
-        foreach (var target in targets)
+        foreach (var target in SelectTargets(matches))
         {
             bool changed = false;
             for (int i = 0; i < states.Length; i++)

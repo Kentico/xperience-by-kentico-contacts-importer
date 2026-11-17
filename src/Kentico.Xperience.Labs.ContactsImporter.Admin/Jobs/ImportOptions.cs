@@ -84,11 +84,17 @@ internal enum InvalidEmailBehavior
     ImportWithoutEmail,
 }
 
+/// <summary>
+/// What happens to a contact that unsubscribed from the selected recipient list. Both values count and report such
+/// contacts; "report only" of the plan had no behavior of its own and is the same as <see cref="Keep"/>.
+/// </summary>
 internal enum UnsubscribedBehavior
 {
+    /// <summary>The contact stays unsubscribed.</summary>
     Keep,
+
+    /// <summary>The contact gets a new approved subscription confirmation (attested).</summary>
     Resubscribe,
-    ReportOnly,
 }
 
 internal enum BouncedAddressBehavior

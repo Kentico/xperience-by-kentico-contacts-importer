@@ -34,11 +34,14 @@ public static class ContactsImporterServiceCollectionExtensions
         services.TryAddSingleton<IContactImportRepository, ContactImportRepository>();
         services.TryAddSingleton<IImportCacheInvalidator, ImportCacheInvalidator>();
         services.TryAddSingleton<IImportReportReader, ImportReportReader>();
+        services.TryAddSingleton<IImportAudienceResolver, ImportAudienceResolver>();
+        services.TryAddSingleton<IImportEventPublisher, ImportEventPublisher>();
         services.TryAddSingleton<IImportProcessor, ImportProcessor>();
 
         // Admin pages (UIPages)
         services.TryAddTransient<IImportTexts, LocalizedImportTexts>();
         services.TryAddTransient<IImportUserNameProvider, ImportUserNameProvider>();
+        services.TryAddTransient<IImportChoiceProvider, ImportChoiceProvider>();
         services.TryAddSingleton<IImportProcessGate, ImportProcessGate>();
         services.TryAddSingleton<IImportReportPager, ImportReportPager>();
         services.TryAddTransient<IImportCommandService, ImportCommandService>();

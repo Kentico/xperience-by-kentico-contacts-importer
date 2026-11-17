@@ -17,9 +17,12 @@ internal interface IImportJobCleanupService
 
     /// <summary>
     /// "Delete import files now": deletes the uploaded chunks and reports of a job and, when the job is not
-    /// finished, cancels it. The job stays in the recent imports list. Returns <c>false</c> when the job does not exist.
+    /// finished, cancels it (which raises <see cref="AfterContactImportEvent"/>). The job stays in the recent imports
+    /// list. Returns <c>false</c> when the job does not exist.
     /// </summary>
-    public bool DeleteImportFiles(Guid jobId);
+    /// <param name="jobId">Job whose files are deleted.</param>
+    /// <param name="userId">User who asked for it, for the event; <c>null</c> = not known.</param>
+    public bool DeleteImportFiles(Guid jobId, int? userId = null);
 
     /// <summary>
     /// Runs <see cref="Sweep"/> unless it ran in this application instance within the last
@@ -45,7 +48,8 @@ internal sealed class ImportJobCleanupService(
     IImportJobStore store,
     IOptions<ContactsImporterOptions> options,
     TimeProvider timeProvider,
-    ILogger<ImportJobCleanupService> logger) : IImportJobCleanupService
+    ILogger<ImportJobCleanupService> logger,
+    IImportEventPublisher? events = null) : IImportJobCleanupService
 {
     /// <summary>Shortest time between two lazy sweeps in one application instance.</summary>
     internal static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(10);
@@ -57,7 +61,7 @@ internal sealed class ImportJobCleanupService(
 
     public void DeleteChunks(Guid jobId) => store.DeleteChunks(jobId);
 
-    public bool DeleteImportFiles(Guid jobId)
+    public bool DeleteImportFiles(Guid jobId, int? userId = null)
     {
         if (!store.JobExists(jobId))
         {
@@ -65,10 +69,19 @@ internal sealed class ImportJobCleanupService(
         }
 
         var utcNow = UtcNow();
-        store.UpdateStatus(jobId, status =>
-            ImportJobStateMachine.IsTerminal(status.State) ? status : ImportJobStateMachine.Transition(status, ImportJobState.Cancelled, utcNow));
+        bool cancelled = false;
+        var updated = store.UpdateStatus(jobId, status =>
+        {
+            cancelled = !ImportJobStateMachine.IsTerminal(status.State);
+
+            return cancelled ? ImportJobStateMachine.Transition(status, ImportJobState.Cancelled, utcNow) : status;
+        });
         store.DeleteChunks(jobId);
         store.DeleteReports(jobId);
+        if (cancelled && updated is not null)
+        {
+            PublishCancelled(jobId, updated, userId);
+        }
 
         return true;
     }
@@ -176,13 +189,33 @@ internal sealed class ImportJobCleanupService(
             return;
         }
 
-        store.UpdateStatus(jobId, current =>
-            ImportJobStateMachine.IsTerminal(current.State)
-                ? current
-                : ImportJobStateMachine.Transition(current, ImportJobState.Cancelled, utcNow) with { Error = AbandonedError });
+        bool cancelled = false;
+        var updated = store.UpdateStatus(jobId, current =>
+        {
+            cancelled = !ImportJobStateMachine.IsTerminal(current.State);
+
+            return cancelled
+                ? ImportJobStateMachine.Transition(current, ImportJobState.Cancelled, utcNow) with { Error = AbandonedError }
+                : current;
+        });
         store.DeleteChunks(jobId);
         store.DeleteReports(jobId);
         counts.JobsAbandoned++;
+        if (cancelled && updated is not null)
+        {
+            PublishCancelled(jobId, updated, null);
+        }
+    }
+
+    /// <summary>
+    /// Raises the event of a job this service cancelled. Nothing was written when the import never started.
+    /// </summary>
+    private void PublishCancelled(Guid jobId, ImportJobStatus status, int? userId)
+    {
+        if (events is not null && TryReadJob(jobId) is { } job)
+        {
+            events.Publish(job, status, ContactImportStatus.Cancelled, status.Checkpoint.Phase != ImportPhase.Execute, userId);
+        }
     }
 
     /// <summary>

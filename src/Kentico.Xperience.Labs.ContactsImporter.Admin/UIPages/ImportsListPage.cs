@@ -1,6 +1,7 @@
 using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
+using Kentico.Xperience.Admin.Base.Authentication;
 using Kentico.Xperience.Labs.ContactsImporter.Admin;
 
 [assembly: UIPage(
@@ -22,7 +23,8 @@ namespace Kentico.Xperience.Labs.ContactsImporter.Admin;
 internal sealed class ImportsListPage(
     IImportCommandService commands,
     IUIPermissionEvaluator permissionEvaluator,
-    IPageLinkGenerator pageLinkGenerator) : Page<ImportsListClientProperties>
+    IPageLinkGenerator pageLinkGenerator,
+    IAuthenticatedUserAccessor authenticatedUserAccessor) : Page<ImportsListClientProperties>
 {
     public const string SLUG = "imports";
     public const string TEMPLATE_NAME = "@kentico/xperience-labs-contacts-importer-admin/ImportsList";
@@ -45,8 +47,8 @@ internal sealed class ImportsListPage(
         Task.FromResult(ResponseFrom(commands.ListImports()));
 
     [PageCommand(CommandName = ImportCommands.DELETE_FILES, Permission = ContactsImporterPermissions.IMPORT)]
-    public Task<ICommandResponse<ImportActionResponse>> DeleteFiles(ImportJobRequest request) =>
-        Task.FromResult(ResponseFrom(commands.DeleteFiles(request?.JobId)));
+    public async Task<ICommandResponse<ImportActionResponse>> DeleteFiles(ImportJobRequest request) =>
+        ResponseFrom(commands.DeleteFiles(request?.JobId, (await authenticatedUserAccessor.Get())?.UserID ?? 0));
 }
 
 internal sealed class ImportsListClientProperties : TemplateClientProperties

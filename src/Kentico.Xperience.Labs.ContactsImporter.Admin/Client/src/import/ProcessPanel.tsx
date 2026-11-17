@@ -52,6 +52,10 @@ export interface ProcessPanelProps {
   readonly cards: CountCardTexts;
   /** Name for the browser tab title next to the percentage. */
   readonly titleName: string;
+  /** The job adds contacts to a recipient list: the running count of subscribed contacts is shown. */
+  readonly usesList?: boolean;
+  /** The job records consent agreements: their running count is shown. */
+  readonly usesConsent?: boolean;
   /** Extra buttons next to Pause / Continue (cancel, back). */
   readonly actions?: React.ReactNode;
 }
@@ -60,7 +64,7 @@ export interface ProcessPanelProps {
  * Progress of the analysis or the import (PLAN §10 "Progress UI"): rows done of total, speed and
  * time left, running counts from the server, and why the work waits when it does.
  */
-export const ProcessPanel = ({ view, runningText, cards, titleName, actions }: ProcessPanelProps) => {
+export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = false, usesConsent = false, actions }: ProcessPanelProps) => {
   const { snapshot, rate, lockedByOtherTab } = view;
   const progress = snapshot.progress;
   const done = progress?.rowsProcessed ?? 0;
@@ -136,6 +140,32 @@ export const ProcessPanel = ({ view, runningText, cards, titleName, actions }: P
       )}
 
       {progress && <CountCards aggregates={progress.aggregates} cards={cards} ratePerSecond={active ? rate.ratePerSecond : 0} etaSeconds={active ? rate.etaSeconds : null} />}
+      {progress && (usesList || usesConsent) && (
+        <Row spacing={Spacing.L}>
+          {usesList && (
+            <Column cols={Cols.Col3}>
+              <Count name="running-list" value={(progress.aggregates.listAdded ?? 0) + (progress.aggregates.listResubscribed ?? 0)} />
+              <InfoCard
+                caption={Strings.run.listCard}
+                tooltip={Strings.run.listCardTooltip}
+                text={formatNumber((progress.aggregates.listAdded ?? 0) + (progress.aggregates.listResubscribed ?? 0))}
+                details={Strings.run.listCardDetail}
+              />
+            </Column>
+          )}
+          {usesConsent && (
+            <Column cols={Cols.Col3}>
+              <Count name="running-consent" value={(progress.aggregates.consentRecorded ?? 0) + (progress.aggregates.consentReAgreed ?? 0)} />
+              <InfoCard
+                caption={Strings.run.consentCard}
+                tooltip={Strings.run.consentCardTooltip}
+                text={formatNumber((progress.aggregates.consentRecorded ?? 0) + (progress.aggregates.consentReAgreed ?? 0))}
+                details={Strings.run.consentCardDetail}
+              />
+            </Column>
+          )}
+        </Row>
+      )}
 
       <Inline spacing={Spacing.M}>
         {active && (

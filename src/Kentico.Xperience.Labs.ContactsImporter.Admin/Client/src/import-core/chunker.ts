@@ -101,6 +101,9 @@ export class Chunker {
     if (record.f && record.f.length > 0) {
       ordered.f = record.f;
     }
+    if (record.c) {
+      ordered.c = record.c.d === undefined ? { a: record.c.a } : { a: record.c.a, d: record.c.d };
+    }
     const line = `${JSON.stringify(ordered)}\n`;
 
     // a UTF-16 code unit takes at most 3 bytes in UTF-8

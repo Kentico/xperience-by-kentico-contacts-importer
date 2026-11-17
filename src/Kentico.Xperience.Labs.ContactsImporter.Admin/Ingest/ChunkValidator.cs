@@ -9,8 +9,9 @@ namespace Kentico.Xperience.Labs.ContactsImporter.Admin;
 /// </summary>
 internal sealed class ChunkValidationContext
 {
-    private ChunkValidationContext(string keyField, string[] targets, int?[] maxValueLengths, int keyIndex, int emailIndex)
+    private ChunkValidationContext(string keyField, string[] targets, int?[] maxValueLengths, int keyIndex, int emailIndex, bool hasConsent)
     {
+        HasConsent = hasConsent;
         KeyField = keyField;
         Targets = targets;
         MaxValueLengths = maxValueLengths;
@@ -30,6 +31,12 @@ internal sealed class ChunkValidationContext
 
     /// <summary>Index of the email field in <see cref="Targets"/>, or -1 when it is not mapped.</summary>
     public int EmailIndex { get; }
+
+    /// <summary>
+    /// The job maps consent columns (<see cref="ImportJob.ConsentMapping"/>): every record must have the consent
+    /// property <c>c</c>. Otherwise no record may have it.
+    /// </summary>
+    public bool HasConsent { get; }
 
     /// <summary>The <c>invalidEmail</c> flag only makes sense when email is mapped and is not the key.</summary>
     public bool InvalidEmailFlagAllowed => EmailIndex >= 0 && EmailIndex != KeyIndex;
@@ -70,7 +77,7 @@ internal sealed class ChunkValidationContext
         }
 
         error = null;
-        context = new ChunkValidationContext(job.KeyField, targets, maxValueLengths, keyIndex, Array.IndexOf(targets, KeyNormalizer.EmailFieldName));
+        context = new ChunkValidationContext(job.KeyField, targets, maxValueLengths, keyIndex, Array.IndexOf(targets, KeyNormalizer.EmailFieldName), job.ConsentMapping is not null);
 
         return true;
     }
@@ -87,9 +94,15 @@ internal sealed record ChunkValidationResult(bool IsValid, int Rows, long FirstR
 
 /// <summary>
 /// Validates the decompressed content of a chunk: NDJSON, one record per line, per the wire contract
-/// (<c>{"r":12,"k":"key","v":{"Field":"value"},"f":["invalidEmail"]}</c>). The server never trusts the browser:
-/// any invalid record rejects the whole chunk.
+/// (<c>{"r":12,"k":"key","v":{"Field":"value"},"f":["invalidEmail"],"c":{"a":true,"d":"2025-03-01"}}</c>). The server
+/// never trusts the browser: any invalid record rejects the whole chunk.
 /// </summary>
+/// <remarks>
+/// The consent property <c>c</c> is required on every record when the job maps consent columns and refused otherwise.
+/// It is an object with <c>a</c> (required, <c>true</c> or <c>false</c>: consent given) and <c>d</c> (optional, the
+/// consent date as <c>yyyy-MM-dd</c> or <c>yyyy-MM-ddTHH:mm:ss</c> with an optional fraction and offset; <c>null</c> =
+/// no date) and nothing else. A date in the future is valid here; the processing does not record consent for it.
+/// </remarks>
 internal static class ChunkValidator
 {
     /// <summary>Longest accepted record (one NDJSON line), in bytes.</summary>
@@ -272,6 +285,7 @@ internal static class ChunkValidator
             bool hasRow = false;
             bool hasValues = false;
             bool hasFlags = false;
+            bool hasConsent = false;
             bool flaggedInvalidEmail = false;
 
             while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
@@ -335,6 +349,20 @@ internal static class ChunkValidator
                         return flagsError;
                     }
                 }
+                else if (reader.ValueTextEquals("c"u8))
+                {
+                    if (hasConsent)
+                    {
+                        return "has a duplicate 'c' property";
+                    }
+
+                    hasConsent = true;
+                    string? consentError = ReadConsent(ref reader);
+                    if (consentError is not null)
+                    {
+                        return consentError;
+                    }
+                }
                 else
                 {
                     return "has an unknown property";
@@ -361,7 +389,69 @@ internal static class ChunkValidator
                 return "has no values 'v'";
             }
 
+            if (hasConsent != context.HasConsent)
+            {
+                return context.HasConsent
+                    ? "has no consent 'c', which every record needs when consent columns are mapped"
+                    : "has consent 'c', which is only allowed when consent columns are mapped";
+            }
+
             return ValidateKey(key, keyValue) ?? ValidateInvalidEmailFlag(flaggedInvalidEmail);
+        }
+
+        private static string? ReadConsent(ref Utf8JsonReader reader)
+        {
+            reader.Read();
+            if (reader.TokenType != JsonTokenType.StartObject)
+            {
+                return "has consent 'c' that is not an object";
+            }
+
+            bool hasAgreed = false;
+            bool hasDate = false;
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+            {
+                if (reader.ValueTextEquals("a"u8))
+                {
+                    if (hasAgreed)
+                    {
+                        return "has a duplicate 'a' in consent 'c'";
+                    }
+
+                    hasAgreed = true;
+                    reader.Read();
+                    if (reader.TokenType is not (JsonTokenType.True or JsonTokenType.False))
+                    {
+                        return "has a consent flag 'a' that is not true or false";
+                    }
+                }
+                else if (reader.ValueTextEquals("d"u8))
+                {
+                    if (hasDate)
+                    {
+                        return "has a duplicate 'd' in consent 'c'";
+                    }
+
+                    hasDate = true;
+                    reader.Read();
+                    if (reader.TokenType != JsonTokenType.Null
+                        && (reader.TokenType != JsonTokenType.String || !FieldValueConverter.TryParseDateTime(reader.GetString()!, out _)))
+                    {
+                        return "has a consent date 'd' that is not an ISO date or date and time";
+                    }
+                }
+                else
+                {
+                    return "has an unknown property in consent 'c'";
+                }
+            }
+
+            if (reader.TokenType != JsonTokenType.EndObject)
+            {
+                return "has malformed consent 'c'";
+            }
+
+            return hasAgreed ? null : "has consent 'c' without the consent flag 'a'";
         }
 
         private string? ReadValues(ref Utf8JsonReader reader, out string? keyValue)

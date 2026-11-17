@@ -123,7 +123,8 @@ internal static class ImportJobStateMachine
         bool uploadAffected = current.File != updated.File
             || !string.Equals(current.KeyField, updated.KeyField, StringComparison.Ordinal)
             || !string.Equals(current.DateFormat, updated.DateFormat, StringComparison.Ordinal)
-            || !current.Mapping.SequenceEqual(updated.Mapping);
+            || !current.Mapping.SequenceEqual(updated.Mapping)
+            || current.ConsentMapping != updated.ConsentMapping;
         if (uploadAffected)
         {
             return ImportConfigChange.Mapping;
@@ -134,7 +135,7 @@ internal static class ImportJobStateMachine
 
     /// <summary>
     /// Applies the reset rules for a configuration change:
-    /// a mapping change (file, key, mapping, date format) needs a new upload, so the job returns to Configuring and the
+    /// a mapping change (file, key, mapping, consent columns, date format) needs a new upload, so the job returns to Configuring and the
     /// caller must delete the uploaded chunks; an options change after analysis returns the job to Uploaded (analyze again).
     /// No configuration change is allowed once the job is running or finished.
     /// </summary>
@@ -246,7 +247,7 @@ internal enum ImportConfigChange
     /// <summary>Only processing behaviors changed.</summary>
     Options,
 
-    /// <summary>File, key field, column mapping or date format changed; uploaded data no longer matches.</summary>
+    /// <summary>File, key field, column mapping, consent columns or date format changed; uploaded data no longer matches.</summary>
     Mapping,
 }
 

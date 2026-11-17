@@ -47,6 +47,17 @@ internal class ImportJobConfigValidatorTests
         yield return Case("Source_Field_Not_Text", job with { Options = job.Options with { SourceField = "ContactBirthday", SourceValue = "x" } }, "source field");
         yield return Case("Source_Value_Missing", job with { Options = job.Options with { SourceField = "ContactSource" } }, "source value");
         yield return Case("Source_Value_Too_Long", job with { Options = job.Options with { SourceField = "ContactSource", SourceValue = new string('s', 201) } }, "source value");
+        yield return Case("Unsubscribed_Undefined_Enum", job with { Options = job.Options with { Unsubscribed = (UnsubscribedBehavior)2 } }, "unknown value");
+        yield return Case("Consent_Mapping_Empty", job with { ConsentMapping = new ImportConsentMapping() }, "without a column");
+        yield return Case("Consent_Mapping_Empty_Name", job with { ConsentMapping = new ImportConsentMapping { Agreed = "" } }, "consent source column");
+        yield return Case("Consent_Mapping_Long_Name", job with { ConsentMapping = new ImportConsentMapping { Date = new string('c', 1025) } }, "consent source column");
+        yield return Case("Consent_Mapping_Same_Column", job with { ConsentMapping = new ImportConsentMapping { Agreed = "consent", Date = "consent" } }, "different columns");
+        yield return Case("Consent_Mapping_Agreed_Is_A_Field_Column", job with { ConsentMapping = new ImportConsentMapping { Agreed = "col ContactEmail" } }, "cannot also be mapped");
+        yield return Case("Consent_Mapping_Date_Is_A_Field_Column", job with { ConsentMapping = new ImportConsentMapping { Agreed = "consent", Date = "col ContactFirstName" } }, "cannot also be mapped");
+        yield return Case(
+            "Consent_From_Columns_Without_Columns",
+            job with { Options = job.Options with { Consent = ConsentMode.BlanketWithColumnOverride, ConsentId = 2 } },
+            "needs a mapped consent column");
     }
 
     [TestCaseSource(nameof(InvalidJobs))]
@@ -195,6 +206,69 @@ internal class ImportJobConfigValidatorTests
         {
             Assert.That(created, Is.False);
             Assert.That(error, Is.EqualTo(ImportJobConfigValidator.Validate(job, typedFields, options).Single()));
+        });
+    }
+
+    [Test]
+    public void Consent_Columns_Are_Valid_With_Either_Or_Both_Columns_And_With_Any_Consent_Option()
+    {
+        var job = TestData.Job();
+        var both = new ImportConsentMapping { Agreed = "consent", Date = "consent date" };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Validate(job with { ConsentMapping = both }), Is.Empty);
+            Assert.That(Validate(job with { ConsentMapping = new ImportConsentMapping { Agreed = "consent" } }), Is.Empty);
+            Assert.That(Validate(job with { ConsentMapping = new ImportConsentMapping { Date = "consent date" } }), Is.Empty);
+            Assert.That(Validate(job with { ConsentMapping = both, Options = job.Options with { Consent = ConsentMode.BlanketWithColumnOverride, ConsentId = 2 } }), Is.Empty);
+            Assert.That(Validate(job with { ConsentMapping = both, Options = job.Options with { Consent = ConsentMode.Blanket, ConsentId = 2 } }), Is.Empty);
+        });
+    }
+
+    [Test]
+    public void Recipient_List_And_Consent_Are_Checked_Against_The_Database_When_A_Resolver_Is_Given()
+    {
+        var job = TestData.Job();
+        job = job with { Options = job.Options with { RecipientListId = 4 } };
+        var resolver = new Processing.FakeAudienceResolver();
+
+        var found = ImportJobConfigValidator.Validate(job, TestData.Fields, options, resolver);
+        resolver.Error = ImportAudienceResolver.RecipientListMissingError;
+        var missing = ImportJobConfigValidator.Validate(job, TestData.Fields, options, resolver);
+        int calls = resolver.Calls;
+        var invalidAnyway = ImportJobConfigValidator.Validate(job with { DateFormat = "" }, TestData.Fields, options, resolver);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(found, Is.Empty);
+            Assert.That(missing, Is.EqualTo(new[] { ImportAudienceResolver.RecipientListMissingError }));
+            Assert.That(invalidAnyway, Has.Count.EqualTo(1));
+            Assert.That(resolver.Calls, Is.EqualTo(calls), "A configuration with other problems is not worth a database query.");
+        });
+    }
+
+    [Test]
+    public void Processing_Refuses_A_Job_Whose_List_Or_Consent_Was_Not_Checked()
+    {
+        var processingFields = Processing.ProcessingTestData.Fields;
+        var list = TestData.Job() with { Options = new ImportOptions { RecipientListId = 4 } };
+        var consent = TestData.Job() with { Options = new ImportOptions { Consent = ConsentMode.Blanket, ConsentId = 2 } };
+        var columns = TestData.Job() with { Options = new ImportOptions { Consent = ConsentMode.BlanketWithColumnOverride, ConsentId = 2 } };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ImportProcessingContext.TryCreate(list, processingFields, out _, out string? noAudience), Is.False);
+            Assert.That(noAudience, Does.Contain("could not be checked"));
+            Assert.That(ImportProcessingContext.TryCreate(list, processingFields, out _, out _, new ImportAudience(RecipientListId: 5)), Is.False, "Another list than the one of the options.");
+            Assert.That(ImportProcessingContext.TryCreate(list, processingFields, out var listContext, out _, new ImportAudience(RecipientListId: 4)), Is.True);
+            Assert.That(listContext!.HasRecipientList && !listContext.RecordsConsent && listContext.HasAudience, Is.True);
+            Assert.That(ImportProcessingContext.TryCreate(consent, processingFields, out _, out _, ImportAudience.None), Is.False);
+            Assert.That(ImportProcessingContext.TryCreate(consent, processingFields, out var consentContext, out _, new ImportAudience(ConsentId: 2, ConsentHash: "h")), Is.True);
+            Assert.That(consentContext!.RecordsConsent && !consentContext.ConsentFromColumns, Is.True);
+            Assert.That(ImportProcessingContext.TryCreate(columns, processingFields, out _, out string? noColumns, new ImportAudience(ConsentId: 2, ConsentHash: "h")), Is.False);
+            Assert.That(noColumns, Is.EqualTo(ImportJobConfigValidator.ConsentColumnsMissingError));
+            Assert.That(ImportProcessingContext.TryCreate(TestData.Job(), processingFields, out var plain, out _), Is.True);
+            Assert.That(plain!.HasAudience, Is.False);
         });
     }
 }

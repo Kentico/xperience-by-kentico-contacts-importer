@@ -110,7 +110,17 @@ public sealed class IntegrationDatabase
         }
     }
 
-    internal static void DeleteContacts() => Execute("DELETE FROM [OM_Contact]");
+    /// <summary>
+    /// Deletes all contacts with the rows that refer to them: recipient list memberships, subscription confirmations
+    /// and consent agreements.
+    /// </summary>
+    internal static void DeleteContacts() => Execute(
+        """
+        DELETE FROM [OM_ContactGroupMember] WHERE [ContactGroupMemberType] = 0;
+        DELETE FROM [EmailLibrary_EmailSubscriptionConfirmation];
+        DELETE FROM [CMS_ConsentAgreement];
+        DELETE FROM [OM_Contact];
+        """);
 
     internal static int Execute(string sql, params (string Name, object? Value)[] parameters)
     {

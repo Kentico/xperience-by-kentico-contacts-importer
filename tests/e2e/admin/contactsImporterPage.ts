@@ -147,6 +147,14 @@ export class ImportPage {
     await this.expectTarget(columnIndex, optionLabel);
   }
 
+  // Map step: the file column that says whether (`agreed`) or when (`date`) a contact gave consent
+  async setConsentColumn(kind: "agreed" | "date", column: string): Promise<void> {
+    const select = this.page.getByTestId(`contacts-importer-consent-${kind}`);
+    await select.click();
+    await this.page.getByTestId("menu-item").filter({ hasText: new RegExp(`^${escapeRegExp(column)}$`) }).click();
+    await expect(select).toHaveValue(column);
+  }
+
   async expectKeyField(fieldName: string): Promise<void> {
     await expect(this.page.getByTestId("contacts-importer-key-field")).toHaveValue(fieldName);
   }
@@ -188,11 +196,43 @@ export class ImportPage {
     await this.expectStep("options");
   }
 
-  // Radio button of an option, e.g. ("newContacts", "skip")
+  // Radio button of an option, e.g. ("newContacts", "skip"). The label is clicked: the test ID is on a
+  // wrapper that also holds the caption of the choice.
   async chooseOption(name: string, value: string): Promise<void> {
     const radio = this.page.getByTestId(`contacts-importer-option-${name}-${value}`);
-    await radio.click();
+    await radio.locator("label").click();
     await expect(this.page.locator(`input[type="radio"][name="contacts-importer-${name}"][value="${value}"]`)).toBeChecked();
+  }
+
+  // Options step: recipient list and consent selects, by display name
+  async chooseRecipientList(name: string): Promise<void> {
+    await this.chooseFromSelect("contacts-importer-recipient-list", name);
+  }
+
+  async chooseConsent(name: string): Promise<void> {
+    await this.chooseFromSelect("contacts-importer-consent-select", name);
+  }
+
+  private async chooseFromSelect(testId: string, label: string): Promise<void> {
+    const select = this.page.getByTestId(testId);
+    await select.click();
+    await this.page.getByTestId("menu-item").filter({ hasText: new RegExp(`^${escapeRegExp(label)}$`) }).click();
+    await expect(select).toHaveValue(label);
+  }
+
+  // The note about double opt-in and documented consent shown while a recipient list is chosen
+  get consentCallout(): Locator {
+    return this.page.getByTestId("contacts-importer-consent-callout");
+  }
+
+  // Review and Results: what the import does to the recipient list and to consent (options as data attributes)
+  get consentSummary(): Locator {
+    return this.page.getByTestId("contacts-importer-consent-summary");
+  }
+
+  // Results: who confirmed the consent statement
+  get attestationRecord(): Locator {
+    return this.page.getByTestId("contacts-importer-attestation-record");
   }
 
   // Saves the options; the Review step then checks the file (or shows the finished check)
@@ -237,9 +277,26 @@ export class ImportPage {
 
   // "Run import" and its confirmation
   async runImport(): Promise<void> {
+    await this.openRunDialog();
+    await this.confirmRun();
+  }
+
+  async openRunDialog(): Promise<void> {
     await this.page.getByTestId("contacts-importer-review-run").click();
-    // The dialog button has the same label as the button that opens it
-    await this.page.getByRole("button", { name: "Run import" }).last().click();
+  }
+
+  // The dialog button has the same label as the button that opens it
+  get runDialogConfirmButton(): Locator {
+    return this.page.getByRole("button", { name: "Run import" }).last();
+  }
+
+  async confirmRun(): Promise<void> {
+    await this.runDialogConfirmButton.click();
+  }
+
+  // Run dialog of an import that changes subscriptions or consent: the statement text from the server
+  get attestationStatement(): Locator {
+    return this.page.getByTestId("contacts-importer-attestation-statement");
   }
 
   async continueProcessing(): Promise<void> {

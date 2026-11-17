@@ -21,10 +21,12 @@ import React, { useMemo } from 'react';
 
 import type { DateFormat, SampleProfile, TargetField } from '../import-core';
 import {
+  consentColumnChoices,
   hasDateTarget,
   isSameMapping,
   mappedTargets,
   setColumnTarget,
+  setConsentColumn,
   setDateFormat,
   setKeyField,
   validateMapping,
@@ -104,6 +106,12 @@ export const MapStep = ({
     { value: 'mdy', label: S.dateMdy },
   ];
   const mappingChanged = saved !== undefined && !isSameMapping(mapping, saved);
+  const consentChoices = consentColumnChoices(mapping);
+  const consentAgreedOptions: Option[] = [{ value: '', label: S.consentAgreedNone }, ...consentChoices.map((name) => ({ value: name, label: name }))];
+  const consentDateOptions: Option[] = [
+    { value: '', label: S.consentDateNone },
+    ...consentChoices.filter((name) => name !== mapping.consent.agreed).map((name) => ({ value: name, label: name })),
+  ];
 
   return (
     <Stack spacing={Spacing.L}>
@@ -184,6 +192,37 @@ export const MapStep = ({
           </Column>
         )}
       </Row>
+
+      <Stack spacing={Spacing.M}>
+        <Headline size={HeadlineSize.S}>{S.consentHeadline}</Headline>
+        <Text>{S.consentIntro}</Text>
+        <Row spacing={Spacing.L}>
+          <Column cols={Cols.Col4}>
+            <OptionSelect
+              label={S.consentAgreed}
+              value={mapping.consent.agreed}
+              options={consentAgreedOptions}
+              disabled={saving}
+              explanationText={S.consentAgreedHelp}
+              dataTestId={TestIds.consentAgreed}
+              onChange={(source) => onChange(setConsentColumn(mapping, 'agreed', source))}
+            />
+          </Column>
+          {mapping.consent.agreed !== '' && (
+            <Column cols={Cols.Col4}>
+              <OptionSelect
+                label={S.consentDate}
+                value={mapping.consent.date}
+                options={consentDateOptions}
+                disabled={saving}
+                explanationText={S.consentDateHelp}
+                dataTestId={TestIds.consentDate}
+                onChange={(source) => onChange(setConsentColumn(mapping, 'date', source))}
+              />
+            </Column>
+          )}
+        </Row>
+      </Stack>
 
       {validation.problems.map((problem) => (
         <NotificationBarAlert key={problem}>

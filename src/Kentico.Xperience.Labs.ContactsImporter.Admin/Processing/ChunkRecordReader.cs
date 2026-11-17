@@ -10,7 +10,15 @@ namespace Kentico.Xperience.Labs.ContactsImporter.Admin;
 /// <param name="Row">1-based data row number in the source file.</param>
 /// <param name="Key">Normalized dedupe key.</param>
 /// <param name="Values">Raw trimmed values by mapped field index; <c>null</c> = the row has no value for the field.</param>
-internal sealed record ImportRecord(long Row, string Key, string?[] Values);
+/// <param name="Consent">Consent columns of the row (<c>c</c>); <c>null</c> when the job maps no consent columns.</param>
+internal sealed record ImportRecord(long Row, string Key, string?[] Values, ImportRecordConsent? Consent = null);
+
+/// <summary>
+/// What the consent columns of a row say.
+/// </summary>
+/// <param name="Agreed">The "consent given" column has a value that means yes.</param>
+/// <param name="Date">Consent date of the row (wall-clock time, no time zone); <c>null</c> = none.</param>
+internal sealed record ImportRecordConsent(bool Agreed, DateTime? Date);
 
 /// <summary>
 /// The uploaded data of a job is missing or unreadable. The message is safe to store and show (no contact data).
@@ -110,6 +118,18 @@ internal sealed class ChunkRecordReader : IDisposable
             }
         }
 
-        return new ImportRecord(row, key, values);
+        ImportRecordConsent? consent = null;
+        if (root.TryGetProperty("c"u8, out var c))
+        {
+            DateTime? date = null;
+            if (c.TryGetProperty("d"u8, out var d) && d.ValueKind != JsonValueKind.Null)
+            {
+                date = FieldValueConverter.TryParseDateTime(d.GetString()!, out var parsed) ? parsed : throw new FormatException("The consent date is not valid.");
+            }
+
+            consent = new ImportRecordConsent(c.TryGetProperty("a"u8, out var agreed) && agreed.ValueKind == JsonValueKind.True, date);
+        }
+
+        return new ImportRecord(row, key, values, consent);
     }
 }

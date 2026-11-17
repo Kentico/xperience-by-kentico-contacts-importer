@@ -11,7 +11,7 @@ namespace Kentico.Xperience.Labs.ContactsImporter.Admin;
 /// </summary>
 internal interface IImportCommandService
 {
-    /// <summary>Mappable contact fields and the limits the browser must respect.</summary>
+    /// <summary>Mappable contact fields, the limits the browser must respect, and the recipient lists and consents to choose from.</summary>
     public ImportConfigResponse GetConfig();
 
     /// <summary>Recent imports, newest first. Runs the lazy cleanup sweep.</summary>
@@ -39,8 +39,9 @@ internal interface IImportCommandService
     public CompleteUploadResponse CompleteUpload(string? jobId, CompleteUploadRequest? request);
 
     /// <summary>
-    /// Stores the contact options of the Options step. Allowed from Uploaded to Confirmed and not while a request is
-    /// processing the job; a change after the analysis started returns the job to Uploaded (analyze again).
+    /// Stores the contact, recipient list and consent options of the Options step. Allowed from Uploaded to Confirmed
+    /// and not while a request is processing the job; a change after the analysis started returns the job to Uploaded
+    /// (analyze again). A chosen recipient list and consent must exist; consent per row needs a mapped consent column.
     /// </summary>
     public ImportJobResponse SaveOptions(string? jobId, ImportOptionsDto? request);
 
@@ -48,19 +49,28 @@ internal interface IImportCommandService
     /// Does the next piece of the analysis or the import (<see cref="IImportProcessor.ProcessNext"/>) and returns the
     /// progress. One request per job at a time in this application instance.
     /// </summary>
-    public ImportProgressDto ProcessNext(string? jobId, ProcessNextRequest? request, CancellationToken cancellationToken = default);
+    public ImportProgressDto ProcessNext(string? jobId, ProcessNextRequest? request, int userId, CancellationToken cancellationToken = default);
 
-    /// <summary>Confirms an analyzed job for import (Analyzed → Confirmed).</summary>
-    public ImportJobResponse Confirm(string? jobId);
+    /// <summary>
+    /// Confirms an analyzed job for import (Analyzed → Confirmed). When the options change recipient list subscriptions
+    /// or record consent (<see cref="ImportAttestationPolicy.IsRequired"/>), confirming is also the confirmation of the
+    /// consent statement: the user needs <see cref="ContactsImporterPermissions.CONFIRM_CONSENT"/> and the request must
+    /// carry the current statement version; user and time are stored with the job.
+    /// </summary>
+    /// <param name="jobId">Job to confirm.</param>
+    /// <param name="request">Statement version the user saw.</param>
+    /// <param name="userId">The confirming user.</param>
+    /// <param name="canConfirmConsent">The user has <see cref="ContactsImporterPermissions.CONFIRM_CONSENT"/>.</param>
+    public ImportJobResponse Confirm(string? jobId, ConfirmImportRequest? request, int userId, bool canConfirmConsent);
 
     /// <summary>One page of the row report of the analysis or the import.</summary>
     public GetReportResponse GetReport(string? jobId, GetReportRequest? request, CancellationToken cancellationToken = default);
 
     /// <summary>Cancels an unfinished job and deletes its uploaded chunks. A processing request stops after its current batch.</summary>
-    public ImportActionResponse Cancel(string? jobId);
+    public ImportActionResponse Cancel(string? jobId, int userId);
 
     /// <summary>"Delete import files now": deletes chunks and reports; cancels the job when it is not finished.</summary>
-    public ImportActionResponse DeleteFiles(string? jobId);
+    public ImportActionResponse DeleteFiles(string? jobId, int userId);
 }
 
 internal sealed class ImportCommandService(
@@ -74,6 +84,8 @@ internal sealed class ImportCommandService(
     IImportReportReader reportReader,
     IImportProcessGate processGate,
     IImportTexts texts,
+    IImportChoiceProvider choices,
+    IImportAudienceResolver audience,
     IOptions<ContactsImporterOptions> options,
     TimeProvider timeProvider) : IImportCommandService
 {
@@ -104,6 +116,8 @@ internal sealed class ImportCommandService(
                 MaxKeyLength = KeyNormalizer.MaxKeyLength,
                 ParallelUploads = ParallelUploads,
             },
+            RecipientLists = choices.GetRecipientLists(),
+            Consents = choices.GetConsents(),
         };
     }
 
@@ -129,6 +143,9 @@ internal sealed class ImportCommandService(
 
         var names = userNames.GetUserNames([.. jobs.Select(j => j.Job.CreatedByUserId).Distinct()]);
         var utcNow = UtcNow();
+        // Names of the recipient lists and consents the listed imports use; not queried when no import uses one.
+        var listNames = jobs.Any(j => j.Job.Options.RecipientListId is not null) ? ChoiceNames(choices.GetRecipientLists()) : [];
+        var consentNames = jobs.Any(j => j.Job.Options.ConsentId is not null) ? ChoiceNames(choices.GetConsents()) : [];
 
         return new ImportListResponse
         {
@@ -148,6 +165,8 @@ internal sealed class ImportCommandService(
                 Updated = ImportStarted(j.Status) ? j.Status.Aggregates.GetValueOrDefault(ImportAggregateKeys.ContactsUpdated) : 0,
                 CanContinue = !ImportJobStateMachine.IsTerminal(j.Status.State),
                 HasFiles = HasFiles(j.Job.JobId),
+                RecipientListName = j.Job.Options.RecipientListId is { } listId ? listNames.GetValueOrDefault(listId) : null,
+                ConsentName = j.Job.Options.Consent != ConsentMode.None && j.Job.Options.ConsentId is { } consentId ? consentNames.GetValueOrDefault(consentId) : null,
             })],
         };
     }
@@ -203,7 +222,9 @@ internal sealed class ImportCommandService(
         }
 
         var job = existing with { Options = newOptions };
-        var errors = new List<string>(ImportJobConfigValidator.Validate(job, schemaProvider.GetMappableFields(), options.Value));
+        // The resolver checks the chosen recipient list (exists, is a recipient list, not being deleted) and consent.
+        var errors = new List<string>(ImportJobConfigValidator.Validate(job, schemaProvider.GetMappableFields(), options.Value, audience));
+        errors.AddRange(ValidateAudience(job));
         if (newOptions.SourceField is { } sourceField && job.Mapping.Any(m => string.Equals(m.Target, sourceField, StringComparison.Ordinal)))
         {
             errors.Add(texts.Get(ImportTextKeys.SOURCE_FIELD_MAPPED));
@@ -264,7 +285,7 @@ internal sealed class ImportCommandService(
         }
     }
 
-    public ImportProgressDto ProcessNext(string? jobId, ProcessNextRequest? request, CancellationToken cancellationToken = default)
+    public ImportProgressDto ProcessNext(string? jobId, ProcessNextRequest? request, int userId, CancellationToken cancellationToken = default)
     {
         string? token = string.IsNullOrEmpty(request?.DriverToken) ? null : request.DriverToken;
         if (!ImportJobId.TryParse(jobId, out var id)
@@ -300,7 +321,7 @@ internal sealed class ImportCommandService(
 
         try
         {
-            return ProgressDto(processor.ProcessNext(id, phase, token, request!.TakeOver, cancellationToken));
+            return ProgressDto(processor.ProcessNext(id, phase, token, request!.TakeOver, cancellationToken, UserOrNull(userId)));
         }
         finally
         {
@@ -308,17 +329,52 @@ internal sealed class ImportCommandService(
         }
     }
 
-    public ImportJobResponse Confirm(string? jobId)
+    public ImportJobResponse Confirm(string? jobId, ConfirmImportRequest? request, int userId, bool canConfirmConsent)
     {
         if (!ImportJobId.TryParse(jobId, out var id))
         {
             return JobFailed(ImportCommandCodes.INVALID_REQUEST, ImportTextKeys.INVALID_JOB_ID);
         }
 
+        if (!TryRead(id, out var current, out var currentStatus))
+        {
+            return JobFailed(ImportCommandCodes.INVALID_STATE, ImportTextKeys.JOB_UNREADABLE);
+        }
+
+        if (current is null || currentStatus is null)
+        {
+            return JobFailed(ImportCommandCodes.JOB_NOT_FOUND, ImportTextKeys.JOB_NOT_FOUND);
+        }
+
+        // Confirming an import that changes subscriptions or records consent is the confirmation of the consent
+        // statement: only for users with the permission, only for the statement version that is current, and stamped
+        // with the user and time the server knows (never values from the browser).
+        ImportAttestation? attestation = null;
+        if (ImportAttestationPolicy.IsRequired(current.Options))
+        {
+            if (!canConfirmConsent || userId <= 0)
+            {
+                return JobResponse(ImportCommandCodes.CONSENT_PERMISSION_REQUIRED, current, currentStatus) with
+                {
+                    Message = texts.Get(ImportTextKeys.CONSENT_PERMISSION_REQUIRED),
+                };
+            }
+
+            if (!string.Equals(request?.StatementVersion, ImportAttestationPolicy.StatementVersion, StringComparison.Ordinal))
+            {
+                return JobResponse(ImportCommandCodes.ATTESTATION_REQUIRED, current, currentStatus) with
+                {
+                    Message = texts.Get(ImportTextKeys.ATTESTATION_REQUIRED),
+                };
+            }
+
+            attestation = new ImportAttestation { UserId = userId, Utc = UtcNow(), StatementVersion = ImportAttestationPolicy.StatementVersion };
+        }
+
         ImportConfirmResult result;
         try
         {
-            result = processor.Confirm(id);
+            result = processor.Confirm(id, attestation);
         }
         catch (InvalidDataException)
         {
@@ -334,6 +390,8 @@ internal sealed class ImportCommandService(
         {
             ImportConfirmOutcome.Confirmed => JobResponse(ImportCommandCodes.OK, job, status),
             ImportConfirmOutcome.AnalysisExpired => JobResponse(ImportCommandCodes.ANALYSIS_EXPIRED, job, status) with { Message = texts.Get(ImportTextKeys.ANALYSIS_EXPIRED) },
+            // The options changed between the check above and the processor (another tab): confirm again with them.
+            ImportConfirmOutcome.AttestationRequired => JobResponse(ImportCommandCodes.ATTESTATION_REQUIRED, job, status) with { Message = texts.Get(ImportTextKeys.ATTESTATION_REQUIRED) },
             ImportConfirmOutcome.InvalidState or ImportConfirmOutcome.JobNotFound or _ => JobResponse(ImportCommandCodes.INVALID_STATE, job, status) with
             {
                 Message = texts.Get(ImportTextKeys.INVALID_STATE, EffectiveState(status, UtcNow())),
@@ -368,7 +426,7 @@ internal sealed class ImportCommandService(
         {
             Code = ImportCommandCodes.OK,
             FileName = reportReader.GetDownloadFileName(phase),
-            Header = ImportReportFormat.Header(job.Options.ReportIncludesKey),
+            Header = ImportReportFormat.Header(job.Options),
             Data = Convert.ToBase64String(page.GzippedLines),
             Rows = page.Rows,
             NextPart = page.NextPart,
@@ -384,7 +442,7 @@ internal sealed class ImportCommandService(
             return SaveFailed(ImportCommandCodes.INVALID_REQUEST, ImportTextKeys.INVALID_JOB_ID);
         }
 
-        if (!TryBuildConfig(request, out var file, out string keyField, out var mapping, out string dateFormat))
+        if (!TryBuildConfig(request, out var file, out string keyField, out var mapping, out string dateFormat, out var consentMapping))
         {
             return SaveFailed(ImportCommandCodes.INVALID_REQUEST, ImportTextKeys.INVALID_REQUEST);
         }
@@ -404,12 +462,19 @@ internal sealed class ImportCommandService(
         }
 
         var job = isNew
-            ? new ImportJob { JobId = id, CreatedByUserId = userId, CreatedUtc = utcNow, File = file, KeyField = keyField, Mapping = mapping, DateFormat = dateFormat }
-            : existing! with { File = file, KeyField = keyField, Mapping = mapping, DateFormat = dateFormat };
+            ? new ImportJob { JobId = id, CreatedByUserId = userId, CreatedUtc = utcNow, File = file, KeyField = keyField, Mapping = mapping, DateFormat = dateFormat, ConsentMapping = consentMapping }
+            : existing! with { File = file, KeyField = keyField, Mapping = mapping, DateFormat = dateFormat, ConsentMapping = consentMapping };
         if (job.Options.SourceField is { } sourceField && mapping.Any(m => string.Equals(m.Target, sourceField, StringComparison.Ordinal)))
         {
             // The stamp field is now a mapped column: the file value wins, the stamp is chosen again in the Options step.
             job = job with { Options = job.Options with { SourceField = null, SourceValue = null, SourceStamp = SourceStampBehavior.CreatedOnly } };
+        }
+
+        if (job.Options.Consent == ConsentMode.BlanketWithColumnOverride && !HasConsentColumn(job))
+        {
+            // The column that said which rows agreed is gone. "Only those rows" never widens to every row: no consent
+            // is recorded until it is chosen again in the Options step.
+            job = job with { Options = job.Options with { Consent = ConsentMode.None, ConsentId = null, RevokedConsent = RevokedConsentBehavior.Keep } };
         }
 
 
@@ -565,7 +630,7 @@ internal sealed class ImportCommandService(
         };
     }
 
-    public ImportActionResponse Cancel(string? jobId)
+    public ImportActionResponse Cancel(string? jobId, int userId)
     {
         if (!ImportJobId.TryParse(jobId, out var id))
         {
@@ -577,7 +642,7 @@ internal sealed class ImportCommandService(
             return ActionFailed(ImportCommandCodes.JOB_NOT_FOUND, ImportTextKeys.JOB_NOT_FOUND);
         }
 
-        var result = processor.Cancel(id);
+        var result = processor.Cancel(id, UserOrNull(userId));
 
         return result.Outcome switch
         {
@@ -587,14 +652,14 @@ internal sealed class ImportCommandService(
         };
     }
 
-    public ImportActionResponse DeleteFiles(string? jobId)
+    public ImportActionResponse DeleteFiles(string? jobId, int userId)
     {
         if (!ImportJobId.TryParse(jobId, out var id))
         {
             return ActionFailed(ImportCommandCodes.INVALID_REQUEST, ImportTextKeys.INVALID_JOB_ID);
         }
 
-        if (!store.JobExists(id) || !cleanup.DeleteImportFiles(id))
+        if (!store.JobExists(id) || !cleanup.DeleteImportFiles(id, UserOrNull(userId)))
         {
             return ActionFailed(ImportCommandCodes.JOB_NOT_FOUND, ImportTextKeys.JOB_NOT_FOUND);
         }
@@ -609,12 +674,14 @@ internal sealed class ImportCommandService(
         out ImportFileDescriptor file,
         out string keyField,
         out IReadOnlyList<ImportFieldMapping> mapping,
-        out string dateFormat)
+        out string dateFormat,
+        out ImportConsentMapping? consentMapping)
     {
         file = new ImportFileDescriptor { Name = "", Size = 0, Fingerprint = "" };
         keyField = "";
         mapping = [];
         dateFormat = "";
+        consentMapping = null;
 
         if (request?.File is not { Name: { } name, Fingerprint: { } fingerprint } requestFile
             || request.KeyField is null
@@ -628,9 +695,35 @@ internal sealed class ImportCommandService(
         keyField = request.KeyField;
         mapping = [.. request.Mapping.Select(m => new ImportFieldMapping { Source = m.Source!, Target = m.Target! })];
         dateFormat = request.DateFormat ?? "iso";
+        consentMapping = ConsentMapping(request.ConsentMapping);
 
         return IsKnownDateFormat(dateFormat);
     }
+
+    /// <summary>Consent columns of a request; <c>null</c> when no column is named (empty names count as not named).</summary>
+    private static ImportConsentMapping? ConsentMapping(ImportConsentMappingDto? request)
+    {
+        string? agreed = string.IsNullOrEmpty(request?.Agreed) ? null : request.Agreed;
+        string? date = string.IsNullOrEmpty(request?.Date) ? null : request.Date;
+
+        return agreed is null && date is null ? null : new ImportConsentMapping { Agreed = agreed, Date = date };
+    }
+
+    /// <summary>A "consent given" column is mapped: consent can be recorded for the rows that say yes.</summary>
+    private static bool HasConsentColumn(ImportJob job) => job.ConsentMapping?.Agreed is not null;
+
+    private static Dictionary<int, string> ChoiceNames(IReadOnlyList<ImportChoiceDto> items) =>
+        items.GroupBy(item => item.Id).ToDictionary(group => group.Key, group => group.First().Name);
+
+    /// <summary>
+    /// Problem of the consent options that <see cref="ImportJobConfigValidator"/> does not report: consent per row needs
+    /// the "consent given" column, not only a consent date column (the validator reports no consent columns at all,
+    /// and the audience resolver a missing list or consent).
+    /// </summary>
+    private List<string> ValidateAudience(ImportJob job) =>
+        job.Options.Consent == ConsentMode.BlanketWithColumnOverride && job.ConsentMapping is not null && !HasConsentColumn(job)
+            ? [texts.Get(ImportTextKeys.CONSENT_COLUMN_REQUIRED)]
+            : [];
 
     // Formats the browser can parse (Client/src/import-core/contract.ts DateFormat).
     private static bool IsKnownDateFormat(string dateFormat) => dateFormat is "iso" or "dmy" or "mdy";
@@ -681,7 +774,13 @@ internal sealed class ImportCommandService(
             || !TryParseOption<EmptyValuesBehavior>(request.EmptyValues, out var emptyValues)
             || !TryParseOption<MultipleMatchesBehavior>(request.MultipleMatches, out var multipleMatches)
             || !TryParseOption<InvalidEmailBehavior>(request.InvalidEmail, out var invalidEmail)
-            || !TryParseOption<SourceStampBehavior>(request.SourceStamp, out var sourceStamp))
+            || !TryParseOption<SourceStampBehavior>(request.SourceStamp, out var sourceStamp)
+            || !TryParseOption<UnsubscribedBehavior>(request.Unsubscribed ?? OptionName(UnsubscribedBehavior.Keep), out var unsubscribed)
+            || !TryParseOption<BouncedAddressBehavior>(request.BouncedAddress ?? OptionName(BouncedAddressBehavior.AddAndReport), out var bouncedAddress)
+            || !TryParseOption<ConsentMode>(request.Consent ?? OptionName(ConsentMode.None), out var consent)
+            || !TryParseOption<RevokedConsentBehavior>(request.RevokedConsent ?? OptionName(RevokedConsentBehavior.Keep), out var revokedConsent)
+            || request.RecipientListId is <= 0
+            || request.ConsentId is <= 0)
         {
             return false;
         }
@@ -698,6 +797,14 @@ internal sealed class ImportCommandService(
             SourceValue = sourceField is null ? null : request.SourceValue?.Trim(),
             SourceStamp = sourceField is null ? SourceStampBehavior.CreatedOnly : sourceStamp,
             ReportIncludesKey = request.ReportIncludesKey,
+            // Options that do not apply are stored as their defaults, which change nothing (keep unsubscribed, keep
+            // revoked): a choice like "subscribe again" never stays behind for a list chosen later.
+            RecipientListId = request.RecipientListId,
+            Unsubscribed = request.RecipientListId is null ? UnsubscribedBehavior.Keep : unsubscribed,
+            BouncedAddress = request.RecipientListId is null ? BouncedAddressBehavior.AddAndReport : bouncedAddress,
+            Consent = consent,
+            ConsentId = consent == ConsentMode.None ? null : request.ConsentId,
+            RevokedConsent = consent == ConsentMode.None ? RevokedConsentBehavior.Keep : revokedConsent,
         };
 
         return true;
@@ -725,6 +832,12 @@ internal sealed class ImportCommandService(
         SourceValue = options.SourceValue,
         SourceStamp = OptionName(options.SourceStamp),
         ReportIncludesKey = options.ReportIncludesKey,
+        RecipientListId = options.RecipientListId,
+        Unsubscribed = OptionName(options.Unsubscribed),
+        BouncedAddress = OptionName(options.BouncedAddress),
+        Consent = OptionName(options.Consent),
+        ConsentId = options.ConsentId,
+        RevokedConsent = OptionName(options.RevokedConsent),
     };
 
     private static ImportAggregatesDto AggregatesDto(ImportAggregates aggregates) => new()
@@ -743,6 +856,21 @@ internal sealed class ImportCommandService(
         DuplicateRows = aggregates.DuplicateRows,
         MultipleMatches = aggregates.MultipleMatches,
         ImportedWithoutEmail = aggregates.ImportedWithoutEmail,
+        ListAdded = aggregates.ListAdded,
+        ListAlreadySubscribed = aggregates.ListAlreadySubscribed,
+        ListKeptUnsubscribed = aggregates.ListKeptUnsubscribed,
+        ListResubscribed = aggregates.ListResubscribed,
+        ListSkippedBounced = aggregates.ListSkippedBounced,
+        ListSkippedNoEmail = aggregates.ListSkippedNoEmail,
+        BouncedHard = aggregates.BouncedHard,
+        BouncedSoftOverLimit = aggregates.BouncedSoftOverLimit,
+        BouncedSoftUnderLimit = aggregates.BouncedSoftUnderLimit,
+        ConsentRecorded = aggregates.ConsentRecorded,
+        ConsentAlreadyAgreed = aggregates.ConsentAlreadyAgreed,
+        ConsentKeptRevoked = aggregates.ConsentKeptRevoked,
+        ConsentReAgreed = aggregates.ConsentReAgreed,
+        ConsentNotGiven = aggregates.ConsentNotGiven,
+        ConsentSkippedFutureDate = aggregates.ConsentSkippedFutureDate,
         Fields = [.. aggregates.Fields.Select(f => new ImportFieldChangeDto(f.Field, f.Changed, f.Cleared))],
     };
 
@@ -767,6 +895,12 @@ internal sealed class ImportCommandService(
     private ImportJobDto JobDto(ImportJob job)
     {
         var mapped = job.Mapping.Select(m => m.Target).ToHashSet(StringComparer.Ordinal);
+        string? recipientListName = job.Options.RecipientListId is { } listId
+            ? choices.GetRecipientLists().FirstOrDefault(list => list.Id == listId)?.Name
+            : null;
+        string? consentName = job.Options.Consent != ConsentMode.None && job.Options.ConsentId is { } consentId
+            ? choices.GetConsents().FirstOrDefault(consent => consent.Id == consentId)?.Name
+            : null;
 
         return new ImportJobDto
         {
@@ -775,12 +909,31 @@ internal sealed class ImportCommandService(
             KeyField = job.KeyField,
             Mapping = [.. job.Mapping.Select(m => new ImportMappingDto { Source = m.Source, Target = m.Target })],
             DateFormat = job.DateFormat,
+            ConsentMapping = job.ConsentMapping is null ? null : new ImportConsentMappingDto { Agreed = job.ConsentMapping.Agreed, Date = job.ConsentMapping.Date },
             CreatedUtc = job.CreatedUtc,
             Options = OptionsDto(job.Options),
             InvalidEmailApplies = InvalidEmailApplies(job),
             SourceFields = [.. schemaProvider.GetMappableFields().Where(f => f.IsText && !mapped.Contains(f.Name)).Select(FieldDto)],
             DefaultSourceValue = DefaultSourceValue(job),
+            RecipientListName = recipientListName,
+            ConsentName = consentName,
+            AttestationRequired = ImportAttestationPolicy.IsRequired(job.Options),
+            AttestationStatement = texts.Get(ImportTextKeys.ATTESTATION_STATEMENT),
+            AttestationVersion = ImportAttestationPolicy.StatementVersion,
+            Attestation = AttestationDto(job.Attestation),
         };
+    }
+
+    private ImportAttestationDto? AttestationDto(ImportAttestation? attestation)
+    {
+        if (attestation is null)
+        {
+            return null;
+        }
+
+        string userName = userNames.GetUserNames([attestation.UserId]).GetValueOrDefault(attestation.UserId, "");
+
+        return new ImportAttestationDto(userName, attestation.Utc, attestation.StatementVersion);
     }
 
     private static ImportFieldDto FieldDto(ContactFieldDefinition field) =>
@@ -886,4 +1039,7 @@ internal sealed class ImportCommandService(
     }
 
     private DateTime UtcNow() => timeProvider.GetUtcNow().UtcDateTime;
+
+    /// <summary>User ID for the event log; <c>null</c> when no user is signed in.</summary>
+    private static int? UserOrNull(int userId) => userId > 0 ? userId : null;
 }

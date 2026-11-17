@@ -37,13 +37,20 @@ internal static class ProcessingTestData
     /// <summary>Reference to an object type whose table is not known: flagged, not checked.</summary>
     public const string Persona = "PersonaID";
 
-    public static ImportProcessingContext Context(string keyField, string[] targets, ImportOptions? options = null)
+    /// <summary>Hash of the consent the fake audience resolver knows.</summary>
+    public const string ConsentHash = "consent-hash";
+
+    public static ImportProcessingContext Context(string keyField, string[] targets, ImportOptions? options = null, ImportConsentMapping? consentMapping = null, int softBounceLimit = ImportAudience.DefaultSoftBounceLimit)
     {
-        var job = TestData.Job(keyField: keyField, targets: targets) with { Options = options ?? new ImportOptions() };
-        Assert.That(ImportProcessingContext.TryCreate(job, Fields, out var context, out string? error), Is.True, error);
+        var job = TestData.Job(keyField: keyField, targets: targets) with { Options = options ?? new ImportOptions(), ConsentMapping = consentMapping };
+        Assert.That(ImportProcessingContext.TryCreate(job, Fields, out var context, out string? error, Audience(job.Options, softBounceLimit)), Is.True, error);
 
         return context!;
     }
+
+    /// <summary>The audience a resolver returns for options whose list and consent exist.</summary>
+    public static ImportAudience Audience(ImportOptions options, int softBounceLimit = ImportAudience.DefaultSoftBounceLimit) =>
+        new(options.RecipientListId, options.Consent == ConsentMode.None ? null : options.ConsentId, options.Consent == ConsentMode.None ? null : ConsentHash, softBounceLimit);
 
     public static ImportRecord Record(long row, string key, params string?[] values) => new(row, key, values);
 }
@@ -160,13 +167,73 @@ internal sealed class FakeContactRepository : IContactImportRepository
         return [.. Enumerable.Range(0, values.Count).Where(i => !existing.Contains(values[i]))];
     }
 
-    public void Write(ImportProcessingContext context, IReadOnlyList<ContactCreate> creates, IReadOnlyList<ContactUpdate> updates, DateTime now)
+    /// <summary>Contacts that are members of the recipient list of the job.</summary>
+    public List<int> Members { get; } = [];
+
+    /// <summary>Subscription confirmations for the recipient list of the job, in insert order.</summary>
+    public List<FakeSubscription> Subscriptions { get; } = [];
+
+    /// <summary>Consent agreements with the consent of the job, in insert order.</summary>
+    public List<FakeAgreement> Agreements { get; } = [];
+
+    /// <summary>Bounce state by email address.</summary>
+    public Dictionary<string, (bool Hard, int Soft)> Bounces { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Emails of contacts whose email field is not mapped, by contact ID.</summary>
+    public Dictionary<int, string> Emails { get; } = [];
+
+    public int AudienceLookups { get; private set; }
+
+    /// <summary>Runs after the contacts of a batch are written and before its recipient list and consent rows are; throwing simulates a failure inside the transaction.</summary>
+    public Action? OnAudienceWrite { get; set; }
+
+    public IReadOnlyList<AudienceState> FindAudienceStates(ImportProcessingContext context, IReadOnlyList<AudienceTarget> targets, IReadOnlyList<int>? createdContactIds = null, bool usePlannedEmails = true)
+    {
+        AudienceLookups++;
+        var states = new List<AudienceState>();
+        for (int i = 0; i < targets.Count; i++)
+        {
+            var target = targets[i];
+            int? id = target.ContactId ?? (createdContactIds is not null && target.CreateIndex >= 0 ? createdContactIds[target.CreateIndex] : null);
+            var contact = id is null ? null : Contacts.SingleOrDefault(c => c.Id == id);
+            string? stored = null;
+            if (contact is not null)
+            {
+                stored = context.EmailFieldIndex >= 0 ? contact.Values[context.EmailFieldIndex] as string : Emails.GetValueOrDefault(contact.Id);
+            }
+
+            string? email = usePlannedEmails && target.HasPlannedEmail ? target.PlannedEmail : stored;
+            var subscription = contact is null ? null : Subscriptions.Where(s => s.ContactId == contact.Id).OrderByDescending(s => s.Date).FirstOrDefault();
+            var agreement = contact is null ? null : Agreements.Where(a => a.ContactId == contact.Id).OrderByDescending(a => a.Time).FirstOrDefault();
+            var (Hard, Soft) = email is null ? default : Bounces.GetValueOrDefault(email);
+
+            states.Add(new AudienceState(
+                i,
+                contact?.Id,
+                !string.IsNullOrWhiteSpace(email),
+                context.HasRecipientList && contact is not null && Members.Contains(contact.Id),
+                context.HasRecipientList ? subscription?.Approved : null,
+                context.HasRecipientList ? subscription?.Date : null,
+                context.HasRecipientList ? subscription?.Guid : null,
+                context.HasRecipientList && Hard,
+                context.HasRecipientList ? Soft : 0,
+                context.RecordsConsent ? agreement?.Revoked : null,
+                context.RecordsConsent ? agreement?.Time : null,
+                context.RecordsConsent ? agreement?.Guid : null));
+        }
+
+        return states;
+    }
+
+    public AudienceResult? Write(ImportProcessingContext context, IReadOnlyList<ContactCreate> creates, IReadOnlyList<ContactUpdate> updates, DateTime now, AudienceWrite? audience = null)
     {
         Writes++;
         OnWrite?.Invoke(Writes);
 
+        var createdIds = new List<int>();
         foreach (var create in creates)
         {
+            createdIds.Add(nextId);
             Contacts.Add(new FakeContact(nextId++, [.. create.Values]) { LastModified = now, Created = now, Source = context.SourceValue });
         }
 
@@ -196,6 +263,19 @@ internal sealed class FakeContactRepository : IContactImportRepository
                 contact.Source = context.SourceValue;
             }
         }
+
+        if (audience is not { Targets.Count: > 0 } || !context.HasAudience)
+        {
+            return null;
+        }
+
+        OnAudienceWrite?.Invoke();
+        var result = audience.Decide(FindAudienceStates(context, audience.Targets, createdIds, usePlannedEmails: false));
+        Members.AddRange(result.Memberships);
+        Subscriptions.AddRange(result.Subscriptions.Select(s => new FakeSubscription(s.ContactId, true, now, s.Guid)));
+        Agreements.AddRange(result.Agreements.Select(a => new FakeAgreement(a.ContactId, false, a.Time, a.Guid, context.Audience.ConsentHash)));
+
+        return result;
     }
 
     private bool KeyEquals(object? contactKey, object key)
@@ -217,6 +297,45 @@ internal sealed class FakeContact(int id, object?[] values)
     public DateTime? Created { get; set; }
 
     public string? Source { get; set; }
+}
+
+internal sealed record FakeSubscription(int ContactId, bool Approved, DateTime Date, Guid Guid);
+
+internal sealed record FakeAgreement(int ContactId, bool Revoked, DateTime Time, Guid Guid, string? Hash = null);
+
+/// <summary>
+/// Knows every recipient list and consent unless told otherwise; the consent hash is <see cref="ProcessingTestData.ConsentHash"/>.
+/// </summary>
+internal sealed class FakeAudienceResolver : IImportAudienceResolver
+{
+    public string? Error { get; set; }
+
+    public int SoftBounceLimit { get; set; } = ImportAudience.DefaultSoftBounceLimit;
+
+    public int Calls { get; private set; }
+
+    public ImportAudienceResolution Resolve(ImportOptions options)
+    {
+        Calls++;
+
+        return Error is null
+            ? new ImportAudienceResolution(ProcessingTestData.Audience(options, SoftBounceLimit))
+            : new ImportAudienceResolution(null, Error);
+    }
+}
+
+internal sealed class FakeEventPublisher : IImportEventPublisher
+{
+    public List<(ImportJob Job, ImportJobStatus Status, ContactImportStatus Outcome, bool IsDryRun, int? UserId, ImportAudience? Audience)> Events { get; } = [];
+
+    /// <summary>Runs when an event is published; tests use it to check what is already stored or released.</summary>
+    public Action? OnPublish { get; set; }
+
+    public void Publish(ImportJob job, ImportJobStatus status, ContactImportStatus outcome, bool isDryRun, int? userId = null, ImportAudience? audience = null)
+    {
+        Events.Add((job, status, outcome, isDryRun, userId, audience));
+        OnPublish?.Invoke();
+    }
 }
 
 internal sealed class FakeCacheInvalidator : IImportCacheInvalidator

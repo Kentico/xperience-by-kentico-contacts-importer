@@ -121,7 +121,7 @@ export function toJobView(response: ImportJobResponse | undefined): JobView | nu
 /** Existing contacts changed by one import above which the confirmation must be typed (PLAN §10). */
 export const CONFIRM_TYPING_THRESHOLD = 1000;
 
-const NO_COUNTS: AggregatesDto = {
+export const NO_COUNTS: AggregatesDto = {
   rows: 0,
   created: 0,
   updated: 0,
@@ -136,6 +136,21 @@ const NO_COUNTS: AggregatesDto = {
   duplicateRows: 0,
   multipleMatches: 0,
   importedWithoutEmail: 0,
+  listAdded: 0,
+  listAlreadySubscribed: 0,
+  listKeptUnsubscribed: 0,
+  listResubscribed: 0,
+  listSkippedBounced: 0,
+  listSkippedNoEmail: 0,
+  bouncedHard: 0,
+  bouncedSoftOverLimit: 0,
+  bouncedSoftUnderLimit: 0,
+  consentRecorded: 0,
+  consentAlreadyAgreed: 0,
+  consentKeptRevoked: 0,
+  consentReAgreed: 0,
+  consentNotGiven: 0,
+  consentSkippedFutureDate: 0,
   fields: [],
 };
 

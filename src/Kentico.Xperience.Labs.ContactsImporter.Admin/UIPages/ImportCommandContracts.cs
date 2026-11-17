@@ -36,6 +36,18 @@ internal static class ImportCommandCodes
     public const string REJECTED = "rejected";
     public const string ANALYSIS_EXPIRED = "analysisExpired";
 
+    /// <summary>
+    /// <c>CONFIRM_IMPORT</c>: the import changes recipient list subscriptions or records consent, and the request did
+    /// not carry the version of the consent statement that is current (the options or the statement changed).
+    /// </summary>
+    public const string ATTESTATION_REQUIRED = "attestationRequired";
+
+    /// <summary>
+    /// <c>CONFIRM_IMPORT</c>: the import needs the consent confirmation and the user does not have
+    /// <see cref="ContactsImporterPermissions.CONFIRM_CONSENT"/>.
+    /// </summary>
+    public const string CONSENT_PERMISSION_REQUIRED = "consentPermissionRequired";
+
     /// <summary><c>PROCESS_NEXT</c> outcome: another request of this application instance is still processing the job.</summary>
     public const string BUSY = "busy";
 }
@@ -46,6 +58,43 @@ internal sealed record ImportConfigResponse
     public required IReadOnlyList<ImportFieldDto> Fields { get; init; }
 
     public required ImportLimitsDto Limits { get; init; }
+
+    /// <summary>Existing recipient lists, ordered by name, for the Options step.</summary>
+    public IReadOnlyList<ImportChoiceDto> RecipientLists { get; init; } = [];
+
+    /// <summary>Existing consents, ordered by name, for the Options step.</summary>
+    public IReadOnlyList<ImportChoiceDto> Consents { get; init; } = [];
+}
+
+/// <summary>A recipient list or a consent the Options step offers.</summary>
+/// <param name="Id">Contact group ID of the recipient list, or consent ID.</param>
+/// <param name="Name">Display name.</param>
+internal sealed record ImportChoiceDto(int Id, string Name);
+
+/// <summary>Source columns with the consent of each row (<see cref="ImportConsentMapping"/>). Not contact fields.</summary>
+internal sealed record ImportConsentMappingDto
+{
+    /// <summary>Column that says whether consent was given.</summary>
+    public string? Agreed { get; init; }
+
+    /// <summary>Column with the date consent was given.</summary>
+    public string? Date { get; init; }
+}
+
+/// <summary>The stored confirmation of an import that affects consent (<see cref="ImportAttestation"/>).</summary>
+/// <param name="UserName">User who confirmed; empty when the user no longer exists.</param>
+/// <param name="Utc">When the import was confirmed.</param>
+/// <param name="StatementVersion">Version of the consent statement the user confirmed.</param>
+internal sealed record ImportAttestationDto(string UserName, DateTime Utc, string StatementVersion);
+
+/// <summary><c>CONFIRM_IMPORT</c> data.</summary>
+internal sealed record ConfirmImportRequest
+{
+    /// <summary>
+    /// Version of the consent statement the user saw in the confirmation dialog. Required, and must be the current
+    /// version, when the import needs the consent confirmation; ignored otherwise.
+    /// </summary>
+    public string? StatementVersion { get; init; }
 }
 
 /// <summary>Mappable contact field (<see cref="ContactFieldDefinition"/>).</summary>
@@ -142,6 +191,24 @@ internal sealed record ImportOptionsDto
     public string? SourceStamp { get; init; }
 
     public bool ReportIncludesKey { get; init; }
+
+    /// <summary>Recipient list (contact group ID) contacts are added to as subscribed; <c>null</c> = recipient lists are not changed.</summary>
+    public int? RecipientListId { get; init; }
+
+    /// <summary><c>keep</c> or <c>resubscribe</c>; missing = <c>keep</c>. Stored as <c>keep</c> without a recipient list.</summary>
+    public string? Unsubscribed { get; init; }
+
+    /// <summary><c>addAndReport</c> or <c>skipAndReport</c>; missing = <c>addAndReport</c>. Stored as the default without a recipient list.</summary>
+    public string? BouncedAddress { get; init; }
+
+    /// <summary><c>none</c>, <c>blanket</c> or <c>blanketWithColumnOverride</c>; missing = <c>none</c>.</summary>
+    public string? Consent { get; init; }
+
+    /// <summary>Consent agreements are recorded for. Required unless <see cref="Consent"/> is <c>none</c>; stored as <c>null</c> then.</summary>
+    public int? ConsentId { get; init; }
+
+    /// <summary><c>keep</c> or <c>reAgree</c>; missing = <c>keep</c>. Stored as <c>keep</c> when no consent is recorded.</summary>
+    public string? RevokedConsent { get; init; }
 }
 
 /// <summary><c>PROCESS_NEXT</c> data.</summary>
@@ -223,6 +290,37 @@ internal sealed record ImportAggregatesDto
 
     public long ImportedWithoutEmail { get; init; }
 
+    /// <summary>Recipient list: contacts added as subscribed.</summary>
+    public long ListAdded { get; init; }
+
+    public long ListAlreadySubscribed { get; init; }
+
+    public long ListKeptUnsubscribed { get; init; }
+
+    public long ListResubscribed { get; init; }
+
+    public long ListSkippedBounced { get; init; }
+
+    public long ListSkippedNoEmail { get; init; }
+
+    public long BouncedHard { get; init; }
+
+    public long BouncedSoftOverLimit { get; init; }
+
+    public long BouncedSoftUnderLimit { get; init; }
+
+    public long ConsentRecorded { get; init; }
+
+    public long ConsentAlreadyAgreed { get; init; }
+
+    public long ConsentKeptRevoked { get; init; }
+
+    public long ConsentReAgreed { get; init; }
+
+    public long ConsentNotGiven { get; init; }
+
+    public long ConsentSkippedFutureDate { get; init; }
+
     public IReadOnlyList<ImportFieldChangeDto> Fields { get; init; } = [];
 }
 
@@ -281,6 +379,9 @@ internal sealed record ImportJobDto
 
     public required string DateFormat { get; init; }
 
+    /// <summary>Source columns with the consent of each row; <c>null</c> when none are chosen.</summary>
+    public ImportConsentMappingDto? ConsentMapping { get; init; }
+
     public required DateTime CreatedUtc { get; init; }
 
     /// <summary>Contact options of the Options step (PLAN §8).</summary>
@@ -294,6 +395,27 @@ internal sealed record ImportJobDto
 
     /// <summary>Suggested source stamp value: <c>import-{date}-{file name}</c>.</summary>
     public required string DefaultSourceValue { get; init; }
+
+    /// <summary>Display name of the recipient list of the options; <c>null</c> when none is chosen or it no longer exists.</summary>
+    public string? RecipientListName { get; init; }
+
+    /// <summary>Display name of the consent of the options; <c>null</c> when none is chosen or it no longer exists.</summary>
+    public string? ConsentName { get; init; }
+
+    /// <summary>
+    /// The options change recipient list subscriptions or record consent, so confirming the import is also the
+    /// confirmation of <see cref="AttestationStatement"/> and needs <see cref="ContactsImporterPermissions.CONFIRM_CONSENT"/>.
+    /// </summary>
+    public bool AttestationRequired { get; init; }
+
+    /// <summary>Consent statement the user confirms. The client shows this text and never its own.</summary>
+    public string AttestationStatement { get; init; } = "";
+
+    /// <summary>Version of <see cref="AttestationStatement"/>; sent back with <c>CONFIRM_IMPORT</c>.</summary>
+    public string AttestationVersion { get; init; } = "";
+
+    /// <summary>Who confirmed the statement and when; <c>null</c> until then and after the options changed.</summary>
+    public ImportAttestationDto? Attestation { get; init; }
 }
 
 internal sealed record ImportFileDto
@@ -356,6 +478,9 @@ internal sealed record SaveConfigRequest
     public IReadOnlyList<ImportMappingDto>? Mapping { get; init; }
 
     public string? DateFormat { get; init; }
+
+    /// <summary>Source columns with the consent of each row; <c>null</c> (or no column in it) = none.</summary>
+    public ImportConsentMappingDto? ConsentMapping { get; init; }
 }
 
 /// <summary><c>SAVE_CONFIG</c> result. On <c>ok</c> the job accepts chunks (or is already past the upload).</summary>
@@ -484,4 +609,10 @@ internal sealed record ImportListItemDto
 
     /// <summary>The job still has uploaded chunks or reports on the server.</summary>
     public required bool HasFiles { get; init; }
+
+    /// <summary>Display name of the recipient list the import adds contacts to; <c>null</c> when none or it no longer exists.</summary>
+    public string? RecipientListName { get; init; }
+
+    /// <summary>Display name of the consent the import records agreements for; <c>null</c> when none or it no longer exists.</summary>
+    public string? ConsentName { get; init; }
 }

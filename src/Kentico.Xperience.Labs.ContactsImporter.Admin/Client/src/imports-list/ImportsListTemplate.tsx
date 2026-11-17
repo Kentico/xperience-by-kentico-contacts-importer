@@ -112,6 +112,8 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
       textColumn('rows', S.columns.rows, 12, 16),
       textColumn('contactsCreated', S.columns.contactsCreated, 12, 16),
       textColumn('contactsUpdated', S.columns.contactsUpdated, 12, 16),
+      textColumn('recipientList', S.columns.recipientList, 12, 24),
+      textColumn('consent', S.columns.consent, 12, 24),
       ...(canImport ? [actionColumn('actions', S.columns.actions, 10, 14)] : []),
     ],
     [canImport],
@@ -129,6 +131,8 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
           stringCell('rows', item.rowsValid > 0 ? formatNumber(item.rowsValid) : ''),
           stringCell('contactsCreated', item.importStarted ? formatNumber(item.created) : ''),
           stringCell('contactsUpdated', item.importStarted ? formatNumber(item.updated) : ''),
+          stringCell('recipientList', item.recipientListName ?? ''),
+          stringCell('consent', item.consentName ?? ''),
         ];
         if (canImport) {
           const actions: TableAction[] = [

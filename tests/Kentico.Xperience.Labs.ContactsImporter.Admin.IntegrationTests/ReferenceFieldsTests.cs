@@ -40,13 +40,17 @@ public class ReferenceFieldsTests : ImportIntegrationTest
 
         public IReadOnlyList<int> FindMissingReferences(ImportField field, IReadOnlyList<object> values) => inner.FindMissingReferences(field, values);
 
-        public void Write(ImportProcessingContext context, IReadOnlyList<ContactCreate> creates, IReadOnlyList<ContactUpdate> updates, DateTime now)
+        public IReadOnlyList<AudienceState> FindAudienceStates(ImportProcessingContext context, IReadOnlyList<AudienceTarget> targets, IReadOnlyList<int>? createdContactIds = null, bool usePlannedEmails = true) =>
+            inner.FindAudienceStates(context, targets, createdContactIds, usePlannedEmails);
+
+        public AudienceResult? Write(ImportProcessingContext context, IReadOnlyList<ContactCreate> creates, IReadOnlyList<ContactUpdate> updates, DateTime now, AudienceWrite? audience = null)
         {
             Writes++;
             var hook = BeforeWrite;
             BeforeWrite = null;
             hook?.Invoke();
-            inner.Write(context, creates, updates, now);
+
+            return inner.Write(context, creates, updates, now, audience);
         }
 
         public IDisposable? TryLockJob(Guid jobId, TimeSpan timeout) => inner.TryLockJob(jobId, timeout);

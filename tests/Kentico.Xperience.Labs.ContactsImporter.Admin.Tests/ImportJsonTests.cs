@@ -23,7 +23,7 @@ public class ImportJsonTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(json.Select(p => p.Key), Is.EqualTo(new[] { "jobId", "createdByUserId", "createdUtc", "file", "keyField", "mapping", "dateFormat", "options", "attestation" }));
+            Assert.That(json.Select(p => p.Key), Is.EqualTo(new[] { "jobId", "createdByUserId", "createdUtc", "file", "keyField", "mapping", "dateFormat", "consentMapping", "options", "attestation" }));
             Assert.That(json["jobId"]!.GetValue<string>(), Is.EqualTo("6f9619ff-8b86-d011-b42d-00c04fc964ff"));
             Assert.That(json["createdByUserId"]!.GetValue<int>(), Is.EqualTo(53));
             Assert.That(json["createdUtc"]!.GetValue<string>(), Is.EqualTo("2026-11-16T12:00:00Z"));
@@ -32,6 +32,24 @@ public class ImportJsonTests
             Assert.That(json["mapping"]![0]!.ToJsonString(), Is.EqualTo("""{"source":"col ContactEmail","target":"ContactEmail"}"""));
             Assert.That(json["dateFormat"]!.GetValue<string>(), Is.EqualTo("iso"));
             Assert.That(json["attestation"], Is.Null);
+            Assert.That(json["consentMapping"], Is.Null);
+        });
+    }
+
+    [Test]
+    public void Consent_Mapping_Round_Trips_In_The_Contract_Shape()
+    {
+        var job = TestData.Job() with { ConsentMapping = new ImportConsentMapping { Agreed = "Consent given", Date = "Consent date" } };
+        string withoutMapping = ToJson(TestData.Job()).ToJsonString().Replace(",\"consentMapping\":null", "", StringComparison.Ordinal);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ToJson(job)["consentMapping"]!.ToJsonString(), Is.EqualTo("""{"agreed":"Consent given","date":"Consent date"}"""));
+            Assert.That(FromJson<ImportJob>(ToJson(job).ToJsonString()).ConsentMapping, Is.EqualTo(job.ConsentMapping));
+            Assert.That(FromJson<ImportJob>(ToJson(job with { ConsentMapping = new ImportConsentMapping { Date = "d" } }).ToJsonString()).ConsentMapping, Is.EqualTo(new ImportConsentMapping { Date = "d" }));
+            Assert.That(FromJson<ImportJob>(withoutMapping).ConsentMapping, Is.Null, "Jobs stored before consent columns existed have no property.");
+            Assert.That(() => FromJson<ImportOptions>("""{"unsubscribed":"reportOnly"}"""), Throws.InstanceOf<JsonException>(), "The option without a behavior of its own is gone.");
+            Assert.That(FromJson<ImportOptions>("""{"unsubscribed":"resubscribe"}""").Unsubscribed, Is.EqualTo(UnsubscribedBehavior.Resubscribe));
         });
     }
 

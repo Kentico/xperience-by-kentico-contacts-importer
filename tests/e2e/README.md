@@ -8,13 +8,23 @@ Playwright (TypeScript) tests against a running DancingGoat site: the live site 
 | --- | --- | --- |
 | `live-site` | `live-site/*.spec.ts` | public site behavior (widgets, sections, pages) |
 | `admin-setup` | `admin/auth.setup.ts` | signs in once and saves the session to `playwright/.auth/` |
-| `admin-tests` | `admin/*.spec.ts` | administration behavior, starting signed in: sign-in smoke test and the Contacts Importer (`contacts-importer.spec.ts`: File, Map, Upload; `contacts-importer-run.spec.ts`: check, run, results; `contacts-importer-process.spec.ts`: options change, cancel, reload, take over) |
+| `admin-tests` | `admin/*.spec.ts` | administration behavior, starting signed in: sign-in smoke test and the Contacts Importer (`contacts-importer.spec.ts`: File, Map, Upload; `contacts-importer-run.spec.ts`: check, run, results; `contacts-importer-process.spec.ts`: options change, cancel, reload, take over; `contacts-importer-consent.spec.ts`: recipient list, consent, consent confirmation) |
 
-Page objects (`admin/*Page.ts`) hold selectors for UI this repository does not own, so an Xperience update that changes markup is fixed in one place.
+Page objects (`admin/*Page.ts`) hold selectors for UI this repository does not own, so an Xperience update that changes markup is fixed in one place: `contactsListPage.ts` (Contact management), `recipientListsPage.ts` (Recipient lists: the "Email status" of a recipient), `dataProtectionPage.ts` (Data protection: consents and their agreements).
 
 Importer specs use the `test` from `admin/contactsImporterFixtures.ts`: page objects, files from `fixtures/` copied under a unique name per run, and cleanup ("Delete files" cancels the imports a test created and deletes their uploaded data; the cancelled imports stay in the list until their retention ends). Job files are written under `examples/DancingGoat/App_Data/contacts-importer` (gitignored).
 
 The run and process specs **create and change contacts** in the database DancingGoat uses. Every run uses its own email addresses (`e2e.{runId}.{n}@example.com`), so the specs can run again, but the contacts stay: run them against a database you can throw away (CI creates a fresh one). They check the imported contacts in the Contact management application (`admin/contactsListPage.ts`). The specs that interrupt an import rely on the small importer settings of `appsettings.CI.json` (`ASPNETCORE_ENVIRONMENT=CI`); with the default settings an import of a few thousand rows finishes in one processing call.
+
+## Recipient list and consent test data
+
+`contacts-importer-consent.spec.ts` needs a recipient list and a consent. Nothing is seeded by a separate step:
+
+- **Recipient list**: the spec uses the recipient list of the DancingGoat sample data ("Dancing goat recipient list", part of every database `scripts/Initialize-Database.ps1` creates, also in CI); if it was renamed, the first recipient list. No recipient list fails the spec with a hint.
+- **Consent**: the spec opens the Data protection application and uses the consent "E2E imported contacts consent", creating it there when it does not exist (fresh CI database). Later runs reuse it.
+- **Unsubscribed contacts and withdrawn consent** cannot be produced in the administration (they come from the unsubscribe link and the website). The spec writes them to the database the way Xperience stores them, through `shared/database.ts` → `scripts/Invoke-E2ESql.ps1` (PowerShell 7 `pwsh`, `System.Data.SqlClient`). Connection string, first that is set: `E2E_SQL_CONNECTION_STRING`, `ConnectionStrings__CMSConnectionString`, the DancingGoat user secrets (not in CI), `examples/DancingGoat/appsettings.json` (CI, written there by `Initialize-Database.ps1`). It must be the database DancingGoat uses. Without a reachable database that test is skipped.
+
+The spec subscribes contacts to the list and records consent agreements: like the other importing specs, run it against a database you can throw away.
 
 ## Requirements
 
@@ -44,5 +54,6 @@ The `e2e` job in `.github/workflows/ci.yml` runs SQL Server and Mailpit service 
 | `ADMIN_BASE_URL` | `<base URL>/admin` |
 | `XPERIENCE_ADMIN_USERNAME` / `XPERIENCE_ADMIN_PASSWORD` | `administrator` / `Pass@12345` (same default as `Initialize-Database.ps1`) |
 | `E2E_VIEWER_USERNAME` / `E2E_VIEWER_PASSWORD` | not set / the administrator password. A user with administration access whose role has only the **View** permission of the Contacts Importer (Labs) application. Without it the permission spec is skipped (as in CI). |
+| `E2E_SQL_CONNECTION_STRING` | not set: see "Recipient list and consent test data" |
 | `E2E_WEB_SERVER_COMMAND` | `dotnet run --project examples/DancingGoat` |
 | `E2E_WEB_SERVER_TIMEOUT_MS` | `180000` |

@@ -88,12 +88,16 @@ internal sealed class ImportProcessingContext
 {
     private const int MaxDecimalDigits = 38;
 
-    private ImportProcessingContext(ImportJob job, ImportField[] fields, int keyIndex, int emailIndex, string? sourceField)
+    private ImportProcessingContext(ImportJob job, ImportField[] fields, int keyIndex, int emailIndex, string? sourceField, ImportAudience audience)
     {
+        JobId = job.JobId;
+        Audience = audience;
+        EmailFieldIndex = emailIndex;
+        ConsentAgreedMapped = job.ConsentMapping?.Agreed is not null;
         Options = job.Options;
         Fields = fields;
         KeyIndex = keyIndex;
-        EmailIndex = emailIndex;
+        EmailIndex = emailIndex == keyIndex ? -1 : emailIndex;
         SourceField = sourceField;
         SourceValue = sourceField is null ? null : job.Options.SourceValue;
         FieldIndexes = fields.ToDictionary(f => f.Name, f => f.Index, StringComparer.Ordinal);
@@ -103,7 +107,37 @@ internal sealed class ImportProcessingContext
             .Select(group => (IReadOnlyList<ImportField>)[.. group])];
     }
 
+    public Guid JobId { get; }
+
     public ImportOptions Options { get; }
+
+    /// <summary>
+    /// The recipient list and consent of the job as found in the database when the processing call started.
+    /// </summary>
+    public ImportAudience Audience { get; }
+
+    /// <summary>The job adds contacts to a recipient list.</summary>
+    public bool HasRecipientList => Audience.RecipientListId is not null;
+
+    /// <summary>The job records consent agreements.</summary>
+    public bool RecordsConsent => Audience.ConsentId is not null;
+
+    /// <summary>Whether rows can change recipient list subscriptions or consent agreements.</summary>
+    public bool HasAudience => HasRecipientList || RecordsConsent;
+
+    /// <summary>
+    /// Consent is recorded only for rows whose consent columns say so (<see cref="ConsentMode.BlanketWithColumnOverride"/>);
+    /// otherwise for every contact of the file.
+    /// </summary>
+    public bool ConsentFromColumns => Options.Consent == ConsentMode.BlanketWithColumnOverride;
+
+    /// <summary>
+    /// A "consent given" column is mapped. When only the consent date column is mapped, every row counts as consent given.
+    /// </summary>
+    public bool ConsentAgreedMapped { get; }
+
+    /// <summary>Index of the email field when it is mapped (key or not), otherwise -1.</summary>
+    public int EmailFieldIndex { get; }
 
     /// <summary>Mapped fields in mapping order.</summary>
     public IReadOnlyList<ImportField> Fields { get; }
@@ -139,9 +173,22 @@ internal sealed class ImportProcessingContext
     /// Builds the context. Fails (with a message free of contact data) when the job no longer matches the contact
     /// class: a mapped field is gone or has a data type the importer cannot write, or the key or source field is not usable.
     /// </summary>
-    public static bool TryCreate(ImportJob job, IReadOnlyList<ContactFieldDefinition> mappableFields, out ImportProcessingContext? context, out string? error)
+    /// <param name="job">Job to process.</param>
+    /// <param name="mappableFields">Current mappable contact fields.</param>
+    /// <param name="context">The context when the job can be processed.</param>
+    /// <param name="error">Why the job cannot be processed.</param>
+    /// <param name="audience">
+    /// Recipient list and consent of the job, checked by <see cref="IImportAudienceResolver"/>. Required when the
+    /// options select a list or record consent: without it such a job is refused, never processed without them.
+    /// </param>
+    public static bool TryCreate(ImportJob job, IReadOnlyList<ContactFieldDefinition> mappableFields, out ImportProcessingContext? context, out string? error, ImportAudience? audience = null)
     {
         context = null;
+        if (!TryGetAudience(job, audience, out var checkedAudience, out error))
+        {
+            return false;
+        }
+
         var definitions = mappableFields.ToDictionary(f => f.Name, StringComparer.Ordinal);
         var fields = new ImportField[job.Mapping.Count];
         var names = new HashSet<string>(StringComparer.Ordinal);
@@ -201,9 +248,36 @@ internal sealed class ImportProcessingContext
 
         int emailIndex = Array.FindIndex(fields, f => KeyNormalizer.IsEmailField(f.Name));
         error = null;
-        context = new ImportProcessingContext(job, fields, keyIndex, emailIndex == keyIndex ? -1 : emailIndex, sourceField);
+        context = new ImportProcessingContext(job, fields, keyIndex, emailIndex, sourceField, checkedAudience);
 
         return true;
+    }
+
+    /// <summary>
+    /// The audience must be exactly what the options ask for: a job with a recipient list or consent is never
+    /// processed as if it had none, and never against another list or consent.
+    /// </summary>
+    private static bool TryGetAudience(ImportJob job, ImportAudience? audience, out ImportAudience checkedAudience, out string? error)
+    {
+        var options = job.Options;
+        int? consentId = options.Consent == ConsentMode.None ? null : options.ConsentId;
+        checkedAudience = audience ?? ImportAudience.None;
+        error = null;
+
+        if (options.Consent != ConsentMode.None && consentId is null)
+        {
+            error = ImportAudienceResolver.ConsentNotSelectedError;
+        }
+        else if (checkedAudience.RecipientListId != options.RecipientListId || checkedAudience.ConsentId != consentId)
+        {
+            error = "The recipient list or consent of the import could not be checked.";
+        }
+        else if (options.Consent == ConsentMode.BlanketWithColumnOverride && job.ConsentMapping is null)
+        {
+            error = ImportJobConfigValidator.ConsentColumnsMissingError;
+        }
+
+        return error is null;
     }
 
     private static ImportField CreateField(int index, ContactFieldDefinition definition, ImportValueKind kind)

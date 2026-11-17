@@ -70,6 +70,36 @@ public class ImportReportTests
     }
 
     [Test]
+    public void Line_Has_The_List_And_Consent_Columns_Only_For_Jobs_That_Use_Them()
+    {
+        var row = Row(12, ImportRowOutcome.Created, null, null, "jane@example.com") with { List = "added;bouncedHard", Consent = "recorded" };
+        var list = new ImportOptions { RecipientListId = 4 };
+        var consent = new ImportOptions { Consent = ConsentMode.Blanket, ConsentId = 2, ReportIncludesKey = true };
+        var both = list with { Consent = ConsentMode.Blanket, ConsentId = 2 };
+
+        static string Line(ImportRowResult row, ImportOptions options)
+        {
+            var builder = new StringBuilder();
+            ImportReportFormat.AppendLine(builder, row, ImportReportColumns.From(options));
+
+            return builder.ToString();
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ImportReportFormat.Header(new ImportOptions()), Is.EqualTo("row,outcome,reason,field"));
+            Assert.That(ImportReportFormat.Header(list), Is.EqualTo("row,outcome,reason,field,list"));
+            Assert.That(ImportReportFormat.Header(consent), Is.EqualTo("row,outcome,reason,field,consent,key"));
+            Assert.That(ImportReportFormat.Header(both), Is.EqualTo("row,outcome,reason,field,list,consent"));
+            Assert.That(Line(row, new ImportOptions()), Is.EqualTo("12,created,,\n"));
+            Assert.That(Line(row, list), Is.EqualTo("12,created,,,added;bouncedHard\n"));
+            Assert.That(Line(row, consent), Is.EqualTo("12,created,,,recorded,jane@example.com\n"));
+            Assert.That(Line(row, both), Is.EqualTo("12,created,,,added;bouncedHard,recorded\n"));
+            Assert.That(Line(row with { List = null, Consent = null }, both), Is.EqualTo("12,created,,,,\n"));
+        });
+    }
+
+    [Test]
     public void Part_File_Names_Sort_By_First_Row_And_Parse_Back()
     {
         string name = ImportReportFormat.PartFileName(ImportPhase.Execute, 1234);

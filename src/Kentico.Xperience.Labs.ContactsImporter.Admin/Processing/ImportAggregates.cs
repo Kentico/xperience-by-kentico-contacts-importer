@@ -4,8 +4,16 @@ namespace Kentico.Xperience.Labs.ContactsImporter.Admin;
 /// Names of the counts kept in <see cref="ImportJobStatus.Aggregates"/>. Counts only, never contact data.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Every processed row ends in exactly one of: <see cref="Created"/>, <see cref="Updated"/>, <see cref="Unchanged"/>,
 /// the <c>skipped*</c> counts, or <see cref="DuplicateRows"/>. So their sum equals <see cref="Rows"/>.
+/// </para>
+/// <para>
+/// The <c>list*</c>, <c>bounced*</c> and <c>consent*</c> counts are contacts, not rows: the contacts that rows
+/// resolved to (created, updated, unchanged, and existing contacts that are not updated). With a recipient list,
+/// every such contact is in exactly one <c>list*</c> count, and those with an email address in at most one
+/// <c>bounced*</c> count; with consent, every such contact is in exactly one <c>consent*</c> count.
+/// </para>
 /// </remarks>
 internal static class ImportAggregateKeys
 {
@@ -48,6 +56,51 @@ internal static class ImportAggregateKeys
     /// <summary>Rows with an invalid email that were processed without the email value.</summary>
     public const string ImportedWithoutEmail = "importedWithoutEmail";
 
+    /// <summary>Contacts added to the recipient list as subscribed (membership and approved confirmation).</summary>
+    public const string ListAdded = "listAdded";
+
+    /// <summary>Contacts that already are subscribed members of the recipient list.</summary>
+    public const string ListAlreadySubscribed = "listAlreadySubscribed";
+
+    /// <summary>Contacts that unsubscribed from the recipient list (or are members without a confirmation) and were left that way.</summary>
+    public const string ListKeptUnsubscribed = "listKeptUnsubscribed";
+
+    /// <summary>Unsubscribed contacts that got a new approved confirmation.</summary>
+    public const string ListResubscribed = "listResubscribed";
+
+    /// <summary>Contacts not added or resubscribed because their address is bounced and such addresses are skipped.</summary>
+    public const string ListSkippedBounced = "listSkippedBounced";
+
+    /// <summary>Contacts not added to the recipient list because they have no email address.</summary>
+    public const string ListSkippedNoEmail = "listSkippedNoEmail";
+
+    /// <summary>Contacts considered for the recipient list whose address has a hard bounce.</summary>
+    public const string BouncedHard = "bouncedHard";
+
+    /// <summary>Contacts considered for the recipient list whose address reached the soft bounce limit (no hard bounce).</summary>
+    public const string BouncedSoftOverLimit = "bouncedSoftOverLimit";
+
+    /// <summary>Contacts considered for the recipient list whose address has soft bounces below the limit; Xperience still sends to it.</summary>
+    public const string BouncedSoftUnderLimit = "bouncedSoftUnderLimit";
+
+    /// <summary>Contacts that got a consent agreement.</summary>
+    public const string ConsentRecorded = "consentRecorded";
+
+    /// <summary>Contacts whose newest agreement with the consent is not revoked; nothing written.</summary>
+    public const string ConsentAlreadyAgreed = "consentAlreadyAgreed";
+
+    /// <summary>Contacts that revoked the consent and were left that way (also when the consent date of the row is not after the revocation).</summary>
+    public const string ConsentKeptRevoked = "consentKeptRevoked";
+
+    /// <summary>Contacts that had revoked the consent and got a new agreement.</summary>
+    public const string ConsentReAgreed = "consentReAgreed";
+
+    /// <summary>Contacts whose rows do not say that consent was given (consent from a file column).</summary>
+    public const string ConsentNotGiven = "consentNotGiven";
+
+    /// <summary>Contacts without an agreement because the consent date of the row is in the future.</summary>
+    public const string ConsentSkippedFutureDate = "consentSkippedFutureDate";
+
     /// <summary>Prefix of per-field counts of contacts whose value of the field changes: <c>fieldChanged:ContactFirstName</c>.</summary>
     public const string FieldChangedPrefix = "fieldChanged:";
 
@@ -85,6 +138,36 @@ internal sealed record ImportAggregates
     public long MultipleMatches { get; init; }
 
     public long ImportedWithoutEmail { get; init; }
+
+    public long ListAdded { get; init; }
+
+    public long ListAlreadySubscribed { get; init; }
+
+    public long ListKeptUnsubscribed { get; init; }
+
+    public long ListResubscribed { get; init; }
+
+    public long ListSkippedBounced { get; init; }
+
+    public long ListSkippedNoEmail { get; init; }
+
+    public long BouncedHard { get; init; }
+
+    public long BouncedSoftOverLimit { get; init; }
+
+    public long BouncedSoftUnderLimit { get; init; }
+
+    public long ConsentRecorded { get; init; }
+
+    public long ConsentAlreadyAgreed { get; init; }
+
+    public long ConsentKeptRevoked { get; init; }
+
+    public long ConsentReAgreed { get; init; }
+
+    public long ConsentNotGiven { get; init; }
+
+    public long ConsentSkippedFutureDate { get; init; }
 
     /// <summary>All skipped rows and keys.</summary>
     public long Skipped => SkippedNew + SkippedExisting + SkippedMultipleMatches + SkippedInvalidEmail + SkippedInvalidValue;
@@ -124,6 +207,21 @@ internal sealed record ImportAggregates
             DuplicateRows = counts.GetValueOrDefault(ImportAggregateKeys.DuplicateRows),
             MultipleMatches = counts.GetValueOrDefault(ImportAggregateKeys.MultipleMatches),
             ImportedWithoutEmail = counts.GetValueOrDefault(ImportAggregateKeys.ImportedWithoutEmail),
+            ListAdded = counts.GetValueOrDefault(ImportAggregateKeys.ListAdded),
+            ListAlreadySubscribed = counts.GetValueOrDefault(ImportAggregateKeys.ListAlreadySubscribed),
+            ListKeptUnsubscribed = counts.GetValueOrDefault(ImportAggregateKeys.ListKeptUnsubscribed),
+            ListResubscribed = counts.GetValueOrDefault(ImportAggregateKeys.ListResubscribed),
+            ListSkippedBounced = counts.GetValueOrDefault(ImportAggregateKeys.ListSkippedBounced),
+            ListSkippedNoEmail = counts.GetValueOrDefault(ImportAggregateKeys.ListSkippedNoEmail),
+            BouncedHard = counts.GetValueOrDefault(ImportAggregateKeys.BouncedHard),
+            BouncedSoftOverLimit = counts.GetValueOrDefault(ImportAggregateKeys.BouncedSoftOverLimit),
+            BouncedSoftUnderLimit = counts.GetValueOrDefault(ImportAggregateKeys.BouncedSoftUnderLimit),
+            ConsentRecorded = counts.GetValueOrDefault(ImportAggregateKeys.ConsentRecorded),
+            ConsentAlreadyAgreed = counts.GetValueOrDefault(ImportAggregateKeys.ConsentAlreadyAgreed),
+            ConsentKeptRevoked = counts.GetValueOrDefault(ImportAggregateKeys.ConsentKeptRevoked),
+            ConsentReAgreed = counts.GetValueOrDefault(ImportAggregateKeys.ConsentReAgreed),
+            ConsentNotGiven = counts.GetValueOrDefault(ImportAggregateKeys.ConsentNotGiven),
+            ConsentSkippedFutureDate = counts.GetValueOrDefault(ImportAggregateKeys.ConsentSkippedFutureDate),
             Fields = [.. fields.Select(f => new ImportFieldChangeStat(f.Key, f.Value.Changed, f.Value.Cleared))],
         };
     }
@@ -148,6 +246,17 @@ internal sealed class ImportCounts
         if (count != 0)
         {
             counts[key] = counts.GetValueOrDefault(key) + count;
+        }
+    }
+
+    /// <summary>
+    /// Adds the counts of <paramref name="other"/> to these counts.
+    /// </summary>
+    public void Add(ImportCounts other)
+    {
+        foreach (var (key, count) in other.counts)
+        {
+            Add(key, count);
         }
     }
 

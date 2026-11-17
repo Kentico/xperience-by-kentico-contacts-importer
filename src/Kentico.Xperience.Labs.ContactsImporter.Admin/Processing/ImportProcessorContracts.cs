@@ -19,7 +19,13 @@ internal interface IImportProcessor
     /// <param name="driverToken">Token from the previous call's progress; <c>null</c> on the first call of a browser tab.</param>
     /// <param name="takeOver">The user chose to continue a job another tab or user left (stale heartbeat).</param>
     /// <param name="cancellationToken">Stops after the current batch; the job stays resumable.</param>
-    public ImportProgress ProcessNext(Guid jobId, ImportPhase phase, string? driverToken, bool takeOver, CancellationToken cancellationToken = default);
+    /// <param name="userId">User whose request this is, for the event log and <see cref="AfterContactImportEvent"/>; <c>null</c> = not known.</param>
+    /// <remarks>
+    /// The call that finishes the analysis, completes the import or fails the job raises
+    /// <see cref="AfterContactImportEvent"/> before it returns: after the outcome is stored and after the job lock
+    /// is released, waiting for the handlers.
+    /// </remarks>
+    public ImportProgress ProcessNext(Guid jobId, ImportPhase phase, string? driverToken, bool takeOver, CancellationToken cancellationToken = default, int? userId = null);
 
     /// <summary>
     /// Current progress of a job without doing any work; <c>null</c> when the job does not exist.
@@ -30,6 +36,13 @@ internal interface IImportProcessor
     /// Confirms an analyzed job for import (<c>Analyzed → Confirmed</c>). Refused when the analysis is older than
     /// <see cref="ContactsImporterOptions.AnalysisValidHours"/>: the job then returns to Uploaded and must be analyzed again.
     /// </summary>
+    /// <remarks>
+    /// A job that adds contacts to a recipient list or records consent agreements
+    /// (<see cref="ImportAttestationPolicy.IsRequired"/>) is confirmed only with an attestation by a known user for the
+    /// current consent statement (<see cref="ImportAttestationPolicy.StatementVersion"/>); otherwise the result is
+    /// <see cref="ImportConfirmOutcome.AttestationRequired"/> and nothing changes. The caller checks that the user
+    /// may attest. The attestation is written to the event log.
+    /// </remarks>
     /// <param name="jobId">Job to confirm.</param>
     /// <param name="attestation">Who confirmed and which consent statement they saw; stored in the job configuration.</param>
     public ImportConfirmResult Confirm(Guid jobId, ImportAttestation? attestation = null);
@@ -37,9 +50,11 @@ internal interface IImportProcessor
     /// <summary>
     /// Cancels a job that is not finished. A processing call in progress, also one on another application instance,
     /// stops at its next status check (before its next database write or with its checkpoint); contacts written so
-    /// far stay. Uploaded data is deleted.
+    /// far stay. Uploaded data is deleted. Raises <see cref="AfterContactImportEvent"/>.
     /// </summary>
-    public ImportCancelResult Cancel(Guid jobId);
+    /// <param name="jobId">Job to cancel.</param>
+    /// <param name="userId">User who cancels, for the event log and the event; <c>null</c> = not known.</param>
+    public ImportCancelResult Cancel(Guid jobId, int? userId = null);
 }
 
 internal enum ImportProcessOutcome
@@ -127,6 +142,12 @@ internal enum ImportConfirmOutcome
 
     /// <summary>The analysis is too old; the job returned to Uploaded.</summary>
     AnalysisExpired,
+
+    /// <summary>
+    /// The job changes recipient list subscriptions or consent agreements and was not confirmed with a valid
+    /// attestation of the current consent statement. Nothing changed.
+    /// </summary>
+    AttestationRequired,
 }
 
 /// <param name="Outcome">Result of the confirmation.</param>

@@ -1,5 +1,5 @@
-import { EMAIL_FIELD, INVALID_EMAIL_FLAG, MAX_RECORD_BYTES } from './contract';
-import type { ChunkRecord, DateFormat, FieldMapping, TargetField } from './contract';
+import { CONSENT_DATE_FIELD, CONSENT_YES_VALUES, EMAIL_FIELD, INVALID_EMAIL_FLAG, MAX_RECORD_BYTES } from './contract';
+import type { ChunkRecord, ConsentMapping, ConsentRecord, DateFormat, FieldMapping, TargetField } from './contract';
 import { checkKey, isDateDataType, isValidEmail, parseDateToIso } from './normalization';
 import type { KeyRejectReason } from './normalization';
 import { ImportError } from './source';
@@ -25,6 +25,11 @@ export interface RowMapperOptions {
    * value length check (`maxLength`); when set, every mapping target must be listed.
    */
   fields?: readonly TargetField[];
+  /**
+   * Consent columns (not contact fields). When set (even with both columns empty), every record
+   * gets `c`; a consent column must not be a source of `mapping`.
+   */
+  consentMapping?: ConsentMapping | null;
 }
 
 export type MapResult =
@@ -32,7 +37,7 @@ export type MapResult =
   | {
       ok: false;
       reason: RejectReason;
-      /** Target field the reason applies to (`valueTooLong`, `invalidDate`). */
+      /** Target field the reason applies to (`valueTooLong`, `invalidDate`); `consent date` for the consent date column. */
       field?: string;
       /** Parser error behind a `parseError`. */
       detail?: RowErrorCode;
@@ -47,7 +52,18 @@ interface MappedColumn {
   maxLength: number;
 }
 
+interface ConsentColumn {
+  source: string;
+  index: number;
+}
+
 const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const CONSENT_YES = new Set(CONSENT_YES_VALUES);
+
+/** Whether a value of the "consent given" column means yes: `y`, `yes`, `true`, `1` or `x` (trimmed, any case). */
+export function parseConsentGiven(value: string | undefined): boolean {
+  return value !== undefined && CONSENT_YES.has(value.trim().toLowerCase());
+}
 const RECORD_ENCODER = new TextEncoder();
 
 /**
@@ -64,6 +80,8 @@ export class RowMapper {
   private readonly dynamicColumns: boolean;
   /** Upper bound of the JSON bytes of a record besides its key and values. */
   private readonly overheadBytes: number;
+  /** `null` = the job has no consent mapping: records get no `c`. */
+  private readonly consent: { agreed: ConsentColumn | null; date: ConsentColumn | null } | null;
   private resolvedColumns = -1;
 
   /**
@@ -111,11 +129,12 @@ export class RowMapper {
     this.emailIsKey = keyField === EMAIL_FIELD;
     this.hasEmail = targets.has(EMAIL_FIELD);
     this.dynamicColumns = dynamicColumns;
-    this.overheadBytes = 128 + this.mapped.reduce((sum, column) => sum + column.target.length + 6, 0);
+    this.consent = createConsentColumns(options.consentMapping, mapping);
+    this.overheadBytes = 128 + (this.consent ? 96 : 0) + this.mapped.reduce((sum, column) => sum + column.target.length + 6, 0);
 
     this.resolve();
     if (!dynamicColumns) {
-      const missing = this.mapped.filter((column) => column.index === -1);
+      const missing = [...this.mapped, ...this.consentColumns()].filter((column) => column.index === -1);
       if (missing.length > 0) {
         throw new ImportError(
           'invalidConfig',
@@ -168,7 +187,15 @@ export class RowMapper {
       return { ok: false, reason: problem.reason, field: problem.field };
     }
 
+    const consent = this.mapConsent(values);
+    if (consent === 'invalidDate') {
+      return { ok: false, reason: 'invalidDate', field: CONSENT_DATE_FIELD };
+    }
+
     const record: ChunkRecord = { r: row.rowNumber, k: key.key, v };
+    if (consent) {
+      record.c = consent;
+    }
     if (this.hasEmail && !this.emailIsKey) {
       const email = v[EMAIL_FIELD];
       if (email.length > 0 && !isValidEmail(email)) {
@@ -194,9 +221,61 @@ export class RowMapper {
         index.set(name, i);
       }
     });
-    for (const column of this.mapped) {
+    for (const column of [...this.mapped, ...this.consentColumns()]) {
       column.index = index.get(column.source) ?? -1;
     }
     this.resolvedColumns = this.columns.length;
   }
+
+  private consentColumns(): ConsentColumn[] {
+    return this.consent ? [this.consent.agreed, this.consent.date].filter((column) => column !== null) : [];
+  }
+
+  /**
+   * Consent part of a record. With a "consent given" column only rows that say yes count as agreed.
+   * A mapping with only a date column means every row agreed (the Map step does not offer that).
+   */
+  private mapConsent(values: readonly string[]): ConsentRecord | 'invalidDate' | undefined {
+    if (!this.consent) {
+      return undefined;
+    }
+
+    const { agreed, date } = this.consent;
+    const consent: ConsentRecord = { a: agreed === null ? date !== null : agreed.index !== -1 && parseConsentGiven(values[agreed.index]) };
+    const rawDate = date === null || date.index === -1 ? '' : (values[date.index] ?? '').trim();
+    if (rawDate.length > 0) {
+      const iso = parseDateToIso(rawDate, this.dateFormat);
+      if (iso === null) {
+        return 'invalidDate';
+      }
+      consent.d = iso;
+    }
+
+    return consent;
+  }
+}
+
+function createConsentColumns(
+  consentMapping: ConsentMapping | null | undefined,
+  mapping: readonly FieldMapping[],
+): { agreed: ConsentColumn | null; date: ConsentColumn | null } | null {
+  if (!consentMapping) {
+    return null;
+  }
+
+  const agreed = consentMapping.agreed ? consentMapping.agreed : null;
+  const date = consentMapping.date ? consentMapping.date : null;
+  if (agreed !== null && agreed === date) {
+    throw new ImportError('invalidConfig', 'The consent columns must be two different columns.');
+  }
+  for (const source of [agreed, date]) {
+    if (source !== null && mapping.some((m) => m.source === source)) {
+      throw new ImportError('invalidConfig', `Column '${source}' is mapped to a contact field and cannot also be a consent column.`);
+    }
+  }
+
+  return {
+    agreed: agreed === null ? null : { source: agreed, index: -1 },
+    date: date === null ? null : { source: date, index: -1 },
+  };
 }

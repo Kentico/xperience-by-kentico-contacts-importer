@@ -2,7 +2,10 @@ using System.Reflection;
 
 using CMS.Membership;
 
+using Kentico.Membership;
+
 using Kentico.Xperience.Admin.Base;
+using Kentico.Xperience.Admin.Base.Authentication;
 using Kentico.Xperience.Admin.Base.UIPages;
 
 namespace Kentico.Xperience.Labs.ContactsImporter.Admin.Tests.UIPages;
@@ -128,7 +131,7 @@ internal class ImportPagesTests
     public async Task ImportPage_Commands_Use_The_Job_From_The_Url()
     {
         var commands = new RecordingCommandService();
-        var page = new ImportPage(commands, null!, null!, null!) { JobId = "job-from-url" };
+        var page = new ImportPage(commands, new FakePermissions(), new NoUser(), null!) { JobId = "job-from-url" };
 
         await page.GetJob();
         await page.UploadChunk(new UploadChunkPayload { JobId = "job-from-payload" });
@@ -137,7 +140,7 @@ internal class ImportPagesTests
         await page.SaveOptions(new ImportOptionsDto());
         using var cancellation = new CancellationTokenSource();
         await page.ProcessNext(new ProcessNextRequest { Phase = "analyze" }, cancellation.Token);
-        await page.Confirm();
+        await page.Confirm(new ConfirmImportRequest { StatementVersion = "7" });
         await page.GetReport(new GetReportRequest { Phase = "analyze" }, cancellation.Token);
         await page.Cancel();
         await page.DeleteFiles();
@@ -145,16 +148,73 @@ internal class ImportPagesTests
         Assert.That(commands.Calls, Is.EqualTo(new[]
         {
             "GetJob job-from-url", "UploadChunk job-from-url", "TruncateChunks job-from-url", "CompleteUpload job-from-url",
-            "SaveOptions job-from-url", "ProcessNext job-from-url True", "Confirm job-from-url", "GetReport job-from-url True",
+            "SaveOptions job-from-url", "ProcessNext job-from-url True", "Confirm job-from-url 7 0 False", "GetReport job-from-url True",
             "Cancel job-from-url", "DeleteFiles job-from-url",
         }));
+    }
+
+    // A signed-in user (AdminApplicationUser) needs an initialized Xperience container, so these cases run without one:
+    // user ID 0, which the command service refuses for imports that need the consent confirmation.
+    [TestCase(true, "Confirm job 1 0 True")]
+    [TestCase(false, "Confirm job 1 0 False", Description = "the user lacks the Confirm consent permission")]
+    public async Task Confirm_Passes_The_Confirm_Consent_Permission_Of_The_Current_User(bool hasPermission, string expected)
+    {
+        var commands = new RecordingCommandService();
+        var permissions = new FakePermissions();
+        if (hasPermission)
+        {
+            permissions.Granted.Add(ContactsImporterPermissions.CONFIRM_CONSENT);
+        }
+
+        var page = new ImportPage(commands, permissions, new NoUser(), null!) { JobId = "job" };
+
+        await page.Confirm(new ConfirmImportRequest { StatementVersion = "1" });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(commands.Calls, Is.EqualTo(new[] { expected }));
+            Assert.That(permissions.Evaluated, Is.EqualTo(new[] { ContactsImporterPermissions.CONFIRM_CONSENT }), "the Import permission is the command attribute");
+        });
+    }
+
+    [Test]
+    public void Confirm_Consent_Is_Checked_By_The_Command_Not_By_Its_Attribute()
+    {
+        // The attribute permission is the same for every import; the consent permission depends on the job options,
+        // so the command evaluates it and the command service enforces it.
+        var confirm = PageCommands().Single(c => c.Command.CommandName == ImportCommands.CONFIRM_IMPORT);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(confirm.Command.Permission, Is.EqualTo(ContactsImporterPermissions.IMPORT));
+            Assert.That(confirm.Method.GetParameters().Select(p => p.ParameterType), Is.EqualTo(new[] { typeof(ConfirmImportRequest) }));
+        });
+    }
+
+    private sealed class FakePermissions : IUIPermissionEvaluator
+    {
+        public HashSet<string> Granted { get; } = [];
+
+        public List<string> Evaluated { get; } = [];
+
+        public Task<UIPermissionEvaluationResult> Evaluate(string permission)
+        {
+            Evaluated.Add(permission);
+
+            return Task.FromResult(new UIPermissionEvaluationResult(Granted.Contains(permission)));
+        }
+    }
+
+    private sealed class NoUser : IAuthenticatedUserAccessor
+    {
+        public Task<AdminApplicationUser> Get() => Task.FromResult<AdminApplicationUser>(null!);
     }
 
     [Test]
     public async Task ImportsListPage_Commands_Call_The_Command_Service()
     {
         var commands = new RecordingCommandService();
-        var page = new ImportsListPage(commands, null!, null!);
+        var page = new ImportsListPage(commands, null!, null!, new NoUser());
 
         await page.ListImports();
         await page.DeleteFiles(new ImportJobRequest { JobId = "job-1" });
@@ -236,7 +296,7 @@ internal class ImportPagesTests
             return new ImportJobResponse { Code = ImportCommandCodes.OK };
         }
 
-        public ImportProgressDto ProcessNext(string? jobId, ProcessNextRequest? request, CancellationToken cancellationToken = default)
+        public ImportProgressDto ProcessNext(string? jobId, ProcessNextRequest? request, int userId, CancellationToken cancellationToken = default)
         {
             // The page passes the request's cancellation token on.
             Calls.Add($"ProcessNext {jobId} {cancellationToken.CanBeCanceled}");
@@ -244,9 +304,9 @@ internal class ImportPagesTests
             return new ImportProgressDto { Outcome = "processed", Phase = "analyze", State = "Analyzing", Aggregates = new ImportAggregatesDto() };
         }
 
-        public ImportJobResponse Confirm(string? jobId)
+        public ImportJobResponse Confirm(string? jobId, ConfirmImportRequest? request, int userId, bool canConfirmConsent)
         {
-            Calls.Add($"Confirm {jobId}");
+            Calls.Add($"Confirm {jobId} {request?.StatementVersion} {userId} {canConfirmConsent}");
 
             return new ImportJobResponse { Code = ImportCommandCodes.OK };
         }
@@ -258,14 +318,14 @@ internal class ImportPagesTests
             return new GetReportResponse { Code = ImportCommandCodes.OK };
         }
 
-        public ImportActionResponse Cancel(string? jobId)
+        public ImportActionResponse Cancel(string? jobId, int userId)
         {
             Calls.Add($"Cancel {jobId}");
 
             return new ImportActionResponse { Code = ImportCommandCodes.OK };
         }
 
-        public ImportActionResponse DeleteFiles(string? jobId)
+        public ImportActionResponse DeleteFiles(string? jobId, int userId)
         {
             Calls.Add($"DeleteFiles {jobId}");
 

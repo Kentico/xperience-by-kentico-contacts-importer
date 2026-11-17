@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -12,7 +14,9 @@ internal sealed class ImportProcessor(
     IImportCacheInvalidator cacheInvalidator,
     IOptions<ContactsImporterOptions> options,
     TimeProvider timeProvider,
-    ILogger<ImportProcessor> logger) : IImportProcessor
+    ILogger<ImportProcessor> logger,
+    IImportAudienceResolver? audienceResolver = null,
+    IImportEventPublisher? events = null) : IImportProcessor
 {
     internal const string UnexpectedError = "The import stopped because of an unexpected error. See the event log for details.";
     internal const string UnreadableJobError = "The import configuration cannot be read. Start a new import.";
@@ -28,11 +32,26 @@ internal sealed class ImportProcessor(
     private static readonly EventId failedEvent = new(0, "CONTACT_IMPORT_FAILURE");
     private static readonly EventId transientEvent = new(0, "CONTACT_IMPORT_RETRY");
     private static readonly EventId rejectedEvent = new(0, "CONTACT_IMPORT_REJECTED");
+    private static readonly EventId attestationEvent = new(0, "CONTACT_IMPORT_ATTESTATION");
 
     // Timeout, deadlock victim, connection and availability errors, database read-only: the same call succeeds later.
     private static readonly HashSet<int> transientSqlErrors = [-2, 20, 64, 233, 1205, 3906, 3960, 4060, 4221, 10053, 10054, 10060, 10928, 10929, 40143, 40197, 40501, 40540, 40613, 49918, 49919, 49920];
 
-    public ImportProgress ProcessNext(Guid jobId, ImportPhase phase, string? driverToken, bool takeOver, CancellationToken cancellationToken = default)
+    public ImportProgress ProcessNext(Guid jobId, ImportPhase phase, string? driverToken, bool takeOver, CancellationToken cancellationToken = default, int? userId = null)
+    {
+        var call = new ProcessCall(userId);
+        var progress = ProcessNext(jobId, phase, driverToken, takeOver, call, cancellationToken);
+
+        // After the job lock is released: handlers neither run on its connection nor extend the time it is held.
+        if (call.Reached is { } reached)
+        {
+            events?.Publish(reached.Job, reached.Status, reached.Outcome, reached.IsDryRun, userId, reached.Audience);
+        }
+
+        return progress;
+    }
+
+    private ImportProgress ProcessNext(Guid jobId, ImportPhase phase, string? driverToken, bool takeOver, ProcessCall call, CancellationToken cancellationToken)
     {
         ImportJob? job;
         try
@@ -41,6 +60,7 @@ internal sealed class ImportProcessor(
         }
         catch (InvalidDataException ex)
         {
+            // Without a readable configuration there is nothing to report in an event; the failure is in the event log.
             return store.ReadStatus(jobId) is { } unreadable ? Fail(jobId, phase, unreadable, UnreadableJobError, ex) : NotFound(phase);
         }
 
@@ -52,7 +72,7 @@ internal sealed class ImportProcessor(
         if (phase != ImportPhase.Execute)
         {
             // The analysis writes nothing to the database; calls that overlap are sorted out by the call ID in the status.
-            return Process(job, phase, driverToken, takeOver, cancellationToken);
+            return Process(job, phase, driverToken, takeOver, call, cancellationToken);
         }
 
         // One call at a time imports a job, enforced by the database: a call repeated by the browser (lost response,
@@ -76,7 +96,7 @@ internal sealed class ImportProcessor(
 
         using (jobLock)
         {
-            return Process(job, phase, driverToken, takeOver, cancellationToken);
+            return Process(job, phase, driverToken, takeOver, call, cancellationToken);
         }
     }
 
@@ -103,7 +123,7 @@ internal sealed class ImportProcessor(
         return Progress(ImportProcessOutcome.TransientError, phase, status, driverToken, BusyError);
     }
 
-    private ImportProgress Process(ImportJob job, ImportPhase phase, string? driverToken, bool takeOver, CancellationToken cancellationToken)
+    private ImportProgress Process(ImportJob job, ImportPhase phase, string? driverToken, bool takeOver, ProcessCall call, CancellationToken cancellationToken)
     {
         var jobId = job.JobId;
         var settings = options.Value;
@@ -127,7 +147,7 @@ internal sealed class ImportProcessor(
             {
                 try
                 {
-                    ImportProcessingContext.TryCreate(job, schemaProvider.GetMappableFields(), out context, out contextError);
+                    context = CreateContext(job, phase, out contextError);
                     contextChecked = true;
                 }
                 catch (Exception ex)
@@ -138,8 +158,9 @@ internal sealed class ImportProcessor(
                 }
             }
 
-            // The job does not match the contact class (a mapped field is gone, the key or source field is not usable).
-            // Unless the import is already writing contacts, the job goes back to Uploaded with the reason and keeps its
+            // The job cannot be processed as configured: it does not match the contact class (a mapped field is gone, the
+            // key or source field is not usable), its recipient list or consent is gone, or it needs an attestation
+            // of the consent statement and has none. Unless the import is already writing contacts, the job goes back to Uploaded with the reason and keeps its
             // uploaded data: the marketer changes the options or the mapping instead of uploading the file again.
             if (context is null && current.State != ImportJobState.Running)
             {
@@ -157,7 +178,7 @@ internal sealed class ImportProcessor(
         {
             return IsTransient(schemaException)
                 ? Transient(jobId, phase, status, driverToken, schemaException)
-                : Fail(jobId, phase, status, UnexpectedError, schemaException);
+                : Fail(jobId, phase, status, UnexpectedError, schemaException, null, call, job);
         }
 
         if (decision.Stop is { } stop)
@@ -173,16 +194,55 @@ internal sealed class ImportProcessor(
         var driver = new DriverIdentity(decision.Token!, decision.CallId!);
         if (context is null)
         {
-            // The contact class changed while the import was writing contacts.
-            return Fail(jobId, phase, status, contextError!, null, driver);
+            // The contact class, the recipient list or the consent changed while the import was writing contacts.
+            return Fail(jobId, phase, status, contextError!, null, driver, call, job);
         }
 
         if (decision.Started)
         {
-            logger.LogInformation(startedEvent, "Contact import {JobId}: {Phase} started ({Rows} rows in {Chunks} chunks).", jobId, phase, status.Profile.RowsValid, status.Chunks.Count);
+            logger.LogInformation(
+                startedEvent,
+                "Contact import {JobId}: {Phase} started by user {UserId} (import created by user {CreatedByUserId}): {Rows} rows in {Chunks} chunks, recipient list {RecipientListId}, consent {ConsentId}.",
+                jobId,
+                phase,
+                FormatUser(call.UserId),
+                job.CreatedByUserId,
+                status.Profile.RowsValid,
+                status.Chunks.Count,
+                FormatId(context.Audience.RecipientListId),
+                FormatId(context.Audience.ConsentId));
         }
 
-        return Run(job, context, phase, status, driver, cancellationToken);
+        return Run(job, context, phase, status, driver, call, cancellationToken);
+    }
+
+    /// <summary>
+    /// Builds the processing context of a call. Fails (message without contact data) when the import must not run
+    /// as configured: it needs an attestation of the consent statement and has none for the current statement, its
+    /// recipient list or consent does not exist, or the job does not match the contact class.
+    /// </summary>
+    private ImportProcessingContext? CreateContext(ImportJob job, ImportPhase phase, out string? error)
+    {
+        // The analysis writes nothing, so only the import needs the attestation.
+        if (phase == ImportPhase.Execute && !ImportAttestationPolicy.IsSatisfied(job.Options, job.Attestation))
+        {
+            error = ImportAttestationPolicy.MissingError;
+
+            return null;
+        }
+
+        // Without a resolver nothing vouches for the list and the consent: the context then refuses a job that uses them.
+        var resolution = audienceResolver?.Resolve(job.Options) ?? new ImportAudienceResolution(ImportAudience.None);
+        if (resolution.Audience is null)
+        {
+            error = resolution.Error ?? UnexpectedError;
+
+            return null;
+        }
+
+        ImportProcessingContext.TryCreate(job, schemaProvider.GetMappableFields(), out var context, out error, resolution.Audience);
+
+        return context;
     }
 
     public ImportProgress? GetProgress(Guid jobId)
@@ -201,9 +261,35 @@ internal sealed class ImportProcessor(
         }
 
         var utcNow = UtcNow();
+        bool required = ImportAttestationPolicy.IsRequired(job.Options);
+        bool attestationStored = false;
+        if (required)
+        {
+            var before = store.ReadStatus(jobId);
+            if (before is null)
+            {
+                return new ImportConfirmResult(ImportConfirmOutcome.JobNotFound);
+            }
+
+            if (before.State == ImportJobState.Analyzed && !IsAnalysisExpired(before, utcNow, options.Value))
+            {
+                if (!ImportAttestationPolicy.IsSatisfied(job.Options, attestation))
+                {
+                    return new ImportConfirmResult(ImportConfirmOutcome.AttestationRequired, before);
+                }
+
+                // Stored before the job becomes Confirmed, so a confirmed job that needs an attestation always has it
+                // (the import checks again when it starts).
+                store.WriteJob(job with { Attestation = attestation });
+                attestationStored = true;
+            }
+        }
+
         var outcome = ImportConfirmOutcome.InvalidState;
+        bool confirmedNow = false;
         var status = store.UpdateStatus(jobId, current =>
         {
+            confirmedNow = false;
             if (current.State == ImportJobState.Confirmed)
             {
                 outcome = ImportConfirmOutcome.Confirmed;
@@ -222,7 +308,15 @@ internal sealed class ImportProcessor(
                 return ImportJobStateMachine.Transition(current, ImportJobState.Uploaded, utcNow);
             }
 
+            // A job that needs an attestation is confirmed only by the call that stored one.
+            if (required && !attestationStored)
+            {
+                outcome = ImportConfirmOutcome.AttestationRequired;
+                return current;
+            }
+
             outcome = ImportConfirmOutcome.Confirmed;
+            confirmedNow = true;
             return ImportJobStateMachine.Transition(current, ImportJobState.Confirmed, utcNow);
         });
         if (status is null)
@@ -230,15 +324,36 @@ internal sealed class ImportProcessor(
             return new ImportConfirmResult(ImportConfirmOutcome.JobNotFound);
         }
 
-        if (outcome == ImportConfirmOutcome.Confirmed && attestation is not null && job.Attestation != attestation)
+        if (attestationStored && outcome != ImportConfirmOutcome.Confirmed)
+        {
+            // Not confirmed after all (the state changed meanwhile): the attestation does not stay behind.
+            store.WriteJob(job with { Attestation = null });
+        }
+        else if (!required && outcome == ImportConfirmOutcome.Confirmed && attestation is not null && job.Attestation != attestation)
         {
             store.WriteJob(job with { Attestation = attestation });
+        }
+
+        if (confirmedNow && required)
+        {
+            logger.LogInformation(
+                attestationEvent,
+                "Contact import {JobId}: user {UserId} confirmed the import and attested documented consent (statement version {StatementVersion}). Recipient list {RecipientListId}, unsubscribed contacts: {Unsubscribed}, bounced addresses: {BouncedAddress}; consent {ConsentId}, mode {Consent}, revoked consent: {RevokedConsent}.",
+                jobId,
+                attestation!.UserId,
+                attestation.StatementVersion,
+                FormatId(job.Options.RecipientListId),
+                job.Options.Unsubscribed,
+                job.Options.BouncedAddress,
+                FormatId(job.Options.Consent == ConsentMode.None ? null : job.Options.ConsentId),
+                job.Options.Consent,
+                job.Options.RevokedConsent);
         }
 
         return new ImportConfirmResult(outcome, status);
     }
 
-    public ImportCancelResult Cancel(Guid jobId)
+    public ImportCancelResult Cancel(Guid jobId, int? userId = null)
     {
         var utcNow = UtcNow();
         var outcome = ImportCancelOutcome.AlreadyFinished;
@@ -260,8 +375,15 @@ internal sealed class ImportProcessor(
 
         if (outcome == ImportCancelOutcome.Cancelled)
         {
-            logger.LogInformation(cancelledEvent, "Contact import {JobId} was cancelled after {Rows} processed rows.", jobId, status.Aggregates.GetValueOrDefault(ImportAggregateKeys.Rows));
+            logger.LogInformation(
+                cancelledEvent,
+                "Contact import {JobId} was cancelled by user {UserId} after {Rows} processed rows ({Phase}).",
+                jobId,
+                FormatUser(userId),
+                status.Aggregates.GetValueOrDefault(ImportAggregateKeys.Rows),
+                status.Checkpoint.Phase);
             TryDeleteChunks(jobId);
+            PublishCancelled(jobId, status, userId);
         }
 
         return new ImportCancelResult(outcome, status);
@@ -376,7 +498,33 @@ internal sealed class ImportProcessor(
 
     private static ImportProgress NotFound(ImportPhase phase) => new() { Outcome = ImportProcessOutcome.JobNotFound, Phase = phase };
 
-    private ImportProgress Run(ImportJob job, ImportProcessingContext context, ImportPhase phase, ImportJobStatus status, DriverIdentity driver, CancellationToken cancellationToken)
+    /// <summary>
+    /// Raises the event of a cancelled job. Nothing was written when the import (execute phase) never started.
+    /// </summary>
+    private void PublishCancelled(Guid jobId, ImportJobStatus status, int? userId)
+    {
+        if (events is null)
+        {
+            return;
+        }
+
+        ImportJob? job;
+        try
+        {
+            job = store.ReadJob(jobId);
+        }
+        catch (InvalidDataException)
+        {
+            job = null;
+        }
+
+        if (job is not null)
+        {
+            events.Publish(job, status, ContactImportStatus.Cancelled, status.Checkpoint.Phase != ImportPhase.Execute, userId);
+        }
+    }
+
+    private ImportProgress Run(ImportJob job, ImportProcessingContext context, ImportPhase phase, ImportJobStatus status, DriverIdentity driver, ProcessCall call, CancellationToken cancellationToken)
     {
         var jobId = job.JobId;
         var settings = options.Value;
@@ -387,7 +535,7 @@ internal sealed class ImportProcessor(
             DeleteReportParts(jobId, phase, status.Checkpoint.LastRow);
 
             var planner = new BatchPlanner(context);
-            var report = new ImportReportPartWriter(store, jobId, phase, job.Options.ReportIncludesKey);
+            var report = new ImportReportPartWriter(store, jobId, phase, ImportReportColumns.From(job.Options));
             var startedUtc = UtcNow();
 
             while (true)
@@ -395,7 +543,7 @@ internal sealed class ImportProcessor(
                 var checkpoint = status.Checkpoint;
                 if (checkpoint.ChunkIndex >= status.Chunks.Count)
                 {
-                    return Finish(job, phase, status, driver);
+                    return Finish(job, context, phase, status, driver, call);
                 }
 
                 var batchStartedUtc = UtcNow();
@@ -410,7 +558,8 @@ internal sealed class ImportProcessor(
                 var plan = PlanBatch(planner, context, records);
 
                 // Dry run = same code path with the writes off (PLAN D2).
-                if (phase == ImportPhase.Execute && (plan.Creates.Count > 0 || plan.Updates.Count > 0))
+                AudienceResult? audience = null;
+                if (phase == ImportPhase.Execute && HasWrites(plan))
                 {
                     // The lookup can take long on a busy database. Before anything is written, make sure this call
                     // still drives the job (not cancelled, not taken over, not replaced by a repeated call) and
@@ -425,23 +574,34 @@ internal sealed class ImportProcessor(
 
                     try
                     {
-                        repository.Write(context, plan.Creates, plan.Updates, timeProvider.GetLocalNow().DateTime);
+                        audience = WriteBatch(context, plan);
                     }
-                    catch (Exception ex) when (context.ReferenceGroups.Count > 0 && IsConstraintConflict(ex))
+                    catch (Exception ex) when ((context.ReferenceGroups.Count > 0 || context.HasAudience) && IsConstraintConflict(ex))
                     {
-                        // A referenced object (country, status, user, ...) was deleted after the batch was checked.
-                        // The write was rolled back as a whole, so the batch is planned once more: the check now skips
-                        // the rows that refer to it. A second conflict is not this race and fails the job as before.
+                        // A referenced object (country, status, user, ...) was deleted after the batch was checked, or
+                        // a contact was deleted before its membership or agreement was inserted. The write was rolled
+                        // back as a whole, so the batch is planned once more: the checks now see what is gone.
+                        // A second conflict is not this race and fails the job as before.
                         LogSafely(LogLevel.Warning, transientEvent, jobId, phase, "a referenced object was removed while a batch was written; the batch is checked and written again", ex);
                         plan = PlanBatch(planner, context, records);
-                        if (plan.Creates.Count > 0 || plan.Updates.Count > 0)
+                        if (HasWrites(plan))
                         {
-                            repository.Write(context, plan.Creates, plan.Updates, timeProvider.GetLocalNow().DateTime);
+                            audience = WriteBatch(context, plan);
                         }
                     }
                 }
+                else if (plan.Targets.Count > 0)
+                {
+                    // The analysis decides from the same state query with the same code; it only inserts nothing.
+                    audience = AudiencePlanner.Decide(context, plan.Targets, repository.FindAudienceStates(context, plan.Targets), timeProvider.GetLocalNow().DateTime);
+                }
 
-                report.Append(plan.Rows);
+                if (audience is not null)
+                {
+                    plan.Counts.Add(audience.Counts);
+                }
+
+                report.Append(audience?.Annotate(plan.Rows) ?? plan.Rows);
 
                 long offset = checkpoint.RowOffset + records.Count;
                 bool chunkDone = offset >= chunk.Rows;
@@ -478,7 +638,7 @@ internal sealed class ImportProcessor(
             reader?.Dispose();
             reader = null;
 
-            return Fail(jobId, phase, status, ex.Message, ex, driver);
+            return Fail(jobId, phase, status, ex.Message, ex, driver, call, job);
         }
         catch (Exception ex) when (IsTransient(ex))
         {
@@ -489,12 +649,28 @@ internal sealed class ImportProcessor(
             reader?.Dispose();
             reader = null;
 
-            return Fail(jobId, phase, status, UnexpectedError, ex, driver);
+            return Fail(jobId, phase, status, UnexpectedError, ex, driver, call, job);
         }
         finally
         {
             reader?.Dispose();
         }
+    }
+
+    private static bool HasWrites(BatchPlan plan) => plan.Creates.Count > 0 || plan.Updates.Count > 0 || plan.Targets.Count > 0;
+
+    /// <summary>
+    /// Writes a batch. The recipient list and consent decisions are made inside the write transaction, from the
+    /// state read there (<see cref="IContactImportRepository.Write"/>).
+    /// </summary>
+    private AudienceResult? WriteBatch(ImportProcessingContext context, BatchPlan plan)
+    {
+        var now = timeProvider.GetLocalNow().DateTime;
+        var audience = plan.Targets.Count > 0
+            ? new AudienceWrite(plan.Targets, states => AudiencePlanner.Decide(context, plan.Targets, states, now))
+            : null;
+
+        return repository.Write(context, plan.Creates, plan.Updates, now, audience);
     }
 
     private BatchPlan PlanBatch(BatchPlanner planner, ImportProcessingContext context, List<ImportRecord> records)
@@ -588,7 +764,7 @@ internal sealed class ImportProcessor(
         return saved;
     }
 
-    private ImportProgress Finish(ImportJob job, ImportPhase phase, ImportJobStatus status, DriverIdentity driver)
+    private ImportProgress Finish(ImportJob job, ImportProcessingContext context, ImportPhase phase, ImportJobStatus status, DriverIdentity driver, ProcessCall call)
     {
         var jobId = job.JobId;
         if (phase == ImportPhase.Execute)
@@ -639,15 +815,27 @@ internal sealed class ImportProcessor(
         var totals = ImportAggregates.From(updated.Aggregates);
         logger.LogInformation(
             finishedEvent,
-            "Contact import {JobId}: {Phase} finished. Rows {Rows}, created {Created}, updated {Updated}, unchanged {Unchanged}, skipped {Skipped}, duplicate rows {DuplicateRows}.",
+            "Contact import {JobId}: {Phase} finished by user {UserId} (import created by user {CreatedByUserId}). Rows {Rows}, created {Created}, updated {Updated}, unchanged {Unchanged}, skipped {Skipped}, duplicate rows {DuplicateRows}. Recipient list {RecipientListId}: added {ListAdded}, resubscribed {ListResubscribed}, kept unsubscribed {ListKeptUnsubscribed}. Consent {ConsentId}: recorded {ConsentRecorded}, agreed again {ConsentReAgreed}, kept revoked {ConsentKeptRevoked}.",
             jobId,
             phase,
+            FormatUser(call.UserId),
+            job.CreatedByUserId,
             totals.Rows,
             totals.Created,
             totals.Updated,
             totals.Unchanged,
             totals.Skipped,
-            totals.DuplicateRows);
+            totals.DuplicateRows,
+            FormatId(context.Audience.RecipientListId),
+            totals.ListAdded,
+            totals.ListResubscribed,
+            totals.ListKeptUnsubscribed,
+            FormatId(context.Audience.ConsentId),
+            totals.ConsentRecorded,
+            totals.ConsentReAgreed,
+            totals.ConsentKeptRevoked);
+
+        call.Reach(job, updated, phase == ImportPhase.Analyze ? ContactImportStatus.Analyzed : ContactImportStatus.Completed, phase == ImportPhase.Analyze, context.Audience);
 
         return Progress(ImportProcessOutcome.PhaseFinished, phase, updated, null);
     }
@@ -667,21 +855,26 @@ internal sealed class ImportProcessor(
     /// Fails the job. A call that knows its driver identity fails the job only while it still drives it: an older call
     /// that was replaced or taken over must not end the job for the driver that continues it.
     /// </summary>
-    private ImportProgress Fail(Guid jobId, ImportPhase phase, ImportJobStatus status, string safeMessage, Exception? exception, DriverIdentity? driver = null)
+    private ImportProgress Fail(Guid jobId, ImportPhase phase, ImportJobStatus status, string safeMessage, Exception? exception, DriverIdentity? driver = null, ProcessCall? call = null, ImportJob? job = null)
     {
         var utcNow = UtcNow();
+        bool failedNow = false;
         var updated = store.UpdateStatus(jobId, current =>
-            ImportJobStateMachine.IsTerminal(current.State) || (driver is not null && !IsDrivenBy(current, phase, driver))
-                ? current
-                : ImportJobStateMachine.Transition(current, ImportJobState.Failed, utcNow, safeMessage)) ?? status;
+        {
+            failedNow = !ImportJobStateMachine.IsTerminal(current.State) && (driver is null || IsDrivenBy(current, phase, driver));
+
+            return failedNow ? ImportJobStateMachine.Transition(current, ImportJobState.Failed, utcNow, safeMessage) : current;
+        }) ?? status;
 
         // Exception messages of the database can quote contact data (truncated or duplicate values), so only the
         // exception types, SQL error numbers and the stack trace are logged.
         logger.LogError(
             failedEvent,
-            "Contact import {JobId}: {Phase} failed after row {LastRow} (chunk {Chunk}). {Message} Error: {Error}. Stack trace: {StackTrace}",
+            "Contact import {JobId}: {Phase} failed after row {LastRow} (chunk {Chunk}); request of user {UserId}, import created by user {CreatedByUserId}. {Message} Error: {Error}. Stack trace: {StackTrace}",
             jobId,
             phase,
+            FormatUser(call?.UserId),
+            job is null ? "unknown" : FormatId(job.CreatedByUserId),
             updated.Checkpoint.LastRow,
             updated.Checkpoint.ChunkIndex,
             safeMessage,
@@ -694,6 +887,11 @@ internal sealed class ImportProcessor(
         }
 
         TryDeleteChunks(jobId);
+        if (failedNow && job is not null)
+        {
+            // A failed analysis wrote nothing; a failed import may have written the batches before the failure.
+            call?.Reach(job, updated, ContactImportStatus.Failed, phase == ImportPhase.Analyze, null);
+        }
 
         return Progress(ImportProcessOutcome.Failed, phase, updated, null);
     }
@@ -777,6 +975,26 @@ internal sealed class ImportProcessor(
     }
 
     private DateTime UtcNow() => timeProvider.GetUtcNow().UtcDateTime;
+
+    private static string FormatUser(int? userId) => userId is { } id ? id.ToString(CultureInfo.InvariantCulture) : "unknown";
+
+    private static string FormatId(int? id) => id is { } value ? value.ToString(CultureInfo.InvariantCulture) : "none";
+
+    /// <summary>
+    /// One <see cref="ProcessNext(Guid, ImportPhase, string?, bool, CancellationToken, int?)"/> call: who asked, and
+    /// the outcome the job reached in it, if any, which is reported in an event when the call is done.
+    /// </summary>
+    private sealed class ProcessCall(int? userId)
+    {
+        public int? UserId { get; } = userId;
+
+        public ReachedOutcome? Reached { get; private set; }
+
+        public void Reach(ImportJob job, ImportJobStatus status, ContactImportStatus outcome, bool isDryRun, ImportAudience? audience) =>
+            Reached = new ReachedOutcome(job, status, outcome, isDryRun, audience);
+    }
+
+    private sealed record ReachedOutcome(ImportJob Job, ImportJobStatus Status, ContactImportStatus Outcome, bool IsDryRun, ImportAudience? Audience);
 
     /// <param name="Token">Driver token the browser sends with every call.</param>
     /// <param name="CallId">ID of this call (<see cref="ImportJobStatus.DriverCallId"/>).</param>

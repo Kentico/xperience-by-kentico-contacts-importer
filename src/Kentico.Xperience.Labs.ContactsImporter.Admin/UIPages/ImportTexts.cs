@@ -34,6 +34,15 @@ internal static class ImportTextKeys
     public const string SOURCE_FIELD_MAPPED = PREFIX + "sourcefieldmapped";
     public const string ANALYSIS_EXPIRED = PREFIX + "analysisexpired";
     public const string NO_REPORT = PREFIX + "noreport";
+    public const string CONSENT_COLUMN_REQUIRED = PREFIX + "consentcolumnrequired";
+    public const string CONSENT_PERMISSION_REQUIRED = PREFIX + "consentpermissionrequired";
+    public const string ATTESTATION_REQUIRED = PREFIX + "attestationrequired";
+
+    /// <summary>
+    /// Consent statement of the Run confirmation dialog (PLAN D26). When the text changes, the statement version
+    /// (<see cref="ImportAttestationPolicy.StatementVersion"/>) must be bumped with it.
+    /// </summary>
+    public const string ATTESTATION_STATEMENT = ContactsImporterResources.KEY_PREFIX + "attestation.statement";
 }
 
 /// <summary>

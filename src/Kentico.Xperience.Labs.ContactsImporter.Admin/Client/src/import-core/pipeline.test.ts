@@ -64,6 +64,45 @@ function bigCsv(rows: number, seed = 3): string {
   return lines.join('\r\n');
 }
 
+describe('import pipeline: consent columns', () => {
+  const csv =
+    'Email,First Name,Opt in,Opt in date,Secret\n' +
+    'a@example.com,Ann,Yes,2025-03-01,s3cret-1\n' +
+    'b@example.com,Bob,no,2025-03-02,s3cret-2\n' +
+    'c@example.com,Cid,,,s3cret-3\n' +
+    'd@example.com,Dee,x,someday,s3cret-4\n' +
+    'e@example.com,Eve,TRUE,,s3cret-5\n';
+
+  it('uploads the consent part with every record of a job with consent columns', async () => {
+    const { chunks, records, result } = await runPipeline(csv, { ...EMAIL_KEY, consentMapping: { agreed: 'Opt in', date: 'Opt in date' } });
+
+    expect(records).toEqual([
+      { r: 1, k: 'a@example.com', v: { ContactEmail: 'a@example.com', ContactFirstName: 'Ann' }, c: { a: true, d: '2025-03-01' } },
+      { r: 2, k: 'b@example.com', v: { ContactEmail: 'b@example.com', ContactFirstName: 'Bob' }, c: { a: false, d: '2025-03-02' } },
+      { r: 3, k: 'c@example.com', v: { ContactEmail: 'c@example.com', ContactFirstName: 'Cid' }, c: { a: false } },
+      { r: 5, k: 'e@example.com', v: { ContactEmail: 'e@example.com', ContactFirstName: 'Eve' }, c: { a: true } },
+    ]);
+    expect(result.rejectedRows).toEqual([{ rowNumber: 4, reason: 'invalidDate', field: 'consent date' }]);
+
+    // the bytes the server gets: `c` after the contact values, nothing else of the file
+    const ndjson = new TextDecoder().decode(await gunzipBytes(fromBase64(chunks[0].payload.data)));
+    expect(ndjson.split('\n')[0]).toBe(
+      '{"r":1,"k":"a@example.com","v":{"ContactEmail":"a@example.com","ContactFirstName":"Ann"},"c":{"a":true,"d":"2025-03-01"}}',
+    );
+    expect(ndjson.split('\n')[2]).toBe('{"r":3,"k":"c@example.com","v":{"ContactEmail":"c@example.com","ContactFirstName":"Cid"},"c":{"a":false}}');
+    expect(ndjson).not.toContain('s3cret');
+    expect(ndjson).not.toContain('Opt in');
+  });
+
+  it('uploads no consent part for a job without consent columns', async () => {
+    const { chunks, records } = await runPipeline(csv, EMAIL_KEY);
+
+    expect(records).toHaveLength(5);
+    expect(records.every((record) => !('c' in record))).toBe(true);
+    expect(new TextDecoder().decode(await gunzipBytes(fromBase64(chunks[0].payload.data)))).not.toContain('"c"');
+  });
+});
+
 describe('import pipeline', () => {
   it('maps, normalizes and chunks a file; only mapped columns leave', async () => {
     const csv =

@@ -30,7 +30,37 @@ export interface ChunkRecord {
   v: Record<string, string>;
   /** Flags; omitted when empty. */
   f?: RecordFlag[];
+  /** Consent columns of the row; on every record when the job has a `consentMapping`, otherwise never. */
+  c?: ConsentRecord;
 }
+
+/** Consent columns of one row (`ChunkRecord.c`). */
+export interface ConsentRecord {
+  /**
+   * The "consent given" column says yes; false when it holds anything else or nothing. When only a
+   * consent date column is mapped, every row counts as consent given (same rule as the server model).
+   */
+  a: boolean;
+  /** Consent date as ISO 8601 date or date-time; omitted when the column is not mapped or the value is empty. */
+  d?: string;
+}
+
+/**
+ * `job.json` consent mapping: source columns that say whether and when the contact of a row gave
+ * consent. Not contact fields; used only with the consent option "column override".
+ */
+export interface ConsentMapping {
+  /** Source column that says whether consent was given. Not set: every row counts as consent given. */
+  agreed?: string | null;
+  /** Source column with the date consent was given. */
+  date?: string | null;
+}
+
+/** Name used for the consent date column where a target field name is reported (rejected rows). */
+export const CONSENT_DATE_FIELD = 'consent date';
+
+/** Values of the "consent given" column that mean yes (after trim, any letter case). Everything else is no. */
+export const CONSENT_YES_VALUES: readonly string[] = ['y', 'yes', 'true', '1', 'x'];
 
 /** `UPLOAD_CHUNK` page command payload. */
 export interface UploadChunkPayload {

@@ -64,6 +64,8 @@ internal class ImportProcessCommandTests
             new ImportReportReader(temp.Store),
             gate,
             new ResourceImportTexts(),
+            new FakeChoiceProvider(),
+            new FakeChoiceProvider(),
             temp.Options,
             time);
     }
@@ -100,8 +102,20 @@ internal class ImportProcessCommandTests
         string? sourceField = null,
         string? sourceValue = null,
         string sourceStamp = "createdOnly",
-        bool reportIncludesKey = false) => new()
+        bool reportIncludesKey = false,
+        int? recipientListId = null,
+        string? unsubscribed = "keep",
+        string? bouncedAddress = "addAndReport",
+        string? consent = "none",
+        int? consentId = null,
+        string? revokedConsent = "keep") => new()
         {
+            RecipientListId = recipientListId,
+            Unsubscribed = unsubscribed,
+            BouncedAddress = bouncedAddress,
+            Consent = consent,
+            ConsentId = consentId,
+            RevokedConsent = revokedConsent,
             NewContacts = newContacts,
             ExistingContacts = existingContacts,
             EmptyValues = emptyValues,
@@ -121,7 +135,7 @@ internal class ImportProcessCommandTests
     {
         for (int i = 0; i < 1000; i++)
         {
-            var progress = service.ProcessNext(id, Next(phase, token));
+            var progress = service.ProcessNext(id, Next(phase, token), UserId);
             if (progress.Outcome != "processed")
             {
                 return progress;
@@ -132,6 +146,9 @@ internal class ImportProcessCommandTests
 
         throw new InvalidOperationException("The phase did not finish.");
     }
+
+    /// <summary><c>CONFIRM_IMPORT</c> of an import that needs no consent confirmation, by a user without that permission.</summary>
+    private ImportJobResponse Confirm() => service.Confirm(id, new ConfirmImportRequest(), UserId, canConfirmConsent: false);
 
     private ImportJobState State() => temp.Store.ReadStatus(jobId)!.State;
 
@@ -202,19 +219,30 @@ internal class ImportProcessCommandTests
     }
 
     [Test]
-    public void SaveOptions_Keeps_Options_Of_Later_Versions()
+    public void SaveOptions_Without_The_List_And_Consent_Options_Stores_The_Ones_That_Change_Nothing()
     {
         Upload();
         var job = temp.Store.ReadJob(jobId)!;
-        temp.Store.WriteJob(job with { Options = job.Options with { RecipientListId = 7, Unsubscribed = UnsubscribedBehavior.ReportOnly } });
+        temp.Store.WriteJob(job with
+        {
+            Options = job.Options with
+            {
+                RecipientListId = FakeChoiceProvider.NewsletterListId,
+                Unsubscribed = UnsubscribedBehavior.Resubscribe,
+                Consent = ConsentMode.Blanket,
+                ConsentId = FakeChoiceProvider.SignupConsentId,
+                RevokedConsent = RevokedConsentBehavior.ReAgree,
+            },
+        });
 
-        service.SaveOptions(id, Options(emptyValues: "clear"));
+        // A request of a client that does not know these options: they are not kept from the stored job.
+        var response = service.SaveOptions(id, Options(emptyValues: "clear", unsubscribed: null, bouncedAddress: null, consent: null, revokedConsent: null));
 
         Assert.Multiple(() =>
         {
-            Assert.That(StoredOptions().RecipientListId, Is.EqualTo(7));
-            Assert.That(StoredOptions().Unsubscribed, Is.EqualTo(UnsubscribedBehavior.ReportOnly));
-            Assert.That(StoredOptions().EmptyValues, Is.EqualTo(EmptyValuesBehavior.Clear));
+            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK));
+            Assert.That(StoredOptions(), Is.EqualTo(new ImportOptions { EmptyValues = EmptyValuesBehavior.Clear }));
+            Assert.That(response.Job!.AttestationRequired, Is.False);
         });
     }
 
@@ -308,7 +336,7 @@ internal class ImportProcessCommandTests
     {
         Upload();
         Drive("analyze");
-        Assert.That(service.Confirm(id).Code, Is.EqualTo(ImportCommandCodes.OK));
+        Assert.That(Confirm().Code, Is.EqualTo(ImportCommandCodes.OK));
         var job = temp.Store.ReadJob(jobId)!;
         temp.Store.WriteJob(job with { Attestation = new ImportAttestation { UserId = UserId, Utc = TestData.Now, StatementVersion = "1" } });
 
@@ -387,7 +415,7 @@ internal class ImportProcessCommandTests
         temp.Options.Value.ProcessingTimeBudgetSeconds = 0;
         Upload(rows: 25);
 
-        var first = service.ProcessNext(id, Next("analyze"));
+        var first = service.ProcessNext(id, Next("analyze"), UserId);
         var last = Drive("analyze", first.DriverToken);
         var job = service.GetJob(id);
 
@@ -419,8 +447,8 @@ internal class ImportProcessCommandTests
     {
         Upload(rows: 25);
         Drive("analyze");
-        var beforeConfirm = service.ProcessNext(id, Next("execute"));
-        var confirmed = service.Confirm(id);
+        var beforeConfirm = service.ProcessNext(id, Next("execute"), UserId);
+        var confirmed = Confirm();
 
         var last = Drive("execute");
         var job = service.GetJob(id);
@@ -454,12 +482,12 @@ internal class ImportProcessCommandTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(service.ProcessNext(id, null).Outcome, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
-            Assert.That(service.ProcessNext(id, Next("Analyze")).Outcome, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
-            Assert.That(service.ProcessNext(id, Next("import")).Outcome, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
-            Assert.That(service.ProcessNext(id, Next("analyze", new string('a', 65))).Outcome, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
-            Assert.That(service.ProcessNext("../x", Next("analyze")).Outcome, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
-            Assert.That(service.ProcessNext(Guid.NewGuid().ToString("D"), Next("analyze")).Outcome, Is.EqualTo("jobNotFound"));
+            Assert.That(service.ProcessNext(id, null, UserId).Outcome, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+            Assert.That(service.ProcessNext(id, Next("Analyze"), UserId).Outcome, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+            Assert.That(service.ProcessNext(id, Next("import"), UserId).Outcome, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+            Assert.That(service.ProcessNext(id, Next("analyze", new string('a', 65)), UserId).Outcome, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+            Assert.That(service.ProcessNext("../x", Next("analyze"), UserId).Outcome, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+            Assert.That(service.ProcessNext(Guid.NewGuid().ToString("D"), Next("analyze"), UserId).Outcome, Is.EqualTo("jobNotFound"));
             Assert.That(State(), Is.EqualTo(ImportJobState.Uploaded));
         });
     }
@@ -469,17 +497,17 @@ internal class ImportProcessCommandTests
     {
         temp.Options.Value.ProcessingTimeBudgetSeconds = 0;
         Upload(rows: 25);
-        var first = service.ProcessNext(id, Next("analyze"));
+        var first = service.ProcessNext(id, Next("analyze"), UserId);
         ImportProgressDto? second = null;
         ImportProgressDto? stranger = null;
         // A second request of the same driver and one of another tab arrive while the first one is in a batch.
         repository.OnLookup = _ =>
         {
-            second ??= service.ProcessNext(id, Next("analyze", first.DriverToken));
-            stranger ??= service.ProcessNext(id, Next("analyze", takeOver: true));
+            second ??= service.ProcessNext(id, Next("analyze", first.DriverToken), UserId);
+            stranger ??= service.ProcessNext(id, Next("analyze", takeOver: true), UserId);
         };
 
-        var next = service.ProcessNext(id, Next("analyze", first.DriverToken));
+        var next = service.ProcessNext(id, Next("analyze", first.DriverToken), UserId);
         repository.OnLookup = null;
 
         Assert.Multiple(() =>
@@ -504,7 +532,7 @@ internal class ImportProcessCommandTests
         Upload();
         repository.OnLookup = _ => throw new InvalidOperationException("secret@example.com");
 
-        var failed = service.ProcessNext(id, Next("analyze"));
+        var failed = service.ProcessNext(id, Next("analyze"), UserId);
 
         Assert.Multiple(() =>
         {
@@ -521,13 +549,13 @@ internal class ImportProcessCommandTests
     {
         temp.Options.Value.ProcessingTimeBudgetSeconds = 0;
         Upload(rows: 25);
-        service.ProcessNext(id, Next("analyze"));
+        service.ProcessNext(id, Next("analyze"), UserId);
 
-        var active = service.ProcessNext(id, Next("analyze"));
+        var active = service.ProcessNext(id, Next("analyze"), UserId);
         time.Advance(TimeSpan.FromSeconds(temp.Options.Value.HeartbeatStaleSeconds + 1));
         var paused = service.GetJob(id);
-        var stale = service.ProcessNext(id, Next("analyze"));
-        var takenOver = service.ProcessNext(id, Next("analyze", takeOver: true));
+        var stale = service.ProcessNext(id, Next("analyze"), UserId);
+        var takenOver = service.ProcessNext(id, Next("analyze", takeOver: true), UserId);
 
         Assert.Multiple(() =>
         {
@@ -545,11 +573,11 @@ internal class ImportProcessCommandTests
     public void Confirm_Is_Refused_Before_The_Analysis_And_When_It_Is_Too_Old()
     {
         Upload();
-        var tooEarly = service.Confirm(id);
+        var tooEarly = Confirm();
         Drive("analyze");
         time.Advance(TimeSpan.FromHours(temp.Options.Value.AnalysisValidHours + 1));
 
-        var expired = service.Confirm(id);
+        var expired = Confirm();
 
         Assert.Multiple(() =>
         {
@@ -558,8 +586,8 @@ internal class ImportProcessCommandTests
             Assert.That(expired.Code, Is.EqualTo(ImportCommandCodes.ANALYSIS_EXPIRED));
             Assert.That(expired.Message, Is.Not.Empty);
             Assert.That(expired.Status!.State, Is.EqualTo("Uploaded"));
-            Assert.That(service.Confirm("x").Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
-            Assert.That(service.Confirm(Guid.NewGuid().ToString("D")).Code, Is.EqualTo(ImportCommandCodes.JOB_NOT_FOUND));
+            Assert.That(service.Confirm("x", null, UserId, false).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+            Assert.That(service.Confirm(Guid.NewGuid().ToString("D"), null, UserId, false).Code, Is.EqualTo(ImportCommandCodes.JOB_NOT_FOUND));
         });
     }
 
@@ -569,11 +597,11 @@ internal class ImportProcessCommandTests
         temp.Options.Value.ProcessingTimeBudgetSeconds = 0;
         Upload(rows: 25);
         Drive("analyze");
-        service.Confirm(id);
-        var first = service.ProcessNext(id, Next("execute"));
+        Confirm();
+        var first = service.ProcessNext(id, Next("execute"), UserId);
 
-        var cancelled = service.Cancel(id);
-        var next = service.ProcessNext(id, Next("execute", first.DriverToken));
+        var cancelled = service.Cancel(id, UserId);
+        var next = service.ProcessNext(id, Next("execute", first.DriverToken), UserId);
         var job = service.GetJob(id);
 
         Assert.Multiple(() =>

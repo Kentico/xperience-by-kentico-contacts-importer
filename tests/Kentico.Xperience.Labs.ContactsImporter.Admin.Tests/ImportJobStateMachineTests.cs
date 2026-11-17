@@ -147,6 +147,20 @@ internal class ImportJobStateMachineTests
             Assert.That(ImportJobStateMachine.ClassifyConfigChange(job, job with { Mapping = [.. job.Mapping.Reverse()] }), Is.EqualTo(ImportConfigChange.Mapping));
             Assert.That(ImportJobStateMachine.ClassifyConfigChange(job, job with { Mapping = [.. job.Mapping.Take(1)] }), Is.EqualTo(ImportConfigChange.Mapping));
             Assert.That(
+                ImportJobStateMachine.ClassifyConfigChange(job, job with { ConsentMapping = new ImportConsentMapping { Agreed = "consent" } }),
+                Is.EqualTo(ImportConfigChange.Mapping),
+                "consent columns are applied in the browser, like the field mapping");
+            Assert.That(
+                ImportJobStateMachine.ClassifyConfigChange(
+                    job with { ConsentMapping = new ImportConsentMapping { Agreed = "consent" } },
+                    job with { ConsentMapping = new ImportConsentMapping { Agreed = "consent", Date = "date" } }),
+                Is.EqualTo(ImportConfigChange.Mapping));
+            Assert.That(
+                ImportJobStateMachine.ClassifyConfigChange(
+                    job with { ConsentMapping = new ImportConsentMapping { Agreed = "consent" } },
+                    job with { ConsentMapping = new ImportConsentMapping { Agreed = "consent" } }),
+                Is.EqualTo(ImportConfigChange.None));
+            Assert.That(
                 ImportJobStateMachine.ClassifyConfigChange(job, job with { KeyField = "ContactFirstName", Options = job.Options with { NewContacts = NewContactsBehavior.Skip } }),
                 Is.EqualTo(ImportConfigChange.Mapping),
                 "a mapping change wins over an options change");

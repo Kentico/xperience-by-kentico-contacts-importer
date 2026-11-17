@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { EncodedChunk, TargetField } from '../import-core';
 import { fingerprintFile } from '../import-core';
-import { makeFile } from '../import-core/test-helpers';
+import { decodeChunkData, makeFile } from '../import-core/test-helpers';
 
 import { ImportWorkerClient } from './client';
 import { ImportWorkerError } from './protocol';
@@ -85,6 +85,31 @@ describe('ImportWorkerSession', () => {
     });
 
     expect(events).toEqual([expect.objectContaining({ type: 'error', requestId: 2, code: 'invalidConfig' })]);
+  });
+
+  it('passes the consent columns of the job to the pipeline: every uploaded record has its consent part', async () => {
+    const events: WorkerEvent[] = [];
+    const session = new ImportWorkerSession((event) => {
+      events.push(event);
+      if (event.type === 'chunk') {
+        void session.handle({ type: 'ack', requestId: event.requestId, index: event.chunk.payload.index });
+      }
+    });
+
+    await session.handle({
+      type: 'start',
+      requestId: 4,
+      file: makeFile('Email,First Name,Opt in\na@example.com,Ann,yes\nb@example.com,Bob,\n'),
+      source: {},
+      pipeline: pipelineConfig({ consentMapping: { agreed: 'Opt in', date: null } }),
+      window: 2,
+    });
+
+    const chunk = events.find((event) => event.type === 'chunk');
+    expect(chunk).toBeDefined();
+    if (chunk?.type === 'chunk') {
+      expect((await decodeChunkData(chunk.chunk.payload.data)).map((record) => record.c)).toEqual([{ a: true }, { a: false }]);
+    }
   });
 
   it('sends chunks in order, then progress and done with the totals', async () => {

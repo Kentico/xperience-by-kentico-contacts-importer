@@ -22,14 +22,15 @@ import React, { useCallback, useEffect, useState } from 'react';
 
 import type { FinishReason } from '../process/process-loop';
 import { Commands } from '../shared/commands';
-import type { AggregatesDto, ExecuteCommand, FieldDto, ImportJobResponse } from '../shared/commands';
+import type { AggregatesDto, ConfirmImportRequest, ExecuteCommand, FieldDto, ImportJobResponse } from '../shared/commands';
 import { formatDateTime, formatNumber } from '../shared/format';
 import { useIsMounted } from '../shared/hooks';
 import { Strings, format } from '../shared/strings';
 import { TestIds, Text, testId } from '../shared/ui';
 
-import { AggregatesTable, Count, FieldChangesTable, clearedValues } from './Aggregates';
+import { AggregatesTable, Count, FieldChangesTable, bouncedContacts, clearedValues } from './Aggregates';
 import { CancelImport } from './CancelImport';
+import { ConsentSummary } from './ConsentSummary';
 import { CONFIRM_TYPING_THRESHOLD, progressFor } from './model';
 import type { JobView } from './model';
 import { ProcessPanel } from './ProcessPanel';
@@ -42,6 +43,8 @@ export interface ReviewStepProps {
   readonly execute: ExecuteCommand;
   readonly view: JobView;
   readonly fields: readonly FieldDto[];
+  /** The user has the permission to confirm consent (UI hint; the server checks it when the import is confirmed). */
+  readonly canConfirmConsent: boolean;
   /** Shown above the progress (why the file is checked again). */
   readonly notice: string | null;
   readonly onBackToOptions: () => void;
@@ -83,6 +86,8 @@ const Analyzing = ({ execute, view, notice, onBackToOptions, onReload }: ReviewS
         runningText={S.running}
         cards={S.cards}
         titleName={view.job.file.name}
+        usesList={view.job.options.recipientListId !== null}
+        usesConsent={view.job.options.consent !== 'none'}
         actions={
           <>
             <Button label={S.back} color={ButtonColor.Secondary} dataTestId={testId(TestIds.reviewBack)} onClick={onBackToOptions} />
@@ -100,7 +105,7 @@ const Analyzing = ({ execute, view, notice, onBackToOptions, onReload }: ReviewS
   );
 };
 
-const Summary = ({ execute, view, fields, onBackToOptions, onReload, onConfirmed }: ReviewStepProps) => {
+const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, onReload, onConfirmed }: ReviewStepProps) => {
   const isMounted = useIsMounted();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -113,11 +118,19 @@ const Summary = ({ execute, view, fields, onBackToOptions, onReload, onConfirmed
   const cleared = clearedValues(analysis);
   const mustType = analysis.contactsUpdated > CONFIRM_TYPING_THRESHOLD;
   const typedOk = !mustType || typed.trim().toUpperCase() === S.confirmWord;
+  const usesList = job.options.recipientListId !== null;
+  const usesConsent = job.options.consent !== 'none';
+  // Decided by the server from the saved options; the statement and its version come from there too.
+  const mustAttest = job.attestationRequired;
+  const blockedByPermission = mustAttest && !canConfirmConsent;
+  const bounced = bouncedContacts(analysis);
 
   const confirm = useCallback(async () => {
     setConfirming(true);
     setError(null);
-    const response = await execute<ImportJobResponse>(Commands.ConfirmImport);
+    const response = await execute<ImportJobResponse, ConfirmImportRequest>(Commands.ConfirmImport, {
+      statementVersion: mustAttest ? job.attestationVersion : null,
+    });
     if (!isMounted()) {
       return;
     }
@@ -128,10 +141,17 @@ const Summary = ({ execute, view, fields, onBackToOptions, onReload, onConfirmed
     } else if (response?.code === 'analysisExpired' || response?.code === 'invalidState') {
       setConfirmOpen(false);
       onReload();
+    } else if (response?.code === 'attestationRequired') {
+      // The options or the statement changed since this page loaded them: show the current ones.
+      setConfirmOpen(false);
+      setError(S.confirmStatementChanged);
+      onReload();
+    } else if (response?.code === 'consentPermissionRequired') {
+      setError(response.message ?? S.confirmNoPermission);
     } else {
       setError(format(S.confirmFailed, response?.message ?? ''));
     }
-  }, [execute, isMounted, onConfirmed, onReload]);
+  }, [execute, isMounted, job.attestationVersion, mustAttest, onConfirmed, onReload]);
 
   return (
     <Stack spacing={Spacing.L}>
@@ -171,8 +191,19 @@ const Summary = ({ execute, view, fields, onBackToOptions, onReload, onConfirmed
         </Callout>
       )}
 
+      <ConsentSummary job={job} />
+      {usesList && bounced > 0 && (
+        <Callout
+          type={CalloutType.QuickTip}
+          placement={CalloutPlacementType.OnDesk}
+          headline={format(Strings.consentSummary.bouncedHeadline, formatNumber(bounced))}
+        >
+          {Strings.consentSummary.bouncedText}
+        </Callout>
+      )}
+
       <Headline size={HeadlineSize.S}>{S.detailsHeadline}</Headline>
-      <AggregatesTable expected={analysis} actual={null} />
+      <AggregatesTable expected={analysis} actual={null} usesList={usesList} usesConsent={usesConsent} />
 
       {analysis.fields.length > 0 && (
         <>
@@ -209,7 +240,7 @@ const Summary = ({ execute, view, fields, onBackToOptions, onReload, onConfirmed
         onClose={() => setConfirmOpen(false)}
         confirmAction={{
           label: S.confirmRun,
-          disabled: !typedOk,
+          disabled: !typedOk || blockedByPermission,
           onClick: () => void confirm(),
         }}
         cancelAction={{ label: S.confirmCancel, onClick: () => setConfirmOpen(false) }}
@@ -221,6 +252,34 @@ const Summary = ({ execute, view, fields, onBackToOptions, onReload, onConfirmed
           </Text>
           <Text>{format(Strings.steps.fileLine, job.file.name)}</Text>
           <Text>{S.confirmNoUndo}</Text>
+          {mustAttest && (
+            <>
+              {usesList && (
+                <Text>{format(S.confirmListAdded, job.recipientListName ?? '', formatNumber(analysis.listAdded ?? 0))}</Text>
+              )}
+              {usesList && job.options.unsubscribed === 'resubscribe' && (
+                <Text>{format(S.confirmListResubscribed, formatNumber(analysis.listResubscribed ?? 0))}</Text>
+              )}
+              {usesConsent && (
+                <Text>
+                  {format(S.confirmConsentRecorded, job.consentName ?? '', formatNumber((analysis.consentRecorded ?? 0) + (analysis.consentReAgreed ?? 0)))}
+                </Text>
+              )}
+              {usesConsent && job.options.revokedConsent === 'reAgree' && (
+                <Text>{format(S.confirmConsentReAgreed, formatNumber(analysis.consentReAgreed ?? 0))}</Text>
+              )}
+              {blockedByPermission ? (
+                <NotificationBarAlert dataTestId={testId(TestIds.attestationNoPermission)}>{S.confirmNoPermission}</NotificationBarAlert>
+              ) : (
+                <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnPaper} headline={S.confirmStatementHeadline}>
+                  <div data-testid={TestIds.attestationStatement} data-statement-version={job.attestationVersion}>
+                    {job.attestationStatement}
+                  </div>
+                  <div style={{ marginTop: Spacing.S }}>{S.confirmStatementHint}</div>
+                </Callout>
+              )}
+            </>
+          )}
           {mustType && (
             <Input
               label={S.confirmTypeLabel}

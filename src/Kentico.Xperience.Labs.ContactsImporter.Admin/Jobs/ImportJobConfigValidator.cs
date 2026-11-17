@@ -11,13 +11,19 @@ internal static class ImportJobConfigValidator
     internal const int MaxSourceColumnLength = 1024;
     internal const int MaxDateFormatLength = 64;
 
+    internal const string ConsentColumnsMissingError = "Consent from a file column needs a mapped consent column. Map a consent column or choose another consent option.";
+
     /// <summary>
     /// Returns the problems found; empty when the configuration is valid.
     /// </summary>
     /// <param name="job">Configuration to validate.</param>
     /// <param name="fields">Mappable contact fields (the allow-list for mapping targets).</param>
     /// <param name="options">Importer settings.</param>
-    public static IReadOnlyList<string> Validate(ImportJob job, IReadOnlyList<ContactFieldDefinition> fields, ContactsImporterOptions options)
+    /// <param name="audience">
+    /// Checks the selected recipient list and consent against the database. <c>null</c> = not checked here (the
+    /// analysis and the import check them again when they start).
+    /// </param>
+    public static IReadOnlyList<string> Validate(ImportJob job, IReadOnlyList<ContactFieldDefinition> fields, ContactsImporterOptions options, IImportAudienceResolver? audience = null)
     {
         var errors = new List<string>();
         var fieldsByName = fields.ToDictionary(f => f.Name, StringComparer.Ordinal);
@@ -35,7 +41,19 @@ internal static class ImportJobConfigValidator
             errors.Add("The date format is missing or too long.");
         }
 
+        ValidateConsentMapping(job, errors);
         ValidateOptions(job.Options, fieldsByName, errors);
+
+        if (job.Options.Consent == ConsentMode.BlanketWithColumnOverride && job.ConsentMapping is null)
+        {
+            errors.Add(ConsentColumnsMissingError);
+        }
+
+        // Only a configuration that is valid so far is worth a database query.
+        if (errors.Count == 0 && audience is not null && audience.Resolve(job.Options).Error is { } audienceError)
+        {
+            errors.Add(audienceError);
+        }
 
         return errors;
     }
@@ -98,6 +116,35 @@ internal static class ImportJobConfigValidator
         else if (!fieldsByName[job.KeyField].CanBeKey)
         {
             errors.Add($"Contact field '{job.KeyField}' cannot be the key field: only text, whole number and GUID fields can.");
+        }
+    }
+
+    private static void ValidateConsentMapping(ImportJob job, List<string> errors)
+    {
+        if (job.ConsentMapping is not { } consent)
+        {
+            return;
+        }
+
+        if (consent.Agreed is null && consent.Date is null)
+        {
+            errors.Add("The consent columns are set without a column.");
+            return;
+        }
+
+        if (consent.Agreed is { Length: 0 or > MaxSourceColumnLength } || consent.Date is { Length: 0 or > MaxSourceColumnLength })
+        {
+            errors.Add("A consent source column name is missing or too long.");
+        }
+
+        if (consent.Agreed is not null && string.Equals(consent.Agreed, consent.Date, StringComparison.Ordinal))
+        {
+            errors.Add("The consent given and consent date columns must be different columns.");
+        }
+
+        if (job.Mapping.Any(m => string.Equals(m.Source, consent.Agreed, StringComparison.Ordinal) || string.Equals(m.Source, consent.Date, StringComparison.Ordinal)))
+        {
+            errors.Add("A consent column cannot also be mapped to a contact field.");
         }
     }
 

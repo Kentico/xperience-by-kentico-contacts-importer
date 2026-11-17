@@ -5,9 +5,26 @@ using System.Text;
 namespace Kentico.Xperience.Labs.ContactsImporter.Admin;
 
 /// <summary>
-/// Format of the row-level report: CSV with the columns <c>row,outcome,reason,field</c> and, only when the job asks
-/// for it, <c>key</c>. Row number, outcome and reason codes are no personal data; the key is.
+/// Columns of the row-level report after <c>row,outcome,reason,field</c>, which every report has.
 /// </summary>
+/// <param name="List">The job adds contacts to a recipient list: column <c>list</c>.</param>
+/// <param name="Consent">The job records consent agreements: column <c>consent</c>.</param>
+/// <param name="Key">The job asks for the key column <c>key</c> (personal data).</param>
+internal readonly record struct ImportReportColumns(bool List, bool Consent, bool Key)
+{
+    public static ImportReportColumns From(ImportOptions options) =>
+        new(options.RecipientListId is not null, options.Consent != ConsentMode.None, options.ReportIncludesKey);
+}
+
+/// <summary>
+/// Format of the row-level report: CSV with the columns <c>row,outcome,reason,field</c>, then <c>list</c> when the
+/// job has a recipient list, <c>consent</c> when it records consent and, only when the job asks for it, <c>key</c>.
+/// Row number, outcome and reason codes are no personal data; the key is.
+/// </summary>
+/// <remarks>
+/// <c>list</c> and <c>consent</c> hold the codes of <see cref="ImportAudienceOutcomes"/> for the contact of the row;
+/// they are empty for skipped rows and for rows merged into a later row with the same key.
+/// </remarks>
 /// <remarks>
 /// While a phase runs, the report is stored as part files <c>report-{phase}-{first row}.csv.gz</c> (gzipped CSV lines
 /// without a header), one or more per processing call; <see cref="IImportReportReader"/> joins them.
@@ -18,7 +35,14 @@ internal static class ImportReportFormat
 
     private const int RowDigits = 12;
 
-    public static string Header(bool includeKey) => includeKey ? "row,outcome,reason,field,key" : "row,outcome,reason,field";
+    /// <summary>Header of a report without recipient list and consent columns.</summary>
+    public static string Header(bool includeKey) => Header(new ImportReportColumns(false, false, includeKey));
+
+    /// <summary>Header of the report of a job with the given options.</summary>
+    public static string Header(ImportOptions options) => Header(ImportReportColumns.From(options));
+
+    public static string Header(ImportReportColumns columns) =>
+        "row,outcome,reason,field" + (columns.List ? ",list" : "") + (columns.Consent ? ",consent" : "") + (columns.Key ? ",key" : "");
 
     public static string PhaseName(ImportPhase phase) => phase == ImportPhase.Analyze ? "analyze" : "execute";
 
@@ -47,14 +71,29 @@ internal static class ImportReportFormat
         _ => throw new InvalidOperationException($"Unknown row outcome {outcome}."),
     };
 
-    public static void AppendLine(StringBuilder builder, ImportRowResult row, bool includeKey)
+    public static void AppendLine(StringBuilder builder, ImportRowResult row, bool includeKey) =>
+        AppendLine(builder, row, new ImportReportColumns(false, false, includeKey));
+
+    public static void AppendLine(StringBuilder builder, ImportRowResult row, ImportReportColumns columns)
     {
         builder.Append(row.Row.ToString(CultureInfo.InvariantCulture)).Append(',')
             .Append(OutcomeName(row.Outcome)).Append(',');
         AppendValue(builder, row.Reason);
         builder.Append(',');
         AppendValue(builder, row.Field);
-        if (includeKey)
+        if (columns.List)
+        {
+            builder.Append(',');
+            AppendValue(builder, row.List);
+        }
+
+        if (columns.Consent)
+        {
+            builder.Append(',');
+            AppendValue(builder, row.Consent);
+        }
+
+        if (columns.Key)
         {
             builder.Append(',');
             AppendValue(builder, row.Key);
@@ -102,8 +141,13 @@ internal static class ImportReportFormat
 /// Writes the report rows of one processing call. After every batch the current part file is stored again with
 /// the new rows, so the stored report never lags behind the checkpoint by more than the batch being processed.
 /// </summary>
-internal sealed class ImportReportPartWriter(IImportJobStore store, Guid jobId, ImportPhase phase, bool includeKey)
+internal sealed class ImportReportPartWriter(IImportJobStore store, Guid jobId, ImportPhase phase, ImportReportColumns columns)
 {
+    public ImportReportPartWriter(IImportJobStore store, Guid jobId, ImportPhase phase, bool includeKey)
+        : this(store, jobId, phase, new ImportReportColumns(false, false, includeKey))
+    {
+    }
+
     /// <summary>Compressed size after which the next batch starts a new part, which bounds the bytes rewritten per batch.</summary>
     internal const int MaxPartBytes = 64 * 1024;
 
@@ -127,7 +171,7 @@ internal sealed class ImportReportPartWriter(IImportJobStore store, Guid jobId, 
         lines.Clear();
         foreach (var row in rows)
         {
-            ImportReportFormat.AppendLine(lines, row, includeKey);
+            ImportReportFormat.AppendLine(lines, row, columns);
         }
 
         // Each batch is its own gzip member; concatenated members are one valid gzip file.
@@ -172,12 +216,12 @@ internal sealed class ImportReportReader(IImportJobStore store) : IImportReportR
             return -1;
         }
 
-        bool includeKey = store.ReadJob(jobId)?.Options.ReportIncludesKey ?? false;
+        var columns = store.ReadJob(jobId) is { } job ? ImportReportColumns.From(job.Options) : default;
         long rows = 0;
         using var gzip = new GZipStream(destination, CompressionLevel.Optimal, leaveOpen: true);
         using var writer = new StreamWriter(gzip, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         writer.NewLine = "\n";
-        writer.WriteLine(ImportReportFormat.Header(includeKey));
+        writer.WriteLine(ImportReportFormat.Header(columns));
 
         for (int i = 0; i < parts.Count; i++)
         {

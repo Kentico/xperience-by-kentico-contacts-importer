@@ -48,4 +48,17 @@
   <data name="contactsimporter.error.noreport" xml:space="preserve">
     <value>This report is not available.</value>
   </data>
+  <data name="contactsimporter.error.consentcolumnrequired" xml:space="preserve">
+    <value>Consent can be recorded for selected rows only when a "Consent given" column is chosen in the mapping.</value>
+  </data>
+  <data name="contactsimporter.error.consentpermissionrequired" xml:space="preserve">
+    <value>This import changes recipient list subscriptions or records consent. To run it you need the permission "Confirm consent for imported contacts" of the Contacts Importer application.</value>
+  </data>
+  <data name="contactsimporter.error.attestationrequired" xml:space="preserve">
+    <value>This import changes recipient list subscriptions or records consent and must be confirmed with the current consent statement. Read the statement and confirm again.</value>
+  </data>
+  <data name="contactsimporter.attestation.statement" xml:space="preserve">
+    <value>I confirm that documented consent exists for the contacts in this import: consent to receive the emails sent to the selected recipient list, and the selected consent, as far as this import sets them. My organization keeps the record of when and how each contact agreed and can provide it on request.</value>
+    <comment>Consent statement confirmed in the Run dialog. When this text changes, bump ImportAttestationPolicy.StatementVersion (Jobs/ImportAttestationPolicy.cs): confirmations of the old text are then asked again.</comment>
+  </data>
 </root>

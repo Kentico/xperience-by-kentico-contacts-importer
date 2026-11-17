@@ -12,7 +12,7 @@ import {
 } from '@kentico/xperience-admin-components';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { createMappingState, isSameMapping, toFieldMapping, validateMapping } from '../mapping/mapping-state';
+import { createMappingState, isSameMapping, toConsentMapping, toFieldMapping, validateMapping } from '../mapping/mapping-state';
 import type { MappingState, SavedMapping } from '../mapping/mapping-state';
 import { Commands } from '../shared/commands';
 import type {
@@ -49,6 +49,8 @@ interface ImportProps {
   readonly jobId: string;
   readonly importsListPath: string;
   readonly contactGroupsPath: string;
+  /** The user may run imports that change recipient list subscriptions or record consent. UI hint; the server decides. */
+  readonly canConfirmConsent: boolean;
 }
 
 type LoadState = 'loading' | 'ready' | 'failed';
@@ -57,7 +59,7 @@ type LoadState = 'loading' | 'ready' | 'failed';
  * One import. Loads the configuration and the job (when it exists) and shows the step the job
  * is at (step = job state, PLAN §4), so an import opened again continues where it was.
  */
-export const ImportTemplate = ({ canImport, jobId, importsListPath, contactGroupsPath }: ImportProps) => {
+export const ImportTemplate = ({ canImport, jobId, importsListPath, contactGroupsPath, canConfirmConsent }: ImportProps) => {
   const navigate = useAdminNavigate();
   const backToList = useCallback(() => navigate(importsListPath), [navigate, importsListPath]);
   const openContactGroups = useCallback(() => navigate(contactGroupsPath), [navigate, contactGroupsPath]);
@@ -79,16 +81,17 @@ export const ImportTemplate = ({ canImport, jobId, importsListPath, contactGroup
     );
   }
 
-  return <Import jobId={jobId} onBackToList={backToList} onOpenContactGroups={openContactGroups} />;
+  return <Import jobId={jobId} canConfirmConsent={canConfirmConsent} onBackToList={backToList} onOpenContactGroups={openContactGroups} />;
 };
 
 interface ImportInnerProps {
   readonly jobId: string;
+  readonly canConfirmConsent: boolean;
   readonly onBackToList: () => void;
   readonly onOpenContactGroups: () => void;
 }
 
-const Import = ({ jobId, onBackToList, onOpenContactGroups }: ImportInnerProps) => {
+const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups }: ImportInnerProps) => {
   const execute = useExecuteCommand();
   const isMounted = useIsMounted();
   const workerRef = useRef<ImportWorkerClient | null>(null);
@@ -226,7 +229,7 @@ const Import = ({ jobId, onBackToList, onOpenContactGroups }: ImportInnerProps) 
   const mappableFields = useMemo(() => (config ? config.fields.filter((field) => field.isSupported) : []), [config]);
   const targetFields = useMemo(() => (config ? toTargetFields(mappableFields, config.limits) : []), [config, mappableFields]);
   const saved = useMemo<SavedMapping | undefined>(
-    () => (job ? { keyField: job.keyField, mapping: job.mapping, dateFormat: job.dateFormat } : undefined),
+    () => (job ? { keyField: job.keyField, mapping: job.mapping, dateFormat: job.dateFormat, consentMapping: job.consentMapping } : undefined),
     [job],
   );
 
@@ -288,6 +291,7 @@ const Import = ({ jobId, onBackToList, onOpenContactGroups }: ImportInnerProps) 
       keyField: mapping.keyField,
       mapping: toFieldMapping(mapping),
       dateFormat: mapping.dateFormat,
+      consentMapping: toConsentMapping(mapping),
     });
     if (!isMounted()) {
       return;
@@ -415,6 +419,8 @@ const Import = ({ jobId, onBackToList, onOpenContactGroups }: ImportInnerProps) 
             job={job}
             status={status}
             fields={config.fields}
+            recipientLists={config.recipientLists ?? []}
+            consents={config.consents ?? []}
             onBack={() => setStep('upload')}
             onSaved={onOptionsSaved}
           />
@@ -426,6 +432,7 @@ const Import = ({ jobId, onBackToList, onOpenContactGroups }: ImportInnerProps) 
             execute={execute}
             view={view}
             fields={config.fields}
+            canConfirmConsent={canConfirmConsent}
             notice={reviewNotice}
             onBackToOptions={() => setStep('options')}
             onReload={reloadJob}
