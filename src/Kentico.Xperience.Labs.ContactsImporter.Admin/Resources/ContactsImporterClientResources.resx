@@ -1593,4 +1593,10 @@
   <data name="contactsimporter.review.samplesshowfewer" xml:space="preserve">
     <value>Show fewer fields</value>
   </data>
+  <data name="contactsimporter.breadcrumb.new" xml:space="preserve">
+    <value>Import (New)</value>
+  </data>
+  <data name="contactsimporter.breadcrumb.file" xml:space="preserve">
+    <value>Import {{fileName}}</value>
+  </data>
 </root>

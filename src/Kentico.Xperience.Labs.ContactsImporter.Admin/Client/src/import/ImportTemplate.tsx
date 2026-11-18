@@ -26,6 +26,7 @@ import type {
   StatusDto,
 } from '../shared/commands';
 import { useAdminNavigate, useExecuteCommand, useIsMounted } from '../shared/hooks';
+import { useLastBreadcrumbText } from '../shared/breadcrumbs';
 import { useText } from '../shared/i18n';
 import { ImporterRoot, TestIds, Text, testId } from '../shared/ui';
 import { ImportWorkerClient } from '../worker/client';
@@ -370,6 +371,13 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
     }
     setStep(stepForState(response.status.state));
   }, [beginUpload, execute, isMounted, mapping, selected, t]);
+
+  // Last breadcrumb: "Import (New)" until the first save, then "Import <file name>" (unchanged while loading).
+  useLastBreadcrumbText(
+    loadState !== 'ready'
+      ? null
+      : job && status && status.state !== 'Configuring' ? t('contactsimporter.breadcrumb.file', { fileName: job.file.name }) : t('contactsimporter.breadcrumb.new'),
+  );
 
   const view = useMemo<JobView | null>(
     () => (job && status && progress && reports ? { job, status, progress, reports } : null),
