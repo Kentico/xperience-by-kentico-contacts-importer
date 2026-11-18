@@ -39,7 +39,7 @@ Skills in `.claude/skills/`:
   - Plain `aspire run` when working alone: DancingGoat goes stale after edits; `aspire resource dancinggoat rebuild` refreshes it.
   - Watch when the user is testing alongside: `$env:features__defaultWatchEnabled = 'true'; aspire run` runs `dotnet watch --non-interactive`, so edits hot-reload and rude edits restart DancingGoat. The watcher owns builds and locks output; read build errors from the resource console logs.
   - Aspire settings files override the env var, so keep `features.defaultWatchEnabled` out of `aspire.config.json` and `~/.aspire`.
-- Update Aspire with `aspire update` (or the grouped dependabot PR) and keep the `Aspire.AppHost.Sdk` version in `AppHost.csproj` on the same version.
+- Update Aspire with `aspire update --self` (CLI), then `aspire update` (or the grouped dependabot PR); keep every `Aspire.Hosting.*` version in `Directory.Packages.props` and `sdk.version` in `aspire.config.json` on the same version.
 
 ## Planning docs (`.agent-resources/<feature>/`)
 

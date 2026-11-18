@@ -16,7 +16,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var repositoryRoot = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", ".."));
 
-var dancingGoat = builder.AddProject<Projects.DancingGoat>("dancinggoat")
+var dancingGoat = builder.AddDotnetProject("dancinggoat", Path.Combine(repositoryRoot, "examples", "DancingGoat", "DancingGoat.csproj"))
     .WithUrls(context =>
     {
         if (context.Urls.FirstOrDefault(url => url.Endpoint?.EndpointName == "http") is { } site)
@@ -88,14 +88,22 @@ if (!builder.Configuration.GetValue("Sql:UseExistingServer", true))
         .WaitForCompletion(databaseInit);
 }
 
-// Admin client webpack dev server (DancingGoat's Development settings use Proxy mode).
-// DancingGoat waits until the first build is served, so the admin never proxies to a server that is not up yet.
-// Port 3020 is fixed in the client's webpack.config.js.
+// Admin client webpack dev server (DancingGoat's Development settings use Proxy mode). Its port is
+// the Proxy entry's in DancingGoat's appsettings.Development.json (webpack.config.js devServer.port matches).
+var adminClientPort = new ConfigurationBuilder()
+    .AddJsonFile(Path.Combine(repositoryRoot, "examples", "DancingGoat", "appsettings.Development.json"))
+    .Build()
+    .GetSection("CMSAdminClientModuleSettings").GetChildren().Single()
+    .GetValue<int>("Port");
+
 var adminClient = builder.AddJavaScriptApp("admin-client", Path.Combine(repositoryRoot, "src", "Kentico.Xperience.Labs.ContactsImporter.Admin", "Client"), "start")
     .WithNpm(install: true)
-    .WithHttpEndpoint(port: 3020, isProxied: false)
+    // webpack-dev-server owns the port, so no Aspire proxy
+    .WithHttpEndpoint(port: adminClientPort, isProxied: false)
+    // The dev server serves /entry.js once the bundle is built
     .WithHttpHealthCheck("/entry.js");
 
+// Admin pages that load the client bundle fail until the dev server serves it
 dancingGoat.WaitFor(adminClient);
 
 builder.Build().Run();
