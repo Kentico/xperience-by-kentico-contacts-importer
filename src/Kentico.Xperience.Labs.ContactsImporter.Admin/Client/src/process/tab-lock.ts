@@ -8,7 +8,12 @@ export interface TabLock {
   release(): void;
 }
 
-type LockManagerLike = Pick<LockManager, 'request'>;
+type LockManagerLike = Pick<LockManager, "request">;
+
+/** `navigator.locks`; lib.dom types it as always present, but not every runtime has it. */
+function defaultLocks(): LockManagerLike | undefined {
+  return (globalThis.navigator as Partial<Navigator> | undefined)?.locks;
+}
 
 /**
  * Takes the lock when it is free; `null` when another tab holds it. With `wait`, waits until the
@@ -16,7 +21,7 @@ type LockManagerLike = Pick<LockManager, 'request'>;
  */
 export async function acquireTabLock(
   name: string,
-  locks: LockManagerLike | undefined = globalThis.navigator?.locks,
+  locks: LockManagerLike | undefined = defaultLocks(),
   wait?: AbortSignal,
 ): Promise<TabLock | null> {
   if (!locks) {
@@ -24,7 +29,9 @@ export async function acquireTabLock(
   }
 
   return new Promise<TabLock | null>((resolve) => {
-    const options: LockOptions = wait ? { signal: wait } : { ifAvailable: true };
+    const options: LockOptions = wait
+      ? { signal: wait }
+      : { ifAvailable: true };
     void locks
       .request(name, options, (lock) => {
         if (!lock) {
@@ -34,9 +41,13 @@ export async function acquireTabLock(
         }
 
         // The lock is held until this promise settles.
-        return new Promise<void>((release) => resolve({ release }));
+        return new Promise<void>((release) => {
+          resolve({ release });
+        });
       })
       // Aborted wait: no lock. Other errors (no lock support in this context): the server checks alone.
-      .catch(() => resolve(wait?.aborted ? null : { release: () => undefined }));
+      .catch(() => {
+        resolve(wait?.aborted ? null : { release: () => undefined });
+      });
   });
 }

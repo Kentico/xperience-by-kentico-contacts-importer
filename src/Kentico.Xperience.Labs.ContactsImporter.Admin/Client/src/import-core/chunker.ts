@@ -1,6 +1,6 @@
-import { GzipWriter, gzip, sha256Hex, toBase64 } from './bytes';
-import type { ChunkRecord, UploadChunkPayload } from './contract';
-import { ImportError } from './source';
+import { GzipWriter, gzip, sha256Hex, toBase64 } from "./bytes";
+import type { ChunkRecord, UploadChunkPayload } from "./contract";
+import { ImportError } from "./source";
 
 /** Matches the server default `ContactsImporter:ChunkSizeBytes`; the server accepts up to twice its setting. */
 export const DEFAULT_TARGET_CHUNK_BYTES = 4 * 1024 * 1024;
@@ -69,7 +69,7 @@ export class Chunker {
     this.maxUncompressedBytes =
       options.maxChunkUncompressedBytes ?? DEFAULT_MAX_CHUNK_UNCOMPRESSED_BYTES;
     if (!(this.targetBytes > 0) || !(this.maxUncompressedBytes > 0)) {
-      throw new ImportError('invalidConfig', 'Chunk sizes must be positive.');
+      throw new ImportError("invalidConfig", "Chunk sizes must be positive.");
     }
     this.probeBytes = Math.min(
       options.probeBytes ?? Math.min(WRITE_THRESHOLD, this.targetBytes),
@@ -88,11 +88,14 @@ export class Chunker {
    */
   add(record: ChunkRecord): boolean {
     if (this.full) {
-      throw new ImportError('invalidConfig', 'Chunk is full: await pump() before adding records.');
+      throw new ImportError(
+        "invalidConfig",
+        "Chunk is full: await pump() before adding records.",
+      );
     }
     if (!(record.r > this.lastRow)) {
       throw new ImportError(
-        'invalidConfig',
+        "invalidConfig",
         `Row numbers must be strictly increasing (got ${record.r} after ${this.lastRow}).`,
       );
     }
@@ -102,7 +105,10 @@ export class Chunker {
       ordered.f = record.f;
     }
     if (record.c) {
-      ordered.c = record.c.d === undefined ? { a: record.c.a } : { a: record.c.a, d: record.c.d };
+      ordered.c =
+        record.c.d === undefined
+          ? { a: record.c.a }
+          : { a: record.c.a, d: record.c.d };
     }
     const line = `${JSON.stringify(ordered)}\n`;
 
@@ -113,7 +119,10 @@ export class Chunker {
       grown.set(this.buffer.subarray(0, this.used));
       this.buffer = grown;
     }
-    const { written } = this.encoder.encodeInto(line, this.buffer.subarray(this.used));
+    const { written } = this.encoder.encodeInto(
+      line,
+      this.buffer.subarray(this.used),
+    );
     this.used += written;
     this.uncompressedBytes += written;
 
@@ -182,9 +191,7 @@ export class Chunker {
     if (this.used === 0) {
       return;
     }
-    if (!this.gz) {
-      this.gz = new GzipWriter();
-    }
+    this.gz ??= new GzipWriter();
 
     const bytes = this.buffer.slice(0, this.used);
     this.used = 0;
@@ -193,7 +200,10 @@ export class Chunker {
 
   private async close(): Promise<EncodedChunk> {
     await this.writePending();
-    const gz = this.gz as GzipWriter;
+    const gz = this.gz;
+    if (!gz) {
+      throw new Error("The chunk has no records.");
+    }
     this.gz = undefined;
     const compressed = await gz.finish();
     const chunk: EncodedChunk = {

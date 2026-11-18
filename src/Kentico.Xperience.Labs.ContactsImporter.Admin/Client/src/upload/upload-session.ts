@@ -1,5 +1,10 @@
-import type { FileLike, OpenSourceOptions, PipelineProgress, PipelineResult } from '../import-core';
-import { Commands } from '../shared/commands';
+import type {
+  FileLike,
+  OpenSourceOptions,
+  PipelineProgress,
+  PipelineResult,
+} from "../import-core";
+import { Commands } from "../shared/commands";
 import type {
   CompleteUploadRequest,
   CompleteUploadResponse,
@@ -9,15 +14,15 @@ import type {
   TruncateChunksRequest,
   TruncateChunksResponse,
   UploadChunkResponse,
-} from '../shared/commands';
-import type { ImportRun, ImportWorkerClient } from '../worker/client';
-import { ImportWorkerError } from '../worker/protocol';
-import type { PipelineConfig } from '../worker/protocol';
+} from "../shared/commands";
+import type { ImportRun, ImportWorkerClient } from "../worker/client";
+import { ImportWorkerError } from "../worker/protocol";
+import type { PipelineConfig } from "../worker/protocol";
 
-import { RetryExhaustedError, withRetry } from './retry';
-import type { RetryOptions } from './retry';
-import { ChunkUploader, UploadError } from './uploader';
-import type { UploadStats } from './uploader';
+import { RetryExhaustedError, withRetry } from "./retry";
+import type { RetryOptions } from "./retry";
+import { ChunkUploader, UploadError } from "./uploader";
+import type { UploadStats } from "./uploader";
 
 /**
  * One full pass of the Upload step: the worker parses and chunks the file, the uploader sends
@@ -34,19 +39,24 @@ export interface UploadSessionOptions {
   parallel: number;
   /** Chunks the server already has (resume). */
   storedChunks: readonly StoredChunkDto[];
-  retry?: Omit<RetryOptions, 'signal' | 'onRetry'>;
+  retry?: Omit<RetryOptions, "signal" | "onRetry">;
   onProgress?: (progress: UploadProgress) => void;
 }
 
 export interface UploadProgress {
-  phase: 'uploading' | 'completing';
+  phase: "uploading" | "completing";
   /** Parsing position and running row counts from the worker. */
   pipeline: PipelineProgress;
   /** Chunks produced by the worker so far. */
   chunksCreated: number;
   stats: UploadStats;
   /** Set while a failed request waits for its next attempt. */
-  retry: { index: number; attempt: number; maxAttempts: number; delayMs: number } | null;
+  retry: {
+    index: number;
+    attempt: number;
+    maxAttempts: number;
+    delayMs: number;
+  } | null;
   /** Stored chunks were deleted because the file was chunked differently before (other browser). */
   truncatedFrom: number | null;
 }
@@ -61,17 +71,17 @@ export interface UploadOutcome {
 
 export type UploadSessionErrorKind =
   /** Stopped by the user. */
-  | 'aborted'
+  | "aborted"
   /** The file could not be parsed or the mapping does not fit it. */
-  | 'worker'
+  | "worker"
   /** The server refused a chunk. */
-  | 'rejected'
+  | "rejected"
   /** Requests kept failing (network, server down). */
-  | 'network'
+  | "network"
   /** No row of the file can be imported, so there is nothing to upload. */
-  | 'noRows'
+  | "noRows"
   /** The server did not accept the finished upload. */
-  | 'complete';
+  | "complete";
 
 /**
  * Why a pass failed. `message` is developer text; the Upload step shows a text of its own for
@@ -93,10 +103,16 @@ export class UploadSessionError extends Error {
   constructor(
     kind: UploadSessionErrorKind,
     message: string,
-    details: { rowNumber?: number; reason?: string; result?: PipelineResult; serverMessage?: string; workerError?: ImportWorkerError } = {},
+    details: {
+      rowNumber?: number;
+      reason?: string;
+      result?: PipelineResult;
+      serverMessage?: string;
+      workerError?: ImportWorkerError;
+    } = {},
   ) {
     super(message);
-    this.name = 'UploadSessionError';
+    this.name = "UploadSessionError";
     this.kind = kind;
     this.rowNumber = details.rowNumber;
     this.reason = details.reason;
@@ -116,17 +132,27 @@ export interface UploadSession {
 const EMPTY_PROGRESS: PipelineProgress = {
   bytesRead: 0,
   totalBytes: 0,
-  profile: { rowsRead: 0, rowsValid: 0, rowsRejected: 0, likelyDuplicates: 0, chunkCount: 0 },
+  profile: {
+    rowsRead: 0,
+    rowsValid: 0,
+    rowsRejected: 0,
+    likelyDuplicates: 0,
+    chunkCount: 0,
+  },
   invalidEmailRows: 0,
 };
 
-export function startUploadSession(options: UploadSessionOptions): UploadSession {
+export function startUploadSession(
+  options: UploadSessionOptions,
+): UploadSession {
   const controller = new AbortController();
   let run: ImportRun | undefined;
   let uploader: ChunkUploader | undefined;
 
   const abort = () => {
-    controller.abort(new UploadSessionError('aborted', 'The upload was stopped.'));
+    controller.abort(
+      new UploadSessionError("aborted", "The upload was stopped."),
+    );
     run?.abort();
     uploader?.abort();
   };
@@ -134,10 +160,16 @@ export function startUploadSession(options: UploadSessionOptions): UploadSession
   const execute = async (): Promise<UploadOutcome> => {
     const { worker, execute: executeCommand, onProgress } = options;
     const progress: UploadProgress = {
-      phase: 'uploading',
+      phase: "uploading",
       pipeline: { ...EMPTY_PROGRESS, totalBytes: options.file.size },
       chunksCreated: 0,
-      stats: { uploadedChunks: 0, skippedChunks: 0, uploadedBytes: 0, skippedBytes: 0, retries: 0 },
+      stats: {
+        uploadedChunks: 0,
+        skippedChunks: 0,
+        uploadedBytes: 0,
+        skippedBytes: 0,
+        retries: 0,
+      },
       retry: null,
       truncatedFrom: null,
     };
@@ -147,14 +179,28 @@ export function startUploadSession(options: UploadSessionOptions): UploadSession
       parallel: options.parallel,
       storedChunks: options.storedChunks,
       retry: options.retry,
-      send: (payload, signal) => executeCommand<UploadChunkResponse, typeof payload>(Commands.UploadChunk, payload, signal),
+      send: (payload, signal) =>
+        executeCommand<UploadChunkResponse, typeof payload>(
+          Commands.UploadChunk,
+          payload,
+          signal,
+        ),
       truncate: (fromIndex, signal) =>
-        executeCommand<TruncateChunksResponse, TruncateChunksRequest>(Commands.TruncateChunks, { fromIndex }, signal),
+        executeCommand<TruncateChunksResponse, TruncateChunksRequest>(
+          Commands.TruncateChunks,
+          { fromIndex },
+          signal,
+        ),
       onEvent: (event) => {
         progress.stats = activeUploader.stats;
-        if (event.type === 'retry') {
-          progress.retry = { index: event.index, attempt: event.attempt, maxAttempts: event.maxAttempts, delayMs: event.delayMs };
-        } else if (event.type === 'truncated') {
+        if (event.type === "retry") {
+          progress.retry = {
+            index: event.index,
+            attempt: event.attempt,
+            maxAttempts: event.maxAttempts,
+            delayMs: event.delayMs,
+          };
+        } else if (event.type === "truncated") {
           progress.truncatedFrom = event.fromIndex;
         } else {
           progress.retry = null;
@@ -177,9 +223,13 @@ export function startUploadSession(options: UploadSessionOptions): UploadSession
         progress.chunksCreated = chunk.payload.index + 1;
         report();
         activeUploader.add(chunk).then(
-          () => activeRun.acknowledge(chunk.payload.index),
+          () => {
+            activeRun.acknowledge(chunk.payload.index);
+          },
           // The first failure stops the worker; nothing else to do per chunk.
-          () => activeRun.abort(),
+          () => {
+            activeRun.abort();
+          },
         );
       },
     });
@@ -213,10 +263,14 @@ export function startUploadSession(options: UploadSessionOptions): UploadSession
     progress.retry = null;
     if (result.profile.chunkCount === 0) {
       report();
-      throw new UploadSessionError('noRows', 'No row of the file can be imported.', { result });
+      throw new UploadSessionError(
+        "noRows",
+        "No row of the file can be imported.",
+        { result },
+      );
     }
 
-    progress.phase = 'completing';
+    progress.phase = "completing";
     report();
 
     let completion: CompleteUploadResponse;
@@ -234,8 +288,12 @@ export function startUploadSession(options: UploadSessionOptions): UploadSession
       throw toSessionError(controller.signal, error, undefined);
     }
 
-    if (completion.code !== 'ok' || !completion.status) {
-      throw new UploadSessionError('complete', 'The upload could not be completed.', { result, serverMessage: completion.message ?? undefined });
+    if (completion.code !== "ok" || !completion.status) {
+      throw new UploadSessionError(
+        "complete",
+        "The upload could not be completed.",
+        { result, serverMessage: completion.message ?? undefined },
+      );
     }
 
     return { result, status: completion.status, stats: activeUploader.stats };
@@ -244,12 +302,16 @@ export function startUploadSession(options: UploadSessionOptions): UploadSession
   return { done: execute(), abort };
 }
 
-function toSessionError(signal: AbortSignal, uploadError: unknown, workerError: unknown): UploadSessionError {
+function toSessionError(
+  signal: AbortSignal,
+  uploadError: unknown,
+  workerError: unknown,
+): UploadSessionError {
   if (signal.aborted) {
-    return new UploadSessionError('aborted', 'The upload was stopped.');
+    return new UploadSessionError("aborted", "The upload was stopped.");
   }
-  if (uploadError instanceof UploadError && uploadError.code !== 'aborted') {
-    const kind = uploadError.code === 'network' ? 'network' : 'rejected';
+  if (uploadError instanceof UploadError && uploadError.code !== "aborted") {
+    const kind = uploadError.code === "network" ? "network" : "rejected";
 
     return new UploadSessionError(kind, uploadError.message, {
       rowNumber: uploadError.rowNumber,
@@ -258,15 +320,22 @@ function toSessionError(signal: AbortSignal, uploadError: unknown, workerError: 
     });
   }
   if (uploadError instanceof RetryExhaustedError) {
-    return new UploadSessionError('network', uploadError.message);
+    return new UploadSessionError("network", uploadError.message);
   }
-  if (workerError instanceof ImportWorkerError && workerError.code !== 'aborted') {
-    return new UploadSessionError('worker', workerError.message, { workerError });
+  if (
+    workerError instanceof ImportWorkerError &&
+    workerError.code !== "aborted"
+  ) {
+    return new UploadSessionError("worker", workerError.message, {
+      workerError,
+    });
   }
 
   const cause = uploadError ?? workerError;
 
-  const detail = cause instanceof Error ? cause.message : '';
+  const detail = cause instanceof Error ? cause.message : "";
 
-  return new UploadSessionError('worker', detail || 'The upload failed.', { workerError: new ImportWorkerError('failed', detail) });
+  return new UploadSessionError("worker", detail || "The upload failed.", {
+    workerError: new ImportWorkerError("failed", detail),
+  });
 }

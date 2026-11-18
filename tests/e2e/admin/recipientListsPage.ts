@@ -36,7 +36,9 @@ export class RecipientListsPage {
   async findList(): Promise<RecipientList> {
     await this.page.goto(`${adminBaseUrl}/${listsPath}`);
     const rows = this.page.getByTestId("table-row");
-    await expect(rows.first().or(this.emptyNotice).first()).toBeVisible({ timeout: 30_000 });
+    await expect(rows.first().or(this.emptyNotice).first()).toBeVisible({
+      timeout: 30_000,
+    });
     expect(
       await rows.count(),
       "a recipient list exists (the DancingGoat sample data has one; create one in the Recipient lists application otherwise)",
@@ -51,17 +53,28 @@ export class RecipientListsPage {
     // The first click after the listing renders is sometimes lost: click again until the list opens.
     await expect(async () => {
       await row.click();
-      await expect(this.page).toHaveURL(new RegExp(`/${listsPath}/\\d+/`), { timeout: 5_000 });
+      await expect(this.page).toHaveURL(new RegExp(`/${listsPath}/\\d+/`), {
+        timeout: 5_000,
+      });
     }).toPass({ timeout: 30_000 });
-    const id = Number(new RegExp(`/${listsPath}/(\\d+)/`).exec(this.page.url())![1]);
+    const match = new RegExp(`/${listsPath}/(\\d+)/`).exec(this.page.url());
+    if (!match) {
+      throw new Error(`No recipient list in ${this.page.url()}`);
+    }
+    const id = Number(match[1]);
 
     return { id, name };
   }
 
   // Opens the Recipients listing of the list filtered to `email`. Returns false when the list has no recipients at all.
-  private async searchRecipient(listId: number, email: string): Promise<boolean> {
+  private async searchRecipient(
+    listId: number,
+    email: string,
+  ): Promise<boolean> {
     await this.page.goto(`${adminBaseUrl}/${listsPath}/${listId}/subscribers`);
-    await expect(this.searchInput.or(this.emptyNotice).first()).toBeVisible({ timeout: 30_000 });
+    await expect(this.searchInput.or(this.emptyNotice).first()).toBeVisible({
+      timeout: 30_000,
+    });
     if (!(await this.searchInput.isVisible())) {
       return false;
     }
@@ -72,11 +85,20 @@ export class RecipientListsPage {
   }
 
   // The contact is a recipient of the list, once, with the given email status
-  async expectRecipient(listId: number, email: string, status: RecipientStatus): Promise<void> {
-    expect(await this.searchRecipient(listId, email), "the recipient list has recipients").toBe(true);
+  async expectRecipient(
+    listId: number,
+    email: string,
+    status: RecipientStatus,
+  ): Promise<void> {
+    expect(
+      await this.searchRecipient(listId, email),
+      "the recipient list has recipients",
+    ).toBe(true);
     const row = this.recipientRow(email);
     await expect(row).toHaveCount(1, { timeout: 30_000 });
-    await expect(row.getByTestId("table-cell-EmailBounceIsHardBounce")).toHaveText(status);
+    await expect(
+      row.getByTestId("table-cell-EmailBounceIsHardBounce"),
+    ).toHaveText(status);
   }
 
   async expectNoRecipient(listId: number, email: string): Promise<void> {
@@ -84,7 +106,9 @@ export class RecipientListsPage {
       return;
     }
 
-    await expect(this.page.getByText("We couldn't find any matches")).toBeVisible({ timeout: 30_000 });
+    await expect(
+      this.page.getByText("We couldn't find any matches"),
+    ).toBeVisible({ timeout: 30_000 });
     await expect(this.recipientRow(email)).toHaveCount(0);
   }
 }

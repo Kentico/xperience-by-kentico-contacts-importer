@@ -1,5 +1,5 @@
-import type { WorkerLike } from './client';
-import workerSource from './import-worker?inline-worker';
+import type { WorkerLike } from "./client";
+import workerSource from "./import-worker?inline-worker";
 
 /**
  * Starts the import worker from the worker bundle inlined in this module.
@@ -8,9 +8,11 @@ import workerSource from './import-worker?inline-worker';
  * file; its code is a string (build/inline-worker-loader.js) run from a Blob URL.
  */
 export function createImportWorker(): WorkerLike {
-  const url = URL.createObjectURL(new Blob([workerSource], { type: 'text/javascript' }));
+  const url = URL.createObjectURL(
+    new Blob([workerSource], { type: "text/javascript" }),
+  );
   try {
-    return new Worker(url, { name: 'contacts-importer' });
+    return new Worker(url, { name: "contacts-importer" });
   } finally {
     // The worker keeps its own reference to the script once constructed.
     URL.revokeObjectURL(url);

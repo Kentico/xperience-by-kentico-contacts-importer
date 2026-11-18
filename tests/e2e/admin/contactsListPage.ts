@@ -26,7 +26,9 @@ export class ContactsListPage {
   // application has no contacts at all: the listing then has no search.
   async search(text: string): Promise<boolean> {
     await this.page.goto(`${adminBaseUrl}/${contactsPath}`);
-    await expect(this.searchInput.or(this.emptyNotice).first()).toBeVisible({ timeout: 30_000 });
+    await expect(this.searchInput.or(this.emptyNotice).first()).toBeVisible({
+      timeout: 30_000,
+    });
     if (!(await this.searchInput.isVisible())) {
       return false;
     }
@@ -38,7 +40,10 @@ export class ContactsListPage {
 
   // The contact exists once, with the first and last name of `contact`
   async expectContact(contact: TestContact): Promise<void> {
-    expect(await this.search(contact.email), "the contact listing has contacts").toBe(true);
+    expect(
+      await this.search(contact.email),
+      "the contact listing has contacts",
+    ).toBe(true);
     const row = this.row(contact.email);
     await expect(row).toHaveCount(1, { timeout: 30_000 });
     await expect(row).toContainText(contact.firstName);
@@ -51,7 +56,9 @@ export class ContactsListPage {
     }
 
     // The listing answered the search: it shows that nothing matches
-    await expect(this.page.getByText("We couldn't find any matches")).toBeVisible({ timeout: 30_000 });
+    await expect(
+      this.page.getByText("We couldn't find any matches"),
+    ).toBeVisible({ timeout: 30_000 });
     await expect(this.row(email)).toHaveCount(0);
   }
 }

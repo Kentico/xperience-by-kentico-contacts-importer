@@ -25,14 +25,17 @@ export class RateEstimator {
 
   /** Records that `done` units were finished at `timeMs`. */
   add(timeMs: number, done: number): void {
-    const last = this.samples[this.samples.length - 1];
+    const last = this.samples.at(-1);
     if (last && (timeMs < last.timeMs || done < last.done)) {
       // Progress went back (a new pass started): old samples say nothing about it.
       this.samples.length = 0;
     }
 
     this.samples.push({ timeMs, done });
-    while (this.samples.length > 2 && timeMs - this.samples[0].timeMs > this.windowMs) {
+    while (
+      this.samples.length > 2 &&
+      timeMs - this.samples[0].timeMs > this.windowMs
+    ) {
       this.samples.shift();
     }
   }
@@ -50,7 +53,10 @@ export class RateEstimator {
       return { ratePerSecond: 0, etaSeconds: null };
     }
 
-    return { ratePerSecond, etaSeconds: Math.max(0, (total - last.done) / ratePerSecond) };
+    return {
+      ratePerSecond,
+      etaSeconds: Math.max(0, (total - last.done) / ratePerSecond),
+    };
   }
 
   reset(): void {
@@ -59,7 +65,11 @@ export class RateEstimator {
 }
 
 /** Row total of the file estimated from the bytes read so far; exact once everything is read. */
-export function estimateTotalRows(rowsRead: number, bytesRead: number, totalBytes: number): number {
+export function estimateTotalRows(
+  rowsRead: number,
+  bytesRead: number,
+  totalBytes: number,
+): number {
   if (bytesRead <= 0 || totalBytes <= 0 || bytesRead >= totalBytes) {
     return rowsRead;
   }

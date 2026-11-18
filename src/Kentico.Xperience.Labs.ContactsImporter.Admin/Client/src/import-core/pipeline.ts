@@ -1,11 +1,11 @@
-import { BloomFilter } from './bloom';
-import type { BloomFilterOptions } from './bloom';
-import { Chunker } from './chunker';
-import type { EncodedChunk } from './chunker';
-import type { ImportProfile } from './contract';
-import { RowMapper } from './mapping';
-import type { RejectReason, RowMapperOptions } from './mapping';
-import type { RecordSource, RowErrorCode } from './source';
+import { BloomFilter } from "./bloom";
+import type { BloomFilterOptions } from "./bloom";
+import { Chunker } from "./chunker";
+import type { EncodedChunk } from "./chunker";
+import type { ImportProfile } from "./contract";
+import { RowMapper } from "./mapping";
+import type { RejectReason, RowMapperOptions } from "./mapping";
+import type { RecordSource, RowErrorCode } from "./source";
 
 export const DEFAULT_MAX_REPORTED_ROWS = 100_000;
 
@@ -97,7 +97,8 @@ export class ImportPipeline {
       targetChunkBytes: options.targetChunkBytes,
       maxChunkUncompressedBytes: options.maxChunkUncompressedBytes,
     });
-    this.bloom = options.bloom === false ? undefined : new BloomFilter(options.bloom);
+    this.bloom =
+      options.bloom === false ? undefined : new BloomFilter(options.bloom);
     this.maxRejectedRows = options.maxRejectedRows ?? DEFAULT_MAX_REPORTED_ROWS;
     this.maxSuspectRows = options.maxSuspectRows ?? DEFAULT_MAX_REPORTED_ROWS;
   }
@@ -105,7 +106,7 @@ export class ImportPipeline {
   /** Chunks in file order (`payload.index` 0, 1, ...). Can be iterated once. */
   async *chunks(): AsyncGenerator<EncodedChunk, void, void> {
     if (this.started) {
-      throw new Error('The pipeline was already run.');
+      throw new Error("The pipeline was already run.");
     }
     this.started = true;
 
@@ -114,8 +115,7 @@ export class ImportPipeline {
       for await (const batch of this.source.batches()) {
         signal?.throwIfAborted();
 
-        for (let i = 0; i < batch.length; i++) {
-          const row = batch[i];
+        for (const row of batch) {
           this.rowsRead++;
 
           const mapped = this.mapper.map(row);
@@ -198,7 +198,8 @@ export class ImportPipeline {
 
   private reject(row: RejectedRow): void {
     this.rowsRejected++;
-    this.rejectedByReason[row.reason] = (this.rejectedByReason[row.reason] ?? 0) + 1;
+    this.rejectedByReason[row.reason] =
+      (this.rejectedByReason[row.reason] ?? 0) + 1;
     if (this.rejectedRows.length < this.maxRejectedRows) {
       this.rejectedRows.push(row);
     }

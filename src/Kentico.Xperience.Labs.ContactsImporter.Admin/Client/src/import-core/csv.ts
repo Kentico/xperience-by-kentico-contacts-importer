@@ -1,8 +1,8 @@
-import { ImportError } from './source';
-import type { RowErrorCode, SourceRow } from './source';
-import type { TextFormatReader } from './text-source';
+import { ImportError } from "./source";
+import type { RowErrorCode, SourceRow } from "./source";
+import type { TextFormatReader } from "./text-source";
 
-export const DELIMITER_CANDIDATES: readonly string[] = [',', ';', '\t', '|'];
+export const DELIMITER_CANDIDATES: readonly string[] = [",", ";", "\t", "|"];
 
 /** Default cap on the characters of one record; a larger record means a broken file (unbalanced quote). */
 export const DEFAULT_MAX_RECORD_CHARS = 1_048_576;
@@ -34,7 +34,7 @@ export class CsvParser {
   private readonly quoteCode: number;
   private readonly maxRecordChars: number;
 
-  private field = '';
+  private field = "";
   private row: string[] = [];
   private rowChars = 0;
   private inQuotes = false;
@@ -47,15 +47,18 @@ export class CsvParser {
   private index = 0;
 
   constructor(options: CsvParserOptions = {}) {
-    const delimiter = options.delimiter ?? ',';
+    const delimiter = options.delimiter ?? ",";
     const quote = options.quote ?? '"';
     if (delimiter.length !== 1) {
-      throw new ImportError('invalidConfig', 'CSV delimiter must be a single character.');
+      throw new ImportError(
+        "invalidConfig",
+        "CSV delimiter must be a single character.",
+      );
     }
     if (quote.length > 1 || quote === delimiter) {
       throw new ImportError(
-        'invalidConfig',
-        'CSV quote must be a single character different from the delimiter.',
+        "invalidConfig",
+        "CSV quote must be a single character different from the delimiter.",
       );
     }
 
@@ -93,14 +96,12 @@ export class CsvParser {
       if (this.inQuotes) {
         const quoteAt = text.indexOf(this.quote, i);
         if (quoteAt === -1) {
-          i = length;
           break;
         }
 
         this.field += text.slice(start, quoteAt);
         if (quoteAt + 1 === length) {
           this.quotePending = true;
-          i = length;
           start = length;
           break;
         }
@@ -152,9 +153,9 @@ export class CsvParser {
     }
     if (this.rowChars + this.field.length > this.maxRecordChars) {
       throw new ImportError(
-        'recordTooLarge',
+        "recordTooLarge",
         `Record ${this.index + 1} is larger than ${this.maxRecordChars} characters. ` +
-          'The file probably has an unbalanced quote or the wrong delimiter.',
+          "The file probably has an unbalanced quote or the wrong delimiter.",
         { record: this.index + 1, maxChars: this.maxRecordChars },
       );
     }
@@ -170,8 +171,12 @@ export class CsvParser {
 
     if (this.inQuotes) {
       this.inQuotes = false;
-      this.endRecord(out, 'unterminatedQuote');
-    } else if (this.row.length > 0 || this.field.length > 0 || this.fieldQuoted) {
+      this.endRecord(out, "unterminatedQuote");
+    } else if (
+      this.row.length > 0 ||
+      this.field.length > 0 ||
+      this.fieldQuoted
+    ) {
       this.endRecord(out);
     }
   }
@@ -180,7 +185,7 @@ export class CsvParser {
     const value = this.field + tail;
     this.row.push(value);
     this.rowChars += value.length;
-    this.field = '';
+    this.field = "";
     this.fieldQuoted = false;
   }
 
@@ -199,7 +204,7 @@ export class CsvParser {
     this.index++;
     this.row = [];
     this.rowChars = 0;
-    this.field = '';
+    this.field = "";
     this.fieldQuoted = false;
   }
 }
@@ -305,11 +310,11 @@ export interface CsvReaderOptions {
 
 /** CSV/TSV format reader: dialect detection, header handling and row numbering on top of `CsvParser`. */
 export class CsvReader implements TextFormatReader {
-  readonly format = 'csv' as const;
+  readonly format = "csv" as const;
   readonly dynamicColumns = false;
   columns: string[] = [];
   columnsReady = false;
-  delimiter = ',';
+  delimiter = ",";
   delimiterDetected = false;
   readonly hasHeader: boolean;
 
@@ -332,7 +337,7 @@ export class CsvReader implements TextFormatReader {
         complete,
       });
       this.delimiterDetected = detected !== null;
-      this.delimiter = detected ?? this.options.fallbackDelimiter ?? ',';
+      this.delimiter = detected ?? this.options.fallbackDelimiter ?? ",";
     }
 
     this.parser = new CsvParser({
@@ -355,7 +360,7 @@ export class CsvReader implements TextFormatReader {
 
   private requireParser(): CsvParser {
     if (!this.parser) {
-      throw new ImportError('invalidConfig', 'CSV reader used before init.');
+      throw new ImportError("invalidConfig", "CSV reader used before init.");
     }
 
     return this.parser;
@@ -363,8 +368,7 @@ export class CsvReader implements TextFormatReader {
 
   private drain(out: SourceRow[]): void {
     const raw = this.raw;
-    for (let i = 0; i < raw.length; i++) {
-      const record = raw[i];
+    for (const record of raw) {
       if (!this.columnsReady) {
         this.columnsReady = true;
         if (this.hasHeader) {

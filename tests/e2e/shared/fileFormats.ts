@@ -15,7 +15,10 @@ export function buildZip(entries: ZipEntryContent[]): Buffer {
   let offset = 0;
 
   for (const entry of entries) {
-    const raw = typeof entry.data === "string" ? Buffer.from(entry.data, "utf8") : entry.data;
+    const raw =
+      typeof entry.data === "string"
+        ? Buffer.from(entry.data, "utf8")
+        : entry.data;
     const deflate = entry.deflate ?? true;
     const data = deflate ? zlib.deflateRawSync(raw) : raw;
     const name = Buffer.from(entry.name, "utf8");
@@ -61,7 +64,11 @@ export function buildZip(entries: ZipEntryContent[]): Buffer {
 }
 
 function xmlEscape(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function columnLetters(index: number): string {
@@ -88,7 +95,8 @@ function excelSerial(date: Date): number {
 // XLSX with shared strings (as Excel writes them) and a date style (built-in format 14) for dates.
 export function buildXlsx(sheets: SheetContent[]): Buffer {
   const main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-  const rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const rel =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
   const pkg = "http://schemas.openxmlformats.org/package/2006/relationships";
   const strings: string[] = [];
   const stringIndex = new Map<string, number>();
@@ -121,25 +129,42 @@ export function buildXlsx(sheets: SheetContent[]): Buffer {
   });
 
   const entries: ZipEntryContent[] = [
-    { name: "[Content_Types].xml", data: '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>' },
-    { name: "_rels/.rels", data: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${pkg}"><Relationship Id="rId1" Type="${rel}/officeDocument" Target="xl/workbook.xml"/></Relationships>` },
+    {
+      name: "[Content_Types].xml",
+      data: '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
+    },
+    {
+      name: "_rels/.rels",
+      data: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${pkg}"><Relationship Id="rId1" Type="${rel}/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    },
     {
       name: "xl/workbook.xml",
       data: `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${main}" xmlns:r="${rel}"><sheets>${sheets
-        .map((sheet, i) => `<sheet name="${xmlEscape(sheet.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`)
+        .map(
+          (sheet, i) =>
+            `<sheet name="${xmlEscape(sheet.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`,
+        )
         .join("")}</sheets></workbook>`,
     },
     {
       name: "xl/_rels/workbook.xml.rels",
       data: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${pkg}">${sheets
-        .map((_, i) => `<Relationship Id="rId${i + 1}" Type="${rel}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`)
-        .join("")}<Relationship Id="rIdS" Type="${rel}/styles" Target="styles.xml"/><Relationship Id="rIdT" Type="${rel}/sharedStrings" Target="sharedStrings.xml"/></Relationships>`,
+        .map(
+          (_, i) =>
+            `<Relationship Id="rId${i + 1}" Type="${rel}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`,
+        )
+        .join(
+          "",
+        )}<Relationship Id="rIdS" Type="${rel}/styles" Target="styles.xml"/><Relationship Id="rIdT" Type="${rel}/sharedStrings" Target="sharedStrings.xml"/></Relationships>`,
     },
     {
       name: "xl/styles.xml",
       data: `<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="${main}"><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="14" applyNumberFormat="1"/></cellXfs></styleSheet>`,
     },
-    ...sheetXml.map((data, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data })),
+    ...sheetXml.map((data, i) => ({
+      name: `xl/worksheets/sheet${i + 1}.xml`,
+      data,
+    })),
   ];
   entries.push({
     name: "xl/sharedStrings.xml",

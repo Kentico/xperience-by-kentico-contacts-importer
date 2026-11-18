@@ -1,26 +1,32 @@
-import type { ConsentMapping, DateFormat, FieldMapping, ImportProfile, JobFile } from '../import-core';
+import type {
+  ConsentMapping,
+  DateFormat,
+  FieldMapping,
+  ImportProfile,
+  JobFile,
+} from "../import-core";
 
 /**
  * Page commands of the importer pages and their DTOs. Keep in sync with
  * `UIPages/ImportCommandContracts.cs` on the server (JSON is camelCase).
  */
 export const Commands = {
-  ListImports: 'LIST_IMPORTS',
-  LoadConfig: 'LOAD_CONFIG',
-  GetJob: 'GET_JOB',
-  SaveConfig: 'SAVE_CONFIG',
-  UploadChunk: 'UPLOAD_CHUNK',
-  TruncateChunks: 'TRUNCATE_CHUNKS',
-  CompleteUpload: 'COMPLETE_UPLOAD',
-  CancelImport: 'CANCEL_IMPORT',
-  DeleteImport: 'DELETE_IMPORT',
-  SaveOptions: 'SAVE_OPTIONS',
-  ProcessNext: 'PROCESS_NEXT',
-  ConfirmImport: 'CONFIRM_IMPORT',
-  GetReport: 'GET_REPORT',
-  GetRunningImport: 'GET_RUNNING_IMPORT',
-  GetSamples: 'GET_SAMPLES',
-  PauseProcessing: 'PAUSE_PROCESSING',
+  ListImports: "LIST_IMPORTS",
+  LoadConfig: "LOAD_CONFIG",
+  GetJob: "GET_JOB",
+  SaveConfig: "SAVE_CONFIG",
+  UploadChunk: "UPLOAD_CHUNK",
+  TruncateChunks: "TRUNCATE_CHUNKS",
+  CompleteUpload: "COMPLETE_UPLOAD",
+  CancelImport: "CANCEL_IMPORT",
+  DeleteImport: "DELETE_IMPORT",
+  SaveOptions: "SAVE_OPTIONS",
+  ProcessNext: "PROCESS_NEXT",
+  ConfirmImport: "CONFIRM_IMPORT",
+  GetReport: "GET_REPORT",
+  GetRunningImport: "GET_RUNNING_IMPORT",
+  GetSamples: "GET_SAMPLES",
+  PauseProcessing: "PAUSE_PROCESSING",
 } as const;
 
 export type CommandName = (typeof Commands)[keyof typeof Commands];
@@ -30,6 +36,7 @@ export type CommandName = (typeof Commands)[keyof typeof Commands];
  * (network error, server error, permission denied). Same shape as `executeCommand` of
  * `usePageCommandProvider`, so tests can pass a fake.
  */
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- TData lets callers state the request type, like executeCommand of the admin
 export type ExecuteCommand = <TResult, TData = void>(
   name: CommandName,
   data?: TData,
@@ -37,39 +44,39 @@ export type ExecuteCommand = <TResult, TData = void>(
 ) => Promise<TResult | undefined>;
 
 export type CommandCode =
-  | 'ok'
-  | 'invalidRequest'
-  | 'jobNotFound'
-  | 'invalidState'
-  | 'invalidConfig'
-  | 'inconsistent'
-  | 'analysisExpired'
+  | "ok"
+  | "invalidRequest"
+  | "jobNotFound"
+  | "invalidState"
+  | "invalidConfig"
+  | "inconsistent"
+  | "analysisExpired"
   /** `CONFIRM_IMPORT`: the import needs the consent confirmation and the request did not carry the current statement version. */
-  | 'attestationRequired'
+  | "attestationRequired"
   /** `CONFIRM_IMPORT`: the user lacks the "Confirm consent" permission the import needs. */
-  | 'consentPermissionRequired'
+  | "consentPermissionRequired"
   /** `CONFIRM_IMPORT`: another import's Run was confirmed and has not ended; only one Run is unfinished at a time. */
-  | 'otherImportRunning'
+  | "otherImportRunning"
   /** `CONFIRM_IMPORT`: the server is checking another confirmation right now; try again. */
-  | 'busy'
+  | "busy"
   /** `DELETE_IMPORT`: another browser tab or user analyzes or runs the import right now. */
-  | 'importActive'
+  | "importActive"
   /** `DELETE_IMPORT`: the files of the import could not be deleted. */
-  | 'deleteFailed';
+  | "deleteFailed";
 
 /** Job states (PLAN §4). `Paused` is derived by the server from a stale heartbeat. */
 export type JobState =
-  | 'Configuring'
-  | 'Uploading'
-  | 'Uploaded'
-  | 'Analyzing'
-  | 'Analyzed'
-  | 'Confirmed'
-  | 'Running'
-  | 'Paused'
-  | 'Completed'
-  | 'Failed'
-  | 'Cancelled';
+  | "Configuring"
+  | "Uploading"
+  | "Uploaded"
+  | "Analyzing"
+  | "Analyzed"
+  | "Confirmed"
+  | "Running"
+  | "Paused"
+  | "Completed"
+  | "Failed"
+  | "Cancelled";
 
 export interface FieldDto {
   name: string;
@@ -149,43 +156,43 @@ export interface JobDto {
 
 /** Contact options of the Options step (PLAN §8); the values are the server option names. */
 export interface OptionsDto {
-  newContacts: 'create' | 'skip';
-  existingContacts: 'update' | 'skip';
-  emptyValues: 'ignore' | 'clear';
-  multipleMatches: 'updateNewest' | 'updateAll' | 'skip';
-  invalidEmail: 'skipRow' | 'importWithoutEmail';
+  newContacts: "create" | "skip";
+  existingContacts: "update" | "skip";
+  emptyValues: "ignore" | "clear";
+  multipleMatches: "updateNewest" | "updateAll" | "skip";
+  invalidEmail: "skipRow" | "importWithoutEmail";
   sourceField: string | null;
   sourceValue: string | null;
-  sourceStamp: 'createdOnly' | 'createdAndUpdated';
+  sourceStamp: "createdOnly" | "createdAndUpdated";
   reportIncludesKey: boolean;
   /** Recipient list contacts are added to as subscribed; `null` = recipient lists are not changed. */
   recipientListId: number | null;
-  unsubscribed: 'keep' | 'resubscribe';
-  bouncedAddress: 'addAndReport' | 'skipAndReport';
-  consent: 'none' | 'blanket' | 'blanketWithColumnOverride';
+  unsubscribed: "keep" | "resubscribe";
+  bouncedAddress: "addAndReport" | "skipAndReport";
+  consent: "none" | "blanket" | "blanketWithColumnOverride";
   /** Consent agreements are recorded for; `null` when `consent` is `none`. */
   consentId: number | null;
-  revokedConsent: 'keep' | 'reAgree';
+  revokedConsent: "keep" | "reAgree";
 }
 
-export type ProcessPhase = 'analyze' | 'execute';
+export type ProcessPhase = "analyze" | "execute";
 
 /** Result of one `PROCESS_NEXT` call (server `ImportProcessOutcome`, plus `invalidRequest` and `busy`). */
 export type ProcessOutcome =
-  | 'processed'
-  | 'phaseFinished'
-  | 'jobNotFound'
-  | 'invalidState'
-  | 'activeElsewhere'
-  | 'staleRequiresTakeOver'
-  | 'analysisExpired'
-  | 'interrupted'
-  | 'transientError'
-  | 'failed'
-  | 'invalidRequest'
-  | 'busy'
+  | "processed"
+  | "phaseFinished"
+  | "jobNotFound"
+  | "invalidState"
+  | "activeElsewhere"
+  | "staleRequiresTakeOver"
+  | "analysisExpired"
+  | "interrupted"
+  | "transientError"
+  | "failed"
+  | "invalidRequest"
+  | "busy"
   /** A call that would start the Run: another import's Run is unfinished (PLAN D60). Nothing changed. */
-  | 'otherImportRunning';
+  | "otherImportRunning";
 
 export interface FieldChangeDto {
   field: string;
@@ -329,7 +336,7 @@ export interface SaveConfigResponse {
 }
 
 export interface UploadChunkResponse {
-  code: 'stored' | 'alreadyStored' | 'rejected';
+  code: "stored" | "alreadyStored" | "rejected";
   /** camelCase `ChunkRejectReason` when rejected. */
   reason: string | null;
   message: string | null;

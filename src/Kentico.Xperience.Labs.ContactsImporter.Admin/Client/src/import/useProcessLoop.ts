@@ -1,13 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ProcessLoop, initialSnapshot, storageTokenStore } from '../process/process-loop';
-import type { LoopSnapshot } from '../process/process-loop';
-import { acquireTabLock } from '../process/tab-lock';
-import type { TabLock } from '../process/tab-lock';
-import { Commands } from '../shared/commands';
-import type { ExecuteCommand, ImportActionResponse, PauseProcessingRequest, ProcessNextRequest, ProcessPhase, ProgressDto } from '../shared/commands';
-import { RateEstimator } from '../upload/progress';
-import type { RateEstimate } from '../upload/progress';
+import {
+  ProcessLoop,
+  initialSnapshot,
+  storageTokenStore,
+} from "../process/process-loop";
+import type { LoopSnapshot } from "../process/process-loop";
+import { acquireTabLock } from "../process/tab-lock";
+import type { TabLock } from "../process/tab-lock";
+import { Commands } from "../shared/commands";
+import type {
+  ExecuteCommand,
+  ImportActionResponse,
+  PauseProcessingRequest,
+  ProcessNextRequest,
+  ProcessPhase,
+  ProgressDto,
+} from "../shared/commands";
+import { RateEstimator } from "../upload/progress";
+import type { RateEstimate } from "../upload/progress";
 
 export interface ProcessLoopView {
   readonly snapshot: LoopSnapshot;
@@ -43,12 +54,25 @@ const IDLE_RATE: RateEstimate = { ratePerSecond: 0, etaSeconds: null };
  * Thin React wrapper of `ProcessLoop`: one loop per mounted step, disposed on unmount. The driver
  * token is kept in session storage, so a reload of the tab continues as the same driver.
  */
-export function useProcessLoop({ jobId, phase, execute, initialProgress, autoStart, pausedByUser = false }: UseProcessLoopOptions): ProcessLoopView {
+export function useProcessLoop({
+  jobId,
+  phase,
+  execute,
+  initialProgress,
+  autoStart,
+  pausedByUser = false,
+}: UseProcessLoopOptions): ProcessLoopView {
   const loopRef = useRef<ProcessLoop | null>(null);
   const lockRef = useRef<TabLock | null>(null);
   const estimatorRef = useRef(new RateEstimator(60_000));
-  const initialRef = useRef({ initialProgress, autoStart: shouldAutoStart(autoStart, pausedByUser), pausedByUser });
-  const [snapshot, setSnapshot] = useState<LoopSnapshot>(() => initialSnapshot(phase, initialProgress, pausedByUser));
+  const initialRef = useRef({
+    initialProgress,
+    autoStart: shouldAutoStart(autoStart, pausedByUser),
+    pausedByUser,
+  });
+  const [snapshot, setSnapshot] = useState<LoopSnapshot>(() =>
+    initialSnapshot(phase, initialProgress, pausedByUser),
+  );
   const [rate, setRate] = useState<RateEstimate>(IDLE_RATE);
   const [lockedByOtherTab, setLockedByOtherTab] = useState(false);
   const [waitingForLock, setWaitingForLock] = useState(false);
@@ -68,7 +92,12 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
           const name = `contacts-importer:${jobId}`;
           let lock = await acquireTabLock(name);
           // "Continue here" while another tab holds the lock: wait for it to let go.
-          if (!lock && takesOver && loopRef.current === loop && !lockWaitRef.current) {
+          if (
+            !lock &&
+            takesOver &&
+            loopRef.current === loop &&
+            !lockWaitRef.current
+          ) {
             const waiting = new AbortController();
             lockWaitRef.current = waiting;
             setLockedByOtherTab(false);
@@ -111,8 +140,17 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
       initialProgress: initialRef.current.initialProgress,
       pausedByUser: initialRef.current.pausedByUser,
       tokens: driverTokenStore(jobId),
-      call: (request, signal) => execute<ProgressDto, ProcessNextRequest>(Commands.ProcessNext, request, signal),
-      release: (driverToken) => execute<ImportActionResponse, PauseProcessingRequest>(Commands.PauseProcessing, { driverToken }),
+      call: (request, signal) =>
+        execute<ProgressDto, ProcessNextRequest>(
+          Commands.ProcessNext,
+          request,
+          signal,
+        ),
+      release: (driverToken) =>
+        execute<ImportActionResponse, PauseProcessingRequest>(
+          Commands.PauseProcessing,
+          { driverToken },
+        ),
       onChange: (next) => {
         if (next.calls !== calls && next.progress) {
           calls = next.calls;
@@ -120,7 +158,10 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
           setRate(estimator.estimate(next.progress.rowsTotal));
         }
         // A paused or finished tab no longer processes: another tab of this browser may continue the import.
-        if ((next.status === 'paused' || next.status === 'finished') && loopRef.current === loop) {
+        if (
+          (next.status === "paused" || next.status === "finished") &&
+          loopRef.current === loop
+        ) {
           lockRef.current?.release();
           lockRef.current = null;
         }
@@ -148,17 +189,30 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
     loopRef.current?.pause();
   }, []);
 
-  return { snapshot, rate, lockedByOtherTab, waitingForOther: waitingForLock || snapshot.waitingForOther, start, pause };
+  return {
+    snapshot,
+    rate,
+    lockedByOtherTab,
+    waitingForOther: waitingForLock || snapshot.waitingForOther,
+    start,
+    pause,
+  };
 }
 
 /** Whether the step starts processing as soon as it shows: never after a Pause (the user selects Continue). */
-export function shouldAutoStart(autoStart: boolean, pausedByUser: boolean): boolean {
+export function shouldAutoStart(
+  autoStart: boolean,
+  pausedByUser: boolean,
+): boolean {
   return autoStart && !pausedByUser;
 }
 
 /** Driver token of this tab for the import, kept in session storage (survives a reload of the tab). */
 function driverTokenStore(jobId: string) {
-  return storageTokenStore(sessionStorageOrUndefined(), `contacts-importer:driver:${jobId}`);
+  return storageTokenStore(
+    sessionStorageOrUndefined(),
+    `contacts-importer:driver:${jobId}`,
+  );
 }
 
 /** The token this tab drives the import with, or `null`; `DELETE_IMPORT` sends it so the tab may delete its own check. */

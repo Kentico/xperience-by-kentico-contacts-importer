@@ -1,14 +1,14 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 
-import { CLIENT_RESX_PATH, readResx } from './test-resources';
+import { CLIENT_RESX_PATH, readResx } from "./test-resources";
 
 /**
  * The client texts live in `Resources/ContactsImporterClientResources.resx` and the code refers to
- * them by plain string keys (`t('contactsimporter.…')`), as the Xperience docs show. These checks
+ * them by plain string keys (`t("contactsimporter.…")`), as the Xperience docs show. These checks
  * stand in for compile-time checking of the keys:
  * - every key the code names exists (a key used with `count` may exist as plural keys only),
  * - every key of the file is used,
@@ -17,9 +17,9 @@ import { CLIENT_RESX_PATH, readResx } from './test-resources';
  * Keys are found as string literals in the source, so keys are never built from parts.
  */
 
-const SRC = fileURLToPath(new URL('..', import.meta.url));
+const SRC = fileURLToPath(new URL("..", import.meta.url));
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
-const KEY_LITERAL = /'(contactsimporter\.[a-z0-9_.]+)'/g;
+const KEY_LITERAL = /['"](contactsimporter\.[a-z0-9_.]+)['"]/g;
 
 interface Site {
   readonly file: string;
@@ -35,7 +35,12 @@ function sourceFiles(dir: string): string[] {
       return sourceFiles(path);
     }
 
-    return /\.tsx?$/.test(entry.name) && !/\.test\.ts$|test-resources\.ts$|test-helpers\.ts$|test-worker\.ts$/.test(entry.name) ? [path] : [];
+    return /\.tsx?$/.test(entry.name) &&
+      !/\.test\.ts$|test-resources\.ts$|test-helpers\.ts$|test-worker\.ts$/.test(
+        entry.name,
+      )
+      ? [path]
+      : [];
   });
 }
 
@@ -44,24 +49,24 @@ function closing(source: string, open: number): number {
   let depth = 0;
   for (let i = open; i < source.length; i++) {
     const char = source[i];
-    if (char === "'" || char === '"' || char === '`') {
+    if (char === "'" || char === '"' || char === "`") {
       for (i++; i < source.length && source[i] !== char; i++) {
-        if (source[i] === '\\') {
+        if (source[i] === "\\") {
           i++;
         }
       }
-    } else if (char === '/' && source[i + 1] === '/') {
-      i = source.indexOf('\n', i);
-    } else if (char === '(' || char === '[' || char === '{') {
+    } else if (char === "/" && source[i + 1] === "/") {
+      i = source.indexOf("\n", i);
+    } else if (char === "(" || char === "[" || char === "{") {
       depth++;
-    } else if (char === ')' || char === ']' || char === '}') {
+    } else if (char === ")" || char === "]" || char === "}") {
       depth--;
       if (depth === 0) {
         return i + 1;
       }
     }
   }
-  throw new Error('Unbalanced brackets');
+  throw new Error("Unbalanced brackets");
 }
 
 /** Splits at the commas that are not inside brackets or strings. */
@@ -70,22 +75,32 @@ function splitTopLevel(text: string): string[] {
   let start = 0;
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
-    if (char === "'" || char === '"' || char === '`' || char === '(' || char === '[' || char === '{') {
-      i = char === '(' || char === '[' || char === '{' ? closing(text, i) - 1 : skipString(text, i);
-    } else if (char === ',') {
+    if (
+      char === "'" ||
+      char === '"' ||
+      char === "`" ||
+      char === "(" ||
+      char === "[" ||
+      char === "{"
+    ) {
+      i =
+        char === "(" || char === "[" || char === "{"
+          ? closing(text, i) - 1
+          : skipString(text, i);
+    } else if (char === ",") {
       parts.push(text.slice(start, i));
       start = i + 1;
     }
   }
   parts.push(text.slice(start));
 
-  return parts.map((part) => part.trim()).filter((part) => part !== '');
+  return parts.map((part) => part.trim()).filter((part) => part !== "");
 }
 
 function skipString(text: string, start: number): number {
   let i = start + 1;
   for (; i < text.length && text[i] !== text[start]; i++) {
-    if (text[i] === '\\') {
+    if (text[i] === "\\") {
       i++;
     }
   }
@@ -97,10 +112,14 @@ function skipString(text: string, start: number): number {
 function propertyNames(objectLiteral: string): Set<string> | null {
   const names = new Set<string>();
   for (const part of splitTopLevel(objectLiteral.trim().slice(1, -1))) {
-    if (part.startsWith('...')) {
+    if (part.startsWith("...")) {
       return null;
     }
-    names.add(/^['"]?([\w$]+)/.exec(part)![1]);
+    const name = /^['"]?([\w$]+)/.exec(part)?.[1];
+    if (name === undefined) {
+      throw new Error(`Unexpected property ${part}`);
+    }
+    names.add(name);
   }
 
   return names;
@@ -115,19 +134,25 @@ function sites(file: string, source: string): Site[] {
   const found: Site[] = [];
   for (const match of source.matchAll(/\bt\(/g)) {
     const open = match.index + 1;
-    const args = splitTopLevel(source.slice(open + 1, closing(source, open) - 1));
-    const params = args[1]?.startsWith('{') ? propertyNames(args[1]) : new Set<string>();
-    for (const key of keysIn(args[0] ?? '')) {
+    const args = splitTopLevel(
+      source.slice(open + 1, closing(source, open) - 1),
+    );
+    const params = args[1]?.startsWith("{")
+      ? propertyNames(args[1])
+      : new Set<string>();
+    for (const key of keysIn(args[0] ?? "")) {
       found.push({ file, key, params });
     }
   }
   for (const match of source.matchAll(/\{\s*key:/g)) {
     const object = source.slice(match.index, closing(source, match.index));
     const parts = splitTopLevel(object.slice(1, -1));
-    const keyPart = parts.find((part) => part.startsWith('key:'));
-    const paramsPart = parts.find((part) => part.startsWith('params:'));
-    const params = paramsPart ? propertyNames(paramsPart.slice('params:'.length)) : new Set<string>();
-    for (const key of keysIn(keyPart ?? '')) {
+    const keyPart = parts.find((part) => part.startsWith("key:"));
+    const paramsPart = parts.find((part) => part.startsWith("params:"));
+    const params = paramsPart
+      ? propertyNames(paramsPart.slice("params:".length))
+      : new Set<string>();
+    for (const key of keysIn(keyPart ?? "")) {
       found.push({ file, key, params });
     }
   }
@@ -136,11 +161,16 @@ function sites(file: string, source: string): Site[] {
 }
 
 function placeholders(text: string): Set<string> {
-  return new Set([...text.matchAll(/\{\{\s*([\w$]+)\s*\}\}/g)].map((match) => match[1]));
+  return new Set(
+    [...text.matchAll(/\{\{\s*([\w$]+)\s*\}\}/g)].map((match) => match[1]),
+  );
 }
 
 const resources = readResx(CLIENT_RESX_PATH);
-const files = sourceFiles(SRC).map((file) => ({ file: file.slice(SRC.length), source: readFileSync(file, 'utf8') }));
+const files = sourceFiles(SRC).map((file) => ({
+  file: file.slice(SRC.length),
+  source: readFileSync(file, "utf8"),
+}));
 const usedKeys = new Map<string, string>();
 for (const { file, source } of files) {
   for (const key of keysIn(source)) {
@@ -155,60 +185,86 @@ function resourceKeys(key: string): string[] {
     return [key];
   }
 
-  return [...resources.keys()].filter((candidate) => candidate.replace(PLURAL_SUFFIX, '') === key && PLURAL_SUFFIX.test(candidate));
+  return [...resources.keys()].filter(
+    (candidate) =>
+      candidate.replace(PLURAL_SUFFIX, "") === key &&
+      PLURAL_SUFFIX.test(candidate),
+  );
 }
 
-describe('client resources', () => {
-  it('has a text for every key the client uses', () => {
-    const missing = [...usedKeys].filter(([key]) => resourceKeys(key).length === 0).map(([key, file]) => `${key} (${file})`);
+describe("client resources", () => {
+  it("has a text for every key the client uses", () => {
+    const missing = [...usedKeys]
+      .filter(([key]) => resourceKeys(key).length === 0)
+      .map(([key, file]) => `${key} (${file})`);
 
     expect(missing).toEqual([]);
   });
 
-  it('uses every key of the resource file', () => {
-    const orphans = [...resources.keys()].filter((key) => !usedKeys.has(key) && !usedKeys.has(key.replace(PLURAL_SUFFIX, '')));
+  it("uses every key of the resource file", () => {
+    const orphans = [...resources.keys()].filter(
+      (key) =>
+        !usedKeys.has(key) && !usedKeys.has(key.replace(PLURAL_SUFFIX, "")),
+    );
 
     expect(orphans).toEqual([]);
   });
 
-  it('never builds keys from parts', () => {
-    const built = files.filter(({ source }) => /[`'"]contactsimporter\.[a-z0-9_.]*(\$\{|['"]\s*\+)/.test(source)).map(({ file }) => file);
+  it("never builds keys from parts", () => {
+    const built = files
+      .filter(({ source }) =>
+        /[`'"]contactsimporter\.[a-z0-9_.]*(\$\{|['"]\s*\+)/.test(source),
+      )
+      .map(({ file }) => file);
 
     expect(built).toEqual([]);
   });
 
-  it('passes the placeholders each text has, and only those', () => {
+  it("passes the placeholders each text has, and only those", () => {
     const problems: string[] = [];
     for (const site of allSites) {
       if (site.params === null) {
         continue;
       }
       const keys = resourceKeys(site.key);
-      const expected = new Set(keys.flatMap((key) => [...placeholders(resources.get(key) ?? '')]));
+      const expected = new Set(
+        keys.flatMap((key) => [...placeholders(resources.get(key) ?? "")]),
+      );
       const plural = keys.some((key) => PLURAL_SUFFIX.test(key));
-      const passed = new Set([...site.params].filter((name) => !(plural && name === 'count')));
-      if (plural && !site.params.has('count')) {
+      const passed = new Set(
+        [...site.params].filter((name) => !(plural && name === "count")),
+      );
+      if (plural && !site.params.has("count")) {
         problems.push(`${site.key} (${site.file}): plural text without count`);
       }
       if ([...expected].sort().join() !== [...passed].sort().join()) {
-        problems.push(`${site.key} (${site.file}): text has {${[...expected].join(', ')}}, call passes {${[...passed].join(', ')}}`);
+        problems.push(
+          `${site.key} (${site.file}): text has {${[...expected].join(", ")}}, call passes {${[...passed].join(", ")}}`,
+        );
       }
     }
 
     expect(problems).toEqual([]);
   });
 
-  it('passes values where it uses a text with placeholders', () => {
+  it("passes values where it uses a text with placeholders", () => {
     const checked = new Set(allSites.map((site) => site.key));
     const unchecked = [...usedKeys.keys()].filter(
-      (key) => !checked.has(key) && resourceKeys(key).some((resourceKey) => placeholders(resources.get(resourceKey) ?? '').size > 0),
+      (key) =>
+        !checked.has(key) &&
+        resourceKeys(key).some(
+          (resourceKey) =>
+            placeholders(resources.get(resourceKey) ?? "").size > 0,
+        ),
     );
 
     expect(unchecked).toEqual([]);
   });
 
-  it('uses the i18next placeholder syntax only', () => {
-    const numbered = [...resources].filter(([, text]) => /\{\d+\}/.test(text)).map(([key]) => key);
+  it("uses the i18next placeholder syntax only", () => {
+    const numbered = [...resources]
+      .filter(([, text]) => /\{\d+\}/.test(text))
+      .map(([key]) => key);
 
     expect(numbered).toEqual([]);
   });

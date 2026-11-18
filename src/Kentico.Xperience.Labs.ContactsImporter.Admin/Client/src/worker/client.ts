@@ -6,10 +6,10 @@ import type {
   PipelineResult,
   SampleProfile,
   TargetField,
-} from '../import-core';
+} from "../import-core";
 
-import { ImportWorkerError } from './protocol';
-import type { PipelineConfig, WorkerEvent, WorkerRequest } from './protocol';
+import { ImportWorkerError } from "./protocol";
+import type { PipelineConfig, WorkerEvent, WorkerRequest } from "./protocol";
 
 /** The part of `Worker` the client uses; tests pass a fake that runs `ImportWorkerSession` in-process. */
 export interface WorkerLike {
@@ -66,10 +66,12 @@ export class ImportWorkerClient {
 
   constructor(worker: WorkerLike) {
     this.worker = worker;
-    worker.onmessage = (event) => this.receive(event.data);
+    worker.onmessage = (event) => {
+      this.receive(event.data);
+    };
     worker.onerror = (event) => {
-      event.preventDefault?.();
-      this.failAll(new ImportWorkerError('failed', event.message ?? ''));
+      event.preventDefault();
+      this.failAll(new ImportWorkerError("failed", event.message));
     };
   }
 
@@ -82,15 +84,18 @@ export class ImportWorkerClient {
   ): Promise<ProfileResult> {
     const requestId = this.nextRequestId++;
     const event = await this.request(requestId, {
-      type: 'profile',
+      type: "profile",
       requestId,
       file,
       source,
       targetFields,
       maxRows,
     });
-    if (event.type !== 'profiled') {
-      throw new ImportWorkerError('failed', `Unexpected worker answer '${event.type}'.`);
+    if (event.type !== "profiled") {
+      throw new ImportWorkerError(
+        "failed",
+        `Unexpected worker answer '${event.type}'.`,
+      );
     }
 
     return { profile: event.profile, fingerprint: event.fingerprint };
@@ -102,7 +107,7 @@ export class ImportWorkerClient {
     const finished = this.request(
       requestId,
       {
-        type: 'start',
+        type: "start",
         requestId,
         file,
         source: options.source,
@@ -114,8 +119,11 @@ export class ImportWorkerClient {
     );
 
     const done = finished.then((event) => {
-      if (event.type !== 'done') {
-        throw new ImportWorkerError('failed', `Unexpected worker answer '${event.type}'.`);
+      if (event.type !== "done") {
+        throw new ImportWorkerError(
+          "failed",
+          `Unexpected worker answer '${event.type}'.`,
+        );
       }
 
       return event.result;
@@ -123,8 +131,12 @@ export class ImportWorkerClient {
 
     return {
       done,
-      acknowledge: (index) => this.send({ type: 'ack', requestId, index }),
-      abort: () => this.send({ type: 'abort', requestId }),
+      acknowledge: (index) => {
+        this.send({ type: "ack", requestId, index });
+      },
+      abort: () => {
+        this.send({ type: "abort", requestId });
+      },
     };
   }
 
@@ -136,16 +148,20 @@ export class ImportWorkerClient {
 
     this.disposed = true;
     this.worker.terminate();
-    this.failAll(new ImportWorkerError('aborted', 'The import worker was stopped.'));
+    this.failAll(
+      new ImportWorkerError("aborted", "The import worker was stopped."),
+    );
   }
 
   private request(
     requestId: number,
     message: WorkerRequest,
-    handlers: Pick<Pending, 'onChunk' | 'onProgress'> = {},
+    handlers: Pick<Pending, "onChunk" | "onProgress"> = {},
   ): Promise<WorkerEvent> {
     if (this.disposed) {
-      return Promise.reject(new ImportWorkerError('aborted', 'The import worker was stopped.'));
+      return Promise.reject(
+        new ImportWorkerError("aborted", "The import worker was stopped."),
+      );
     }
 
     return new Promise<WorkerEvent>((resolve, reject) => {
@@ -167,15 +183,17 @@ export class ImportWorkerClient {
     }
 
     switch (event.type) {
-      case 'chunk':
+      case "chunk":
         pending.onChunk?.(event.chunk);
         break;
-      case 'progress':
+      case "progress":
         pending.onProgress?.(event.progress);
         break;
-      case 'error':
+      case "error":
         this.pending.delete(event.requestId);
-        pending.reject(new ImportWorkerError(event.code, event.message, event.params));
+        pending.reject(
+          new ImportWorkerError(event.code, event.message, event.params),
+        );
         break;
       default:
         this.pending.delete(event.requestId);

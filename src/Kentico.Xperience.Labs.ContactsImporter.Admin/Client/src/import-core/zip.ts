@@ -1,6 +1,6 @@
-import { concatBytes } from './bytes';
-import { ImportError } from './source';
-import type { FileLike } from './source';
+import { concatBytes } from "./bytes";
+import { ImportError } from "./source";
+import type { FileLike } from "./source";
 
 /** One file (or directory) of a zip archive, from the central directory. */
 export interface ZipEntry {
@@ -33,16 +33,20 @@ export const ZIP_STORED = 0;
 export const ZIP_DEFLATE = 8;
 
 function invalid(message: string): ImportError {
-  return new ImportError('invalidZip', message);
+  return new ImportError("invalidZip", message);
 }
 
-async function readRange(file: FileLike, start: number, end: number): Promise<DataView> {
+async function readRange(
+  file: FileLike,
+  start: number,
+  end: number,
+): Promise<DataView> {
   if (start < 0 || end > file.size || start > end) {
-    throw invalid('A zip record points outside the file.');
+    throw invalid("A zip record points outside the file.");
   }
   const buffer = await file.slice(start, end).arrayBuffer();
   if (buffer.byteLength !== end - start) {
-    throw invalid('The zip file is shorter than its directory says.');
+    throw invalid("The zip file is shorter than its directory says.");
   }
 
   return new DataView(buffer);
@@ -54,7 +58,7 @@ function uint64(view: DataView, offset: number): number {
   const high = view.getUint32(offset + 4, true);
   const value = high * 0x1_0000_0000 + low;
   if (!Number.isSafeInteger(value)) {
-    throw invalid('A zip size or offset is too large.');
+    throw invalid("A zip size or offset is too large.");
   }
 
   return value;
@@ -66,7 +70,8 @@ export function hasZipSignature(head: Uint8Array): boolean {
     head.length >= 4 &&
     head[0] === 0x50 &&
     head[1] === 0x4b &&
-    ((head[2] === 0x03 && head[3] === 0x04) || (head[2] === 0x05 && head[3] === 0x06))
+    ((head[2] === 0x03 && head[3] === 0x04) ||
+      (head[2] === 0x05 && head[3] === 0x06))
   );
 }
 
@@ -95,7 +100,7 @@ export class ZipArchive {
 
   static async open(file: FileLike): Promise<ZipArchive> {
     if (file.size < EOCD_SIZE) {
-      throw invalid('The file is too short to be a zip file.');
+      throw invalid("The file is too short to be a zip file.");
     }
 
     const tailStart = Math.max(0, file.size - EOCD_SIZE - MAX_COMMENT);
@@ -108,7 +113,7 @@ export class ZipArchive {
       }
     }
     if (eocd === -1) {
-      throw invalid('The end of the zip central directory was not found.');
+      throw invalid("The end of the zip central directory was not found.");
     }
 
     let count = tail.getUint16(eocd + 10, true);
@@ -123,7 +128,9 @@ export class ZipArchive {
           const recordAt = uint64(locator, 8);
           const record = await readRange(file, recordAt, recordAt + 56);
           if (record.getUint32(0, true) !== ZIP64_EOCD_SIGNATURE) {
-            throw invalid('The ZIP64 end of central directory record is damaged.');
+            throw invalid(
+              "The ZIP64 end of central directory record is damaged.",
+            );
           }
           count = uint64(record, 32);
           size = uint64(record, 40);
@@ -133,7 +140,7 @@ export class ZipArchive {
     }
 
     if (size > MAX_CENTRAL_DIRECTORY_BYTES) {
-      throw invalid('The zip central directory is too large.');
+      throw invalid("The zip central directory is too large.");
     }
 
     const directory = await readRange(file, offset, offset + size);
@@ -154,8 +161,13 @@ export class ZipArchive {
       entry.localHeaderOffset,
       Math.min(this.file.size, entry.localHeaderOffset + LOCAL_HEADER_SIZE),
     );
-    if (header.byteLength < LOCAL_HEADER_SIZE || header.getUint32(0, true) !== LOCAL_SIGNATURE) {
-      throw invalid(`The local header of zip entry '${entry.name}' is damaged.`);
+    if (
+      header.byteLength < LOCAL_HEADER_SIZE ||
+      header.getUint32(0, true) !== LOCAL_SIGNATURE
+    ) {
+      throw invalid(
+        `The local header of zip entry '${entry.name}' is damaged.`,
+      );
     }
 
     const start =
@@ -194,7 +206,9 @@ export class ZipArchive {
             return;
           }
           const next = Math.min(end, position + readBytes);
-          const bytes = new Uint8Array(await file.slice(position, next).arrayBuffer());
+          const bytes = new Uint8Array(
+            await file.slice(position, next).arrayBuffer(),
+          );
           position = next;
           onRead?.(bytes.byteLength);
           controller.enqueue(bytes);
@@ -208,7 +222,10 @@ export class ZipArchive {
     }
 
     const inflated = raw.pipeThrough(
-      new DecompressionStream('deflate-raw') as unknown as TransformStream<Uint8Array, Uint8Array>,
+      new DecompressionStream("deflate-raw") as unknown as TransformStream<
+        Uint8Array,
+        Uint8Array
+      >,
     );
 
     return withZipErrors(inflated, entry.name);
@@ -255,7 +272,7 @@ export class ZipArchive {
     return {
       name: entry.name,
       size: blob.size,
-      stream: () => blob.stream() as ReadableStream<Uint8Array>,
+      stream: () => blob.stream(),
       slice: (start, end) => blob.slice(start, end),
     };
   }
@@ -263,11 +280,14 @@ export class ZipArchive {
 
 function checkEntry(entry: ZipEntry): void {
   if ((entry.flags & 1) !== 0) {
-    throw new ImportError('zipEncrypted', `Zip entry '${entry.name}' is encrypted.`);
+    throw new ImportError(
+      "zipEncrypted",
+      `Zip entry '${entry.name}' is encrypted.`,
+    );
   }
   if (entry.method !== ZIP_STORED && entry.method !== ZIP_DEFLATE) {
     throw new ImportError(
-      'unsupportedCompression',
+      "unsupportedCompression",
       `Zip entry '${entry.name}' uses compression method ${entry.method}; only stored and deflate are supported.`,
       { method: entry.method },
     );
@@ -275,7 +295,12 @@ function checkEntry(entry: ZipEntry): void {
 }
 
 /** A window of a file as a file of its own. */
-function sliceFile(file: FileLike, offset: number, size: number, name: string): FileLike {
+function sliceFile(
+  file: FileLike,
+  offset: number,
+  size: number,
+  name: string,
+): FileLike {
   const view: FileLike = {
     name,
     size,
@@ -297,7 +322,9 @@ function sliceFile(file: FileLike, offset: number, size: number, name: string): 
               return;
             }
             const next = Math.min(size, position + ZIP_READ_BYTES);
-            const bytes = new Uint8Array(await view.slice(position, next).arrayBuffer());
+            const bytes = new Uint8Array(
+              await view.slice(position, next).arrayBuffer(),
+            );
             position = next;
             controller.enqueue(bytes);
           },
@@ -311,7 +338,10 @@ function sliceFile(file: FileLike, offset: number, size: number, name: string): 
 }
 
 /** Turns inflate failures (damaged data) into `invalidZip`. */
-function withZipErrors(stream: ReadableStream<Uint8Array>, name: string): ReadableStream<Uint8Array> {
+function withZipErrors(
+  stream: ReadableStream<Uint8Array>,
+  name: string,
+): ReadableStream<Uint8Array> {
   const reader = stream.getReader();
 
   return new ReadableStream<Uint8Array>(
@@ -321,7 +351,11 @@ function withZipErrors(stream: ReadableStream<Uint8Array>, name: string): Readab
         try {
           result = await reader.read();
         } catch {
-          controller.error(invalid(`Zip entry '${name}' could not be decompressed; the file is damaged.`));
+          controller.error(
+            invalid(
+              `Zip entry '${name}' could not be decompressed; the file is damaged.`,
+            ),
+          );
 
           return;
         }
@@ -341,11 +375,14 @@ function withZipErrors(stream: ReadableStream<Uint8Array>, name: string): Readab
 
 function readCentralDirectory(view: DataView, count: number): ZipEntry[] {
   const entries: ZipEntry[] = [];
-  const utf8 = new TextDecoder('utf-8');
+  const utf8 = new TextDecoder("utf-8");
   let at = 0;
-  while (at + CENTRAL_HEADER_SIZE <= view.byteLength && entries.length < count) {
+  while (
+    at + CENTRAL_HEADER_SIZE <= view.byteLength &&
+    entries.length < count
+  ) {
     if (view.getUint32(at, true) !== CENTRAL_SIGNATURE) {
-      throw invalid('The zip central directory is damaged.');
+      throw invalid("The zip central directory is damaged.");
     }
 
     const flags = view.getUint16(at + 8, true);
@@ -361,13 +398,15 @@ function readCentralDirectory(view: DataView, count: number): ZipEntry[] {
     const extraStart = nameStart + nameLength;
     const next = extraStart + extraLength + commentLength;
     if (next > view.byteLength) {
-      throw invalid('The zip central directory is damaged.');
+      throw invalid("The zip central directory is damaged.");
     }
     // Names without the UTF-8 flag are CP437; ASCII names (the usual case) read the same.
-    const name = utf8.decode(new Uint8Array(view.buffer, view.byteOffset + nameStart, nameLength));
+    const name = utf8.decode(
+      new Uint8Array(view.buffer, view.byteOffset + nameStart, nameLength),
+    );
 
     // ZIP64 extended information: 64-bit values for the fields set to 0xFFFFFFFF, in this order.
-    for (let e = extraStart; e + 4 <= extraStart + extraLength; ) {
+    for (let e = extraStart; e + 4 <= extraStart + extraLength;) {
       const id = view.getUint16(e, true);
       const length = view.getUint16(e + 2, true);
       if (id === 0x0001) {
@@ -388,12 +427,21 @@ function readCentralDirectory(view: DataView, count: number): ZipEntry[] {
       e += 4 + length;
     }
 
-    entries.push({ name, method, flags, compressedSize, uncompressedSize, localHeaderOffset });
+    entries.push({
+      name,
+      method,
+      flags,
+      compressedSize,
+      uncompressedSize,
+      localHeaderOffset,
+    });
     at = next;
   }
 
   if (entries.length < count) {
-    throw invalid('The zip central directory has fewer entries than its end record says.');
+    throw invalid(
+      "The zip central directory has fewer entries than its end record says.",
+    );
   }
 
   return entries;
@@ -401,27 +449,32 @@ function readCentralDirectory(view: DataView, count: number): ZipEntry[] {
 
 /** Directory entries and files that archivers add on their own (macOS resource forks, Finder / Explorer metadata). */
 export function isZipJunk(name: string): boolean {
-  if (name.endsWith('/') || name.endsWith('\\')) {
+  if (name.endsWith("/") || name.endsWith("\\")) {
     return true;
   }
   const parts = name.split(/[\\/]/);
-  if (parts.includes('__MACOSX')) {
+  if (parts.includes("__MACOSX")) {
     return true;
   }
   const base = parts[parts.length - 1];
 
-  return base === '.DS_Store' || base === 'Thumbs.db' || base === 'desktop.ini' || base.startsWith('._');
+  return (
+    base === ".DS_Store" ||
+    base === "Thumbs.db" ||
+    base === "desktop.ini" ||
+    base.startsWith("._")
+  );
 }
 
 /** The one data file of a zip; fails when there is none or more than one. */
 export function singleDataEntry(archive: ZipArchive): ZipEntry {
   const data = archive.entries.filter((entry) => !isZipJunk(entry.name));
   if (data.length === 0) {
-    throw new ImportError('zipEmpty', 'The zip file holds no data file.');
+    throw new ImportError("zipEmpty", "The zip file holds no data file.");
   }
   if (data.length > 1) {
     throw new ImportError(
-      'zipMultipleEntries',
+      "zipMultipleEntries",
       `The zip file holds ${data.length} files; it must hold exactly one.`,
       { count: data.length },
     );
@@ -432,7 +485,7 @@ export function singleDataEntry(archive: ZipArchive): ZipEntry {
 
 /** File name part of a zip entry path. */
 export function baseName(path: string): string {
-  const slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  const slash = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
 
   return slash === -1 ? path : path.slice(slash + 1);
 }

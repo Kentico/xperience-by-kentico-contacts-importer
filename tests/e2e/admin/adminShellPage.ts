@@ -12,8 +12,12 @@ export class AdminShellPage {
 
   async expectSignedIn(): Promise<void> {
     await expect(this.page).toHaveURL(/\/admin/i);
-    await expect.poll(async () => this.page.url().toLowerCase().includes("sign-in")).toBeFalsy();
-    await expect(this.page.locator('a[aria-label="System"]')).toBeVisible({ timeout: 30_000 });
+    await expect
+      .poll(() => this.page.url().toLowerCase().includes("sign-in"))
+      .toBeFalsy();
+    await expect(this.page.locator('a[aria-label="System"]')).toBeVisible({
+      timeout: 30_000,
+    });
   }
 
   // Opens an application category in the left navigation

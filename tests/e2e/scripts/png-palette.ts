@@ -35,21 +35,41 @@ function paeth(a: number, b: number, c: number): number {
 }
 
 // Returns RGB pixels (3 bytes each)
-function decode(png: Buffer): { width: number; height: number; rgb: Uint8Array } {
+function decode(png: Buffer): {
+  width: number;
+  height: number;
+  rgb: Uint8Array;
+} {
   const chunks = readChunks(png);
-  const header = chunks.find((chunk) => chunk.type === "IHDR")!.data;
+  const ihdr = chunks.find((chunk) => chunk.type === "IHDR");
+  if (!ihdr) {
+    throw new Error("PNG has no IHDR chunk.");
+  }
+  const header = ihdr.data;
   const width = header.readUInt32BE(0);
   const height = header.readUInt32BE(4);
   const bitDepth = header[8];
   const colorType = header[9];
   const interlace = header[12];
-  if (bitDepth !== 8 || (colorType !== 2 && colorType !== 6) || interlace !== 0) {
-    throw new Error(`Unsupported PNG (bit depth ${bitDepth}, color type ${colorType}, interlace ${interlace}).`);
+  if (
+    bitDepth !== 8 ||
+    (colorType !== 2 && colorType !== 6) ||
+    interlace !== 0
+  ) {
+    throw new Error(
+      `Unsupported PNG (bit depth ${bitDepth}, color type ${colorType}, interlace ${interlace}).`,
+    );
   }
 
   const channels = colorType === 6 ? 4 : 3;
   const stride = width * channels;
-  const raw = inflateSync(Buffer.concat(chunks.filter((chunk) => chunk.type === "IDAT").map((chunk) => chunk.data)));
+  const raw = inflateSync(
+    Buffer.concat(
+      chunks
+        .filter((chunk) => chunk.type === "IDAT")
+        .map((chunk) => chunk.data),
+    ),
+  );
   const pixels = new Uint8Array(stride * height);
 
   for (let y = 0; y < height; y++) {
@@ -61,15 +81,27 @@ function decode(png: Buffer): { width: number; height: number; rgb: Uint8Array }
       const value = raw[source + x];
       const left = x >= channels ? pixels[row + x - channels] : 0;
       const up = y > 0 ? pixels[previous + x] : 0;
-      const upLeft = y > 0 && x >= channels ? pixels[previous + x - channels] : 0;
+      const upLeft =
+        y > 0 && x >= channels ? pixels[previous + x - channels] : 0;
       let result: number;
       switch (filter) {
-        case 0: result = value; break;
-        case 1: result = value + left; break;
-        case 2: result = value + up; break;
-        case 3: result = value + ((left + up) >> 1); break;
-        case 4: result = value + paeth(left, up, upLeft); break;
-        default: throw new Error(`Unknown PNG filter ${filter}.`);
+        case 0:
+          result = value;
+          break;
+        case 1:
+          result = value + left;
+          break;
+        case 2:
+          result = value + up;
+          break;
+        case 3:
+          result = value + ((left + up) >> 1);
+          break;
+        case 4:
+          result = value + paeth(left, up, upLeft);
+          break;
+        default:
+          throw new Error(`Unknown PNG filter ${filter}.`);
       }
       pixels[row + x] = result & 0xff;
     }
@@ -117,7 +149,8 @@ function crc32(data: Buffer): number {
 export function toPalettePng(png: Buffer): Buffer {
   const { width, height, rgb } = decode(png);
   const pixelCount = width * height;
-  const bucketOf = (i: number) => ((rgb[i] >> 3) << 10) | ((rgb[i + 1] >> 3) << 5) | (rgb[i + 2] >> 3);
+  const bucketOf = (i: number) =>
+    ((rgb[i] >> 3) << 10) | ((rgb[i + 1] >> 3) << 5) | (rgb[i + 2] >> 3);
 
   const counts = new Uint32Array(32768);
   const sums = new Float64Array(32768 * 3);
@@ -129,20 +162,29 @@ export function toPalettePng(png: Buffer): Buffer {
     sums[bucket * 3 + 2] += rgb[i + 2];
   }
 
-  const buckets = Array.from(counts.keys()).filter((bucket) => counts[bucket] > 0);
+  const buckets = Array.from(counts.keys()).filter(
+    (bucket) => counts[bucket] > 0,
+  );
   buckets.sort((a, b) => counts[b] - counts[a]);
-  const palette = buckets.slice(0, 256).map((bucket) => [0, 1, 2].map((c) => Math.round(sums[bucket * 3 + c] / counts[bucket])));
+  const palette = buckets
+    .slice(0, 256)
+    .map((bucket) =>
+      [0, 1, 2].map((c) => Math.round(sums[bucket * 3 + c] / counts[bucket])),
+    );
 
   const indexOfBucket = new Int16Array(32768).fill(-1);
   const nearest = (bucket: number): number => {
     if (indexOfBucket[bucket] >= 0) {
       return indexOfBucket[bucket];
     }
-    const [r, g, b] = [0, 1, 2].map((c) => sums[bucket * 3 + c] / counts[bucket]);
+    const [r, g, b] = [0, 1, 2].map(
+      (c) => sums[bucket * 3 + c] / counts[bucket],
+    );
     let best = 0;
     let bestDistance = Infinity;
     palette.forEach(([pr, pg, pb], index) => {
-      const distance = (pr - r) ** 2 * 0.3 + (pg - g) ** 2 * 0.59 + (pb - b) ** 2 * 0.11;
+      const distance =
+        (pr - r) ** 2 * 0.3 + (pg - g) ** 2 * 0.59 + (pb - b) ** 2 * 0.11;
       if (distance < bestDistance) {
         bestDistance = distance;
         best = index;

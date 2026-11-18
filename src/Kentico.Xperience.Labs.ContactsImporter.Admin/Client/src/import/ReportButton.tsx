@@ -1,12 +1,23 @@
-import { Button, ButtonColor, NotificationBarAlert, Spacing, Stack } from '@kentico/xperience-admin-components';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Button,
+  ButtonColor,
+  NotificationBarAlert,
+  Spacing,
+  Stack,
+} from "@kentico/xperience-admin-components";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
-import { downloadReport, saveBlob } from '../process/report-download';
-import { Commands } from '../shared/commands';
-import type { ExecuteCommand, GetReportRequest, GetReportResponse, ProcessPhase } from '../shared/commands';
-import { useIsMounted } from '../shared/hooks';
-import { useText } from '../shared/i18n';
-import { TestIds, Text, testId } from '../shared/ui';
+import { downloadReport, saveBlob } from "../process/report-download";
+import { Commands } from "../shared/commands";
+import type {
+  ExecuteCommand,
+  GetReportRequest,
+  GetReportResponse,
+  ProcessPhase,
+} from "../shared/commands";
+import { useIsMounted } from "../shared/hooks";
+import { useText } from "../shared/i18n";
+import { TestIds, Text, testId } from "../shared/ui";
 
 export interface ReportButtonProps {
   readonly execute: ExecuteCommand;
@@ -16,7 +27,12 @@ export interface ReportButtonProps {
 }
 
 /** Downloads a row report page by page (`GET_REPORT`) and saves it as one `.csv.gz` file. */
-export const ReportButton = ({ execute, phase, label, hint }: ReportButtonProps) => {
+export const ReportButton = ({
+  execute,
+  phase,
+  label,
+  hint,
+}: ReportButtonProps) => {
   const { t } = useText();
   const isMounted = useIsMounted();
   const abortRef = useRef<AbortController | null>(null);
@@ -34,15 +50,28 @@ export const ReportButton = ({ execute, phase, label, hint }: ReportButtonProps)
       const file = await downloadReport({
         phase,
         signal: controller.signal,
-        call: (request, signal) => execute<GetReportResponse, GetReportRequest>(Commands.GetReport, request, signal),
-        onProgress: (received) => isMounted() && setRows(received),
+        call: (request, signal) =>
+          execute<GetReportResponse, GetReportRequest>(
+            Commands.GetReport,
+            request,
+            signal,
+          ),
+        onProgress: (received) => {
+          if (isMounted()) {
+            setRows(received);
+          }
+        },
       });
       if (isMounted()) {
         saveBlob(file.fileName, file.blob);
       }
     } catch (reason) {
       if (isMounted() && !controller.signal.aborted) {
-        setError(t('contactsimporter.review.downloadfailed', { reason: reason instanceof Error ? reason.message : '' }));
+        setError(
+          t("contactsimporter.review.downloadfailed", {
+            reason: reason instanceof Error ? reason.message : "",
+          }),
+        );
       }
     } finally {
       if (isMounted()) {
@@ -53,10 +82,22 @@ export const ReportButton = ({ execute, phase, label, hint }: ReportButtonProps)
 
   return (
     <Stack spacing={Spacing.S}>
-      {error && <NotificationBarAlert onDismiss={() => setError(null)}>{error}</NotificationBarAlert>}
+      {error && (
+        <NotificationBarAlert
+          onDismiss={() => {
+            setError(null);
+          }}
+        >
+          {error}
+        </NotificationBarAlert>
+      )}
       <div>
         <Button
-          label={rows === null ? label : t('contactsimporter.review.downloading', { count: rows, rows })}
+          label={
+            rows === null
+              ? label
+              : t("contactsimporter.review.downloading", { count: rows, rows })
+          }
           color={ButtonColor.Secondary}
           icon="xp-arrow-down-line"
           disabled={rows !== null}

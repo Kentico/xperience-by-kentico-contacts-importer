@@ -30,8 +30,15 @@ export class DataProtectionPage {
   }
 
   private consentFromUrl(name: string): Consent {
-    const match = consentUrlPattern.exec(this.page.url())!;
-    return { id: Number(match[2]), name, url: `${adminBaseUrl}/${applicationPath}/${match[1]}/consents/${match[2]}` };
+    const match = consentUrlPattern.exec(this.page.url());
+    if (!match) {
+      throw new Error(`No consent in ${this.page.url()}`);
+    }
+    return {
+      id: Number(match[2]),
+      name,
+      url: `${adminBaseUrl}/${applicationPath}/${match[1]}/consents/${match[2]}`,
+    };
   }
 
   // Returns the consent with this name, creating it when it does not exist yet (a fresh database has no consents).
@@ -41,16 +48,27 @@ export class DataProtectionPage {
     await this.page.goto(`${adminBaseUrl}/${applicationPath}`);
     const createButton = this.page.getByTestId("button-create");
     await expect(createButton).toBeVisible({ timeout: 30_000 });
-    await expect(this.searchInput.or(this.emptyNotice).first()).toBeVisible({ timeout: 30_000 });
+    await expect(this.searchInput.or(this.emptyNotice).first()).toBeVisible({
+      timeout: 30_000,
+    });
 
     if (await this.searchInput.isVisible()) {
       await this.searchInput.fill(name);
       await this.searchInput.press("Enter");
-      const existing = this.page.getByTestId("table-cell-ConsentDisplayName").filter({ hasText: new RegExp(`^${escapeRegExp(name)}$`) });
-      await expect(existing.first().or(this.page.getByText("We couldn't find any matches")).first()).toBeVisible({ timeout: 30_000 });
+      const existing = this.page
+        .getByTestId("table-cell-ConsentDisplayName")
+        .filter({ hasText: new RegExp(`^${escapeRegExp(name)}$`) });
+      await expect(
+        existing
+          .first()
+          .or(this.page.getByText("We couldn't find any matches"))
+          .first(),
+      ).toBeVisible({ timeout: 30_000 });
       if ((await existing.count()) > 0) {
         await existing.first().click();
-        await expect(this.page).toHaveURL(consentUrlPattern, { timeout: 30_000 });
+        await expect(this.page).toHaveURL(consentUrlPattern, {
+          timeout: 30_000,
+        });
         return this.consentFromUrl(name);
       }
     }
@@ -66,9 +84,14 @@ export class DataProtectionPage {
   }
 
   // Opens the Consent agreements tab filtered to `email`. Returns false when the consent has no agreements at all.
-  private async searchAgreement(consent: Consent, email: string): Promise<boolean> {
+  private async searchAgreement(
+    consent: Consent,
+    email: string,
+  ): Promise<boolean> {
     await this.page.goto(`${consent.url}/consent-agreements`);
-    await expect(this.searchInput.or(this.emptyNotice).first()).toBeVisible({ timeout: 30_000 });
+    await expect(this.searchInput.or(this.emptyNotice).first()).toBeVisible({
+      timeout: 30_000,
+    });
     if (!(await this.searchInput.isVisible())) {
       return false;
     }
@@ -79,12 +102,21 @@ export class DataProtectionPage {
   }
 
   // The contact has an agreement with the consent that is not revoked; `time` is part of the shown agreement time
-  async expectAgreement(consent: Consent, email: string, time?: string | RegExp): Promise<void> {
-    expect(await this.searchAgreement(consent, email), "the consent has agreements").toBe(true);
+  async expectAgreement(
+    consent: Consent,
+    email: string,
+    time?: string | RegExp,
+  ): Promise<void> {
+    expect(
+      await this.searchAgreement(consent, email),
+      "the consent has agreements",
+    ).toBe(true);
     const row = this.row(email);
     await expect(row).toHaveCount(1, { timeout: 30_000 });
     if (time !== undefined) {
-      await expect(row.getByTestId("table-cell-ConsentAgreementTime")).toContainText(time);
+      await expect(
+        row.getByTestId("table-cell-ConsentAgreementTime"),
+      ).toContainText(time);
     }
   }
 
@@ -93,7 +125,9 @@ export class DataProtectionPage {
       return;
     }
 
-    await expect(this.page.getByText("We couldn't find any matches")).toBeVisible({ timeout: 30_000 });
+    await expect(
+      this.page.getByText("We couldn't find any matches"),
+    ).toBeVisible({ timeout: 30_000 });
     await expect(this.row(email)).toHaveCount(0);
   }
 }

@@ -1,4 +1,8 @@
-import type { OpenSourceOptions, SourceFormat, TargetField } from '../import-core';
+import type {
+  OpenSourceOptions,
+  SourceFormat,
+  TargetField,
+} from "../import-core";
 import type {
   AggregatesDto,
   FieldDto,
@@ -10,10 +14,18 @@ import type {
   ProgressDto,
   ReportsDto,
   StatusDto,
-} from '../shared/commands';
+} from "../shared/commands";
 
 /** Steps of an import (PLAN §14). */
-export const STEPS = ['file', 'map', 'upload', 'options', 'review', 'run', 'results'] as const;
+export const STEPS = [
+  "file",
+  "map",
+  "upload",
+  "options",
+  "review",
+  "run",
+  "results",
+] as const;
 
 export type Step = (typeof STEPS)[number];
 
@@ -21,33 +33,36 @@ export type Step = (typeof STEPS)[number];
  * Step a job in `state` is at (PLAN §4 "UI steps ↔ states"). `Paused` is derived from a stale
  * heartbeat and can be a paused analysis or a paused import: `phase` tells which.
  */
-export function stepForState(state: JobState, phase: ProcessPhase = 'execute'): Step {
+export function stepForState(
+  state: JobState,
+  phase: ProcessPhase = "execute",
+): Step {
   switch (state) {
-    case 'Configuring':
-      return 'file';
-    case 'Uploading':
-    case 'Uploaded':
+    case "Configuring":
+      return "file";
+    case "Uploading":
+    case "Uploaded":
       // The upload runs in the background (upload bar); the Options step is in view meanwhile.
-      return 'options';
-    case 'Analyzing':
-    case 'Analyzed':
-      return 'review';
-    case 'Confirmed':
-    case 'Running':
-      return 'run';
-    case 'Paused':
-      return phase === 'analyze' ? 'review' : 'run';
-    case 'Completed':
-    case 'Failed':
-    case 'Cancelled':
-      return 'results';
+      return "options";
+    case "Analyzing":
+    case "Analyzed":
+      return "review";
+    case "Confirmed":
+    case "Running":
+      return "run";
+    case "Paused":
+      return phase === "analyze" ? "review" : "run";
+    case "Completed":
+    case "Failed":
+    case "Cancelled":
+      return "results";
     default:
-      return 'file';
+      return "file";
   }
 }
 
 export function isFinished(state: JobState): boolean {
-  return state === 'Completed' || state === 'Failed' || state === 'Cancelled';
+  return state === "Completed" || state === "Failed" || state === "Cancelled";
 }
 
 /**
@@ -55,7 +70,7 @@ export function isFinished(state: JobState): boolean {
  * (or passed) and cannot be opened again for this import; `upcoming`: not reached yet, or running
  * (the upload in the background).
  */
-export type StepState = 'current' | 'done' | 'upcoming' | 'locked';
+export type StepState = "current" | "done" | "upcoming" | "locked";
 
 export interface StepView {
   readonly state: StepState;
@@ -77,77 +92,99 @@ export interface StepContext {
  * Review stay open until the import is confirmed (Review once a check exists or runs); from the
  * confirmation on every earlier step is locked; a finished import offers only Results.
  */
-export function stepViews({ current, jobState, phase = 'execute' }: StepContext): Record<Step, StepView> {
+export function stepViews({
+  current,
+  jobState,
+  phase = "execute",
+}: StepContext): Record<Step, StepView> {
   const view = (step: Step, state: StepState): StepView =>
-    step === current ? { state: 'current', clickable: false } : { state, clickable: state === 'done' };
-  const build = (pick: (step: Step, index: number) => StepView): Record<Step, StepView> =>
-    Object.fromEntries(STEPS.map((step, index) => [step, pick(step, index)])) as Record<Step, StepView>;
+    step === current
+      ? { state: "current", clickable: false }
+      : { state, clickable: state === "done" };
+  const build = (
+    pick: (step: Step, index: number) => StepView,
+  ): Record<Step, StepView> =>
+    Object.fromEntries(
+      STEPS.map((step, index) => [step, pick(step, index)]),
+    ) as Record<Step, StepView>;
 
   switch (stageOf(jobState, phase)) {
-    case 'setup': {
+    case "setup": {
       // Before the upload: back to an earlier step, never ahead.
       const currentIndex = STEPS.indexOf(current);
 
-      return build((step, index) => view(step, index < currentIndex ? 'done' : 'upcoming'));
+      return build((step, index) =>
+        view(step, index < currentIndex ? "done" : "upcoming"),
+      );
     }
-    case 'prepare': {
-      const uploading = jobState === 'Uploading';
-      const checkExists = jobState === 'Analyzing' || jobState === 'Analyzed' || jobState === 'Paused';
+    case "prepare": {
+      const uploading = jobState === "Uploading";
+      const checkExists =
+        jobState === "Analyzing" ||
+        jobState === "Analyzed" ||
+        jobState === "Paused";
 
       return build((step) => {
         switch (step) {
-          case 'file':
-          case 'map':
+          case "file":
+          case "map":
             // File is in view again only to select the file of an interrupted upload (resume).
-            return view(step, 'locked');
-          case 'upload':
-            return view(step, uploading ? 'upcoming' : 'locked');
-          case 'options':
+            return view(step, "locked");
+          case "upload":
+            return view(step, uploading ? "upcoming" : "locked");
+          case "options":
             // While the file is selected again for a resume, the upload has not continued yet.
-            return view(step, uploading && current === 'file' ? 'upcoming' : 'done');
-          case 'review':
-            return view(step, checkExists ? 'done' : 'upcoming');
+            return view(
+              step,
+              uploading && current === "file" ? "upcoming" : "done",
+            );
+          case "review":
+            return view(step, checkExists ? "done" : "upcoming");
           default:
-            return view(step, 'upcoming');
+            return view(step, "upcoming");
         }
       });
     }
-    case 'execute': {
-      const runIndex = STEPS.indexOf('run');
+    case "execute": {
+      const runIndex = STEPS.indexOf("run");
 
-      return build((step, index) => view(step, index < runIndex ? 'locked' : 'upcoming'));
+      return build((step, index) =>
+        view(step, index < runIndex ? "locked" : "upcoming"),
+      );
     }
     default:
       // Finished: Results is the only step left.
-      return build((step) => view(step, step === 'results' ? 'done' : 'locked'));
+      return build((step) =>
+        view(step, step === "results" ? "done" : "locked"),
+      );
   }
 }
 
-type Stage = 'setup' | 'prepare' | 'execute' | 'finished';
+type Stage = "setup" | "prepare" | "execute" | "finished";
 
 function stageOf(state: JobState | null, phase: ProcessPhase): Stage {
   switch (state) {
     case null:
-    case 'Configuring':
-      return 'setup';
-    case 'Uploading':
-    case 'Uploaded':
-    case 'Analyzing':
-    case 'Analyzed':
-      return 'prepare';
-    case 'Paused':
-      return phase === 'analyze' ? 'prepare' : 'execute';
-    case 'Confirmed':
-    case 'Running':
-      return 'execute';
+    case "Configuring":
+      return "setup";
+    case "Uploading":
+    case "Uploaded":
+    case "Analyzing":
+    case "Analyzed":
+      return "prepare";
+    case "Paused":
+      return phase === "analyze" ? "prepare" : "execute";
+    case "Confirmed":
+    case "Running":
+      return "execute";
     default:
-      return 'finished';
+      return "finished";
   }
 }
 
 /** How the file is read; empty strings mean "detect". Chosen in the File step. */
 export interface SourceSettings {
-  readonly format: '' | SourceFormat;
+  readonly format: "" | SourceFormat;
   readonly encoding: string;
   readonly delimiter: string;
   readonly hasHeader: boolean;
@@ -155,15 +192,21 @@ export interface SourceSettings {
   readonly sheet: string;
 }
 
-export const DEFAULT_SOURCE_SETTINGS: SourceSettings = { format: '', encoding: '', delimiter: '', hasHeader: true, sheet: '' };
+export const DEFAULT_SOURCE_SETTINGS: SourceSettings = {
+  format: "",
+  encoding: "",
+  delimiter: "",
+  hasHeader: true,
+  sheet: "",
+};
 
 export function toOpenOptions(settings: SourceSettings): OpenSourceOptions {
   return {
-    ...(settings.format !== '' && { format: settings.format }),
-    ...(settings.encoding !== '' && { encoding: settings.encoding }),
-    ...(settings.delimiter !== '' && { delimiter: settings.delimiter }),
+    ...(settings.format !== "" && { format: settings.format }),
+    ...(settings.encoding !== "" && { encoding: settings.encoding }),
+    ...(settings.delimiter !== "" && { delimiter: settings.delimiter }),
     hasHeader: settings.hasHeader,
-    ...(settings.sheet !== '' && { sheet: settings.sheet }),
+    ...(settings.sheet !== "" && { sheet: settings.sheet }),
   };
 }
 
@@ -175,10 +218,17 @@ const CLIENT_MAX_CHUNK_UNCOMPRESSED_BYTES = 32 * 1024 * 1024;
  * chunk validation, so rows the server would refuse are skipped in the browser instead:
  * text fields are limited by their size, all other fields by a fixed length.
  */
-export function toTargetFields(fields: readonly FieldDto[], limits: LimitsDto): TargetField[] {
+export function toTargetFields(
+  fields: readonly FieldDto[],
+  limits: LimitsDto,
+): TargetField[] {
   return fields.map((field) => {
-    const isText = field.dataType.toLowerCase() === 'text' || field.dataType.toLowerCase() === 'longtext';
-    const maxLength = isText ? (field.maxLength ?? undefined) : limits.maxNonTextValueLength;
+    const isText =
+      field.dataType.toLowerCase() === "text" ||
+      field.dataType.toLowerCase() === "longtext";
+    const maxLength = isText
+      ? (field.maxLength ?? undefined)
+      : limits.maxNonTextValueLength;
 
     return {
       name: field.name,
@@ -190,10 +240,16 @@ export function toTargetFields(fields: readonly FieldDto[], limits: LimitsDto): 
 }
 
 /** Chunk sizes for the worker, within the server's limits. */
-export function chunkSizes(limits: LimitsDto): { targetChunkBytes: number; maxChunkUncompressedBytes: number } {
+export function chunkSizes(limits: LimitsDto): {
+  targetChunkBytes: number;
+  maxChunkUncompressedBytes: number;
+} {
   return {
     targetChunkBytes: limits.chunkSizeBytes,
-    maxChunkUncompressedBytes: Math.min(CLIENT_MAX_CHUNK_UNCOMPRESSED_BYTES, limits.maxChunkUncompressedBytes),
+    maxChunkUncompressedBytes: Math.min(
+      CLIENT_MAX_CHUNK_UNCOMPRESSED_BYTES,
+      limits.maxChunkUncompressedBytes,
+    ),
   };
 }
 
@@ -202,7 +258,7 @@ export function chunkSizes(limits: LimitsDto): { targetChunkBytes: number; maxCh
  * fields: caption = column name), the column name without the `Contact` prefix in words
  * (`ContactBusinessPhone` → `Business phone`). The column name itself is `field.name`.
  */
-export function fieldLabel(field: Pick<FieldDto, 'name' | 'caption'>): string {
+export function fieldLabel(field: Pick<FieldDto, "name" | "caption">): string {
   if (field.caption && field.caption !== field.name) {
     return field.caption;
   }
@@ -211,16 +267,18 @@ export function fieldLabel(field: Pick<FieldDto, 'name' | 'caption'>): string {
 }
 
 function humanizeFieldName(name: string): string {
-  const bare = /^Contact[A-Z]/.test(name) ? name.slice('Contact'.length) : name;
+  const bare = /^Contact[A-Z]/.test(name) ? name.slice("Contact".length) : name;
   const words = bare
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
     .split(/[\s_]+/)
     .filter((word) => word.length > 0)
     // Keep acronyms (ID, URL) as they are.
-    .map((word, index) => (index === 0 || /^[A-Z0-9]{2,}$/.test(word) ? word : word.toLowerCase()));
+    .map((word, index) =>
+      index === 0 || /^[A-Z0-9]{2,}$/.test(word) ? word : word.toLowerCase(),
+    );
 
-  return words.length > 0 ? words.join(' ') : name;
+  return words.length > 0 ? words.join(" ") : name;
 }
 
 /** A stored job as `GET_JOB` returns it. */
@@ -232,9 +290,19 @@ export interface JobView {
 }
 
 /** `JobView` of a command response; `null` when the response holds no job. */
-export function toJobView(response: ImportJobResponse | undefined): JobView | null {
-  return response?.job && response.status && response.progress && response.reports
-    ? { job: response.job, status: response.status, progress: response.progress, reports: response.reports }
+export function toJobView(
+  response: ImportJobResponse | undefined,
+): JobView | null {
+  return response?.job &&
+    response.status &&
+    response.progress &&
+    response.reports
+    ? {
+        job: response.job,
+        status: response.status,
+        progress: response.progress,
+        reports: response.reports,
+      }
     : null;
 }
 
@@ -278,6 +346,11 @@ export const NO_COUNTS: AggregatesDto = {
  * Progress to show before the first call of `phase`: the stored progress when it belongs to that
  * phase, otherwise the same totals with nothing processed.
  */
-export function progressFor(phase: ProcessPhase, progress: ProgressDto): ProgressDto {
-  return progress.phase === phase ? progress : { ...progress, phase, rowsProcessed: 0, aggregates: NO_COUNTS };
+export function progressFor(
+  phase: ProcessPhase,
+  progress: ProgressDto,
+): ProgressDto {
+  return progress.phase === phase
+    ? progress
+    : { ...progress, phase, rowsProcessed: 0, aggregates: NO_COUNTS };
 }

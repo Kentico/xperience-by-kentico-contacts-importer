@@ -1,8 +1,8 @@
-import { DEFAULT_MAX_RECORD_CHARS } from './csv';
-import { MAX_FLATTEN_DEPTH } from './ndjson';
-import { ImportError } from './source';
-import type { SourceRow } from './source';
-import type { TextFormatReader } from './text-source';
+import { DEFAULT_MAX_RECORD_CHARS } from "./csv";
+import { MAX_FLATTEN_DEPTH } from "./ndjson";
+import { ImportError } from "./source";
+import type { SourceRow } from "./source";
+import type { TextFormatReader } from "./text-source";
 
 export interface JsonArrayReaderOptions {
   /** Cap on the characters of one array item. */
@@ -36,7 +36,7 @@ function isWhitespace(code: number): boolean {
  * - Broken JSON is fatal (`invalidJson` with the item index): the stream cannot resynchronize.
  */
 export class JsonArrayReader implements TextFormatReader {
-  readonly format = 'json' as const;
+  readonly format = "json" as const;
   readonly dynamicColumns = true;
   readonly columns: string[] = [];
   columnsReady = false;
@@ -45,7 +45,7 @@ export class JsonArrayReader implements TextFormatReader {
   private readonly columnIndex = new Map<string, number>();
   private phase: number = Phase.Start;
   /** Text of the current item from earlier pieces. */
-  private carry = '';
+  private carry = "";
   private depth = 0;
   private inString = false;
   /** A backslash ended the previous piece inside a string. */
@@ -68,7 +68,10 @@ export class JsonArrayReader implements TextFormatReader {
     let i = 0;
 
     if (this.phase === Phase.Start) {
-      while (i < length && (isWhitespace(text.charCodeAt(i)) || text.charCodeAt(i) === 0xfeff)) {
+      while (
+        i < length &&
+        (isWhitespace(text.charCodeAt(i)) || text.charCodeAt(i) === 0xfeff)
+      ) {
         i++;
       }
       if (i === length) {
@@ -76,8 +79,8 @@ export class JsonArrayReader implements TextFormatReader {
       }
       if (text.charCodeAt(i) !== 0x5b /* [ */) {
         throw new ImportError(
-          'jsonNotArray',
-          'The JSON file does not start with an array ([). For one object per line, use NDJSON.',
+          "jsonNotArray",
+          "The JSON file does not start with an array ([). For one object per line, use NDJSON.",
         );
       }
       this.phase = Phase.Items;
@@ -97,7 +100,7 @@ export class JsonArrayReader implements TextFormatReader {
       if (this.inString) {
         const quote = text.indexOf('"', i);
         if (backslash !== -1 && backslash < i) {
-          backslash = text.indexOf('\\', i);
+          backslash = text.indexOf("\\", i);
         }
         if (backslash !== -1 && (quote === -1 || backslash < quote)) {
           if (backslash + 1 < length) {
@@ -129,7 +132,7 @@ export class JsonArrayReader implements TextFormatReader {
           }
           // end of the top-level array
           this.finishItem(this.carry + text.slice(start, i), true, out);
-          this.carry = '';
+          this.carry = "";
           this.phase = Phase.Done;
           i++;
           start = i;
@@ -138,7 +141,7 @@ export class JsonArrayReader implements TextFormatReader {
         this.depth--;
       } else if (code === 0x2c /* , */ && this.depth === 0) {
         this.finishItem(this.carry + text.slice(start, i), false, out);
-        this.carry = '';
+        this.carry = "";
         start = i + 1;
       }
       i++;
@@ -150,7 +153,7 @@ export class JsonArrayReader implements TextFormatReader {
       }
       if (this.carry.length > this.maxRecordChars) {
         throw new ImportError(
-          'recordTooLarge',
+          "recordTooLarge",
           `Item ${this.item + 1} of the JSON array is larger than ${this.maxRecordChars} characters.`,
           { item: this.item + 1, maxChars: this.maxRecordChars },
         );
@@ -162,9 +165,13 @@ export class JsonArrayReader implements TextFormatReader {
     if (this.phase === Phase.Done) {
       for (let j = i; j < length; j++) {
         if (!isWhitespace(text.charCodeAt(j))) {
-          throw new ImportError('invalidJson', 'Unexpected text after the end of the JSON array.', {
-            item: this.item,
-          });
+          throw new ImportError(
+            "invalidJson",
+            "Unexpected text after the end of the JSON array.",
+            {
+              item: this.item,
+            },
+          );
         }
       }
     }
@@ -172,20 +179,31 @@ export class JsonArrayReader implements TextFormatReader {
 
   end(): void {
     if (this.phase === Phase.Start) {
-      throw new ImportError('jsonNotArray', 'The JSON file is empty or does not hold an array.');
+      throw new ImportError(
+        "jsonNotArray",
+        "The JSON file is empty or does not hold an array.",
+      );
     }
     if (this.phase === Phase.Items) {
-      throw new ImportError('invalidJson', 'The JSON array is not closed; the file ends too early.', {
-        item: this.item + 1,
-      });
+      throw new ImportError(
+        "invalidJson",
+        "The JSON array is not closed; the file ends too early.",
+        {
+          item: this.item + 1,
+        },
+      );
     }
     this.columnsReady = true;
   }
 
   private invalid(): ImportError {
-    return new ImportError('invalidJson', `Item ${this.item + 1} of the JSON array is not valid JSON.`, {
-      item: this.item + 1,
-    });
+    return new ImportError(
+      "invalidJson",
+      `Item ${this.item + 1} of the JSON array is not valid JSON.`,
+      {
+        item: this.item + 1,
+      },
+    );
   }
 
   private finishItem(raw: string, closing: boolean, out: SourceRow[]): void {
@@ -208,9 +226,13 @@ export class JsonArrayReader implements TextFormatReader {
       row = parser.parseItem(this.item);
     } catch (error) {
       if (error instanceof JsonSyntaxError) {
-        throw new ImportError('invalidJson', `Item ${this.item} of the JSON array is not valid JSON.`, {
-          item: this.item,
-        });
+        throw new ImportError(
+          "invalidJson",
+          `Item ${this.item} of the JSON array is not valid JSON.`,
+          {
+            item: this.item,
+          },
+        );
       }
       throw error;
     }
@@ -240,11 +262,11 @@ class JsonItemParser {
       this.compact();
       this.end();
 
-      return { rowNumber, values: [], error: 'notAnObject' };
+      return { rowNumber, values: [], error: "notAnObject" };
     }
 
-    const values: string[] = new Array<string>(this.columns.length).fill('');
-    this.flattenObject('', values, 0);
+    const values: string[] = new Array<string>(this.columns.length).fill("");
+    this.flattenObject("", values, 0);
     this.end();
 
     return { rowNumber, values };
@@ -284,7 +306,7 @@ class JsonItemParser {
       this.columnIndex.set(name, index);
     }
     while (values.length < index) {
-      values.push('');
+      values.push("");
     }
     values[index] = value;
   }
@@ -335,19 +357,19 @@ class JsonItemParser {
       return this.parseString();
     }
     if (code === 0x6e /* n */) {
-      this.literal('null');
+      this.literal("null");
 
-      return '';
+      return "";
     }
     if (code === 0x74 /* t */) {
-      this.literal('true');
+      this.literal("true");
 
-      return 'true';
+      return "true";
     }
     if (code === 0x66 /* f */) {
-      this.literal('false');
+      this.literal("false");
 
-      return 'false';
+      return "false";
     }
     if (code === 0x5b || code === 0x7b) {
       return this.compact();
@@ -372,7 +394,7 @@ class JsonItemParser {
       if (s.charCodeAt(this.i) === close) {
         this.i++;
 
-        return object ? '{}' : '[]';
+        return object ? "{}" : "[]";
       }
       const parts: string[] = [];
       for (;;) {
@@ -399,22 +421,22 @@ class JsonItemParser {
         this.fail();
       }
 
-      return object ? `{${parts.join(',')}}` : `[${parts.join(',')}]`;
+      return object ? `{${parts.join(",")}}` : `[${parts.join(",")}]`;
     }
     if (code === 0x6e) {
-      this.literal('null');
+      this.literal("null");
 
-      return 'null';
+      return "null";
     }
     if (code === 0x74) {
-      this.literal('true');
+      this.literal("true");
 
-      return 'true';
+      return "true";
     }
     if (code === 0x66) {
-      this.literal('false');
+      this.literal("false");
 
-      return 'false';
+      return "false";
     }
 
     return this.parseNumber();
@@ -446,7 +468,7 @@ class JsonItemParser {
     if (quote === -1) {
       this.fail();
     }
-    const backslash = s.indexOf('\\', start);
+    const backslash = s.indexOf("\\", start);
     if (backslash === -1 || backslash > quote) {
       const value = s.slice(start, quote);
       this.checkControl(value);
@@ -455,11 +477,11 @@ class JsonItemParser {
       return value;
     }
 
-    let result = '';
+    let result = "";
     let i = start;
     for (;;) {
       quote = s.indexOf('"', i);
-      const escape = s.indexOf('\\', i);
+      const escape = s.indexOf("\\", i);
       if (quote === -1) {
         this.fail();
       }
@@ -480,28 +502,28 @@ class JsonItemParser {
         case '"':
           result += '"';
           break;
-        case '\\':
-          result += '\\';
+        case "\\":
+          result += "\\";
           break;
-        case '/':
-          result += '/';
+        case "/":
+          result += "/";
           break;
-        case 'b':
-          result += '\b';
+        case "b":
+          result += "\b";
           break;
-        case 'f':
-          result += '\f';
+        case "f":
+          result += "\f";
           break;
-        case 'n':
-          result += '\n';
+        case "n":
+          result += "\n";
           break;
-        case 'r':
-          result += '\r';
+        case "r":
+          result += "\r";
           break;
-        case 't':
-          result += '\t';
+        case "t":
+          result += "\t";
           break;
-        case 'u': {
+        case "u": {
           const hex = s.slice(i, i + 4);
           if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
             this.fail();

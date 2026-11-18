@@ -12,6 +12,13 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["playwright.config.ts", "screenshots.config.ts", "admin/**/*.ts", "live-site/**/*.ts", "scripts/**/*.ts", "shared/**/*.ts"],
+  "include": [
+    "playwright.config.ts",
+    "screenshots.config.ts",
+    "admin/**/*.ts",
+    "live-site/**/*.ts",
+    "scripts/**/*.ts",
+    "shared/**/*.ts"
+  ],
   "exclude": ["node_modules", "playwright-report", "test-results"]
 }

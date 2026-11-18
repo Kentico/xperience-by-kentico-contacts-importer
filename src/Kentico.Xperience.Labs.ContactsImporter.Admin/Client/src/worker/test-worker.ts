@@ -1,6 +1,6 @@
-import type { WorkerLike } from './client';
-import type { WorkerEvent, WorkerRequest } from './protocol';
-import { ImportWorkerSession } from './session';
+import type { WorkerLike } from "./client";
+import type { WorkerEvent, WorkerRequest } from "./protocol";
+import { ImportWorkerSession } from "./session";
 
 /**
  * Test double of the import worker: runs `ImportWorkerSession` in the test process and delivers
@@ -37,19 +37,19 @@ export class InProcessWorker implements WorkerLike {
 }
 
 /** CSV with `rows` data rows: `Email,First Name` + `user{n}@example.com,Name {n} {padding}`. */
-export function contactsCsv(rows: number, padding = ''): string {
-  const lines = ['Email,First Name'];
+export function contactsCsv(rows: number, padding = ""): string {
+  const lines = ["Email,First Name"];
   for (let i = 1; i <= rows; i++) {
     lines.push(`user${i}@example.com,Name ${i} ${padding}`);
   }
 
-  return `${lines.join('\n')}\n`;
+  return `${lines.join("\n")}\n`;
 }
 
 /** Text that gzip cannot shrink much, so small inputs still produce several chunks. */
 export function noise(length: number, seed: number): string {
   let state = seed >>> 0 || 1;
-  let text = '';
+  let text = "";
   while (text.length < length) {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     text += state.toString(36);
@@ -60,10 +60,10 @@ export function noise(length: number, seed: number): string {
 
 /** CSV whose rows carry incompressible padding: about `bytesPerRow` gzipped bytes per row. */
 export function noisyContactsCsv(rows: number, bytesPerRow: number): string {
-  const lines = ['Email,First Name'];
+  const lines = ["Email,First Name"];
   for (let i = 1; i <= rows; i++) {
     lines.push(`user${i}@example.com,${noise(bytesPerRow, i)}`);
   }
 
-  return `${lines.join('\n')}\n`;
+  return `${lines.join("\n")}\n`;
 }

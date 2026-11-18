@@ -1,8 +1,12 @@
 import { expect, newRunId, test } from "./contactsImporterFixtures";
-import { ImportPage } from "./contactsImporterPage";
+import type { ImportPage } from "./contactsImporterPage";
 import { DataProtectionPage, type Consent } from "./dataProtectionPage";
 import { RecipientListsPage, type RecipientList } from "./recipientListsPage";
-import { revokeConsent, sqlUnavailableReason, unsubscribeFromRecipientList } from "../shared/database";
+import {
+  revokeConsent,
+  sqlUnavailableReason,
+  unsubscribeFromRecipientList,
+} from "../shared/database";
 
 // Recipient list and consent options: Map (consent columns) -> Options -> Review -> Run dialog (consent
 // confirmation) -> Results, then the end state as Xperience shows it: the "Email status" of the contact in
@@ -26,16 +30,31 @@ function consentCsv(rows: ConsentRow[]): string {
   return `Email,First Name,Opt in,Opt in date\n${rows.map((r) => [r.email, r.firstName, r.optIn, r.optInDate].join(",")).join("\n")}\n`;
 }
 
-function rowsFor(runId: string, from: number, to: number, optIn: (n: number) => string = () => "yes"): ConsentRow[] {
+function rowsFor(
+  runId: string,
+  from: number,
+  to: number,
+  optIn: (n: number) => string = () => "yes",
+): ConsentRow[] {
   const rows: ConsentRow[] = [];
   for (let n = from; n <= to; n++) {
-    rows.push({ email: `e2e.${runId}.${n}@example.com`, firstName: `First${n}`, optIn: optIn(n), optInDate: `2025-03-0${n}` });
+    rows.push({
+      email: `e2e.${runId}.${n}@example.com`,
+      firstName: `First${n}`,
+      optIn: optIn(n),
+      optInDate: `2025-03-0${n}`,
+    });
   }
   return rows;
 }
 
 // Uploads the file, optionally with consent columns, and stops at the Options step.
-async function uploadToOptions(importPage: ImportPage, filePath: string, rows: number, consentColumns: boolean): Promise<void> {
+async function uploadToOptions(
+  importPage: ImportPage,
+  filePath: string,
+  rows: number,
+  consentColumns: boolean,
+): Promise<void> {
   await importPage.selectFile(filePath);
   await importPage.continueToMapping();
   // "Opt in" and "Opt in date" are not suggested as contact fields
@@ -53,8 +72,13 @@ async function uploadToOptions(importPage: ImportPage, filePath: string, rows: n
 // Run dialog of an import that affects consent: the statement from the server, then "Run import" = confirmation.
 async function runWithConfirmation(importPage: ImportPage): Promise<void> {
   await importPage.openRunDialog();
-  await expect(importPage.attestationStatement).toContainText("I confirm that documented consent exists");
-  await expect(importPage.attestationStatement).toHaveAttribute("data-statement-version", /.+/);
+  await expect(importPage.attestationStatement).toContainText(
+    "I confirm that documented consent exists",
+  );
+  await expect(importPage.attestationStatement).toHaveAttribute(
+    "data-statement-version",
+    /.+/,
+  );
   await expect(importPage.runDialogConfirmButton).toBeEnabled();
   await importPage.confirmRun();
   await importPage.expectResults("Completed");
@@ -72,7 +96,12 @@ test.describe("contacts importer: recipient lists and consent", () => {
     consent = await new DataProtectionPage(page).ensureConsent(consentName);
   });
 
-  test("defaults change no recipient list and no consent", async ({ page, importsList, importPage, uniqueFile }) => {
+  test("defaults change no recipient list and no consent", async ({
+    page,
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     const runId = newRunId();
     const rows = rowsFor(runId, 1, 2);
     const file = await uniqueFile("consent-defaults.csv", consentCsv(rows));
@@ -82,16 +111,30 @@ test.describe("contacts importer: recipient lists and consent", () => {
     await uploadToOptions(importPage, file.path, 2, false);
 
     // The safe choices are preselected
-    await expect(page.getByTestId("contacts-importer-recipient-list")).toHaveValue("(None)");
-    await expect(page.locator('input[name="contacts-importer-consent"][value="none"]')).toBeChecked();
+    await expect(
+      page.getByTestId("contacts-importer-recipient-list"),
+    ).toHaveValue("(None)");
+    await expect(
+      page.locator('input[name="contacts-importer-consent"][value="none"]'),
+    ).toBeChecked();
     // Consent per row needs a mapped consent column
-    await expect(page.locator('input[name="contacts-importer-consent"][value="blanketWithColumnOverride"]')).toBeDisabled();
+    await expect(
+      page.locator(
+        'input[name="contacts-importer-consent"][value="blanketWithColumnOverride"]',
+      ),
+    ).toBeDisabled();
     await expect(importPage.consentCallout).toHaveCount(0);
 
     await importPage.saveOptions();
     await importPage.expectAnalyzed();
-    await expect(importPage.consentSummary).toHaveAttribute("data-recipient-list-id", "");
-    await expect(importPage.consentSummary).toHaveAttribute("data-consent", "none");
+    await expect(importPage.consentSummary).toHaveAttribute(
+      "data-recipient-list-id",
+      "",
+    );
+    await expect(importPage.consentSummary).toHaveAttribute(
+      "data-consent",
+      "none",
+    );
 
     // No consent confirmation for an import that changes no subscription and no consent
     await importPage.openRunDialog();
@@ -101,8 +144,14 @@ test.describe("contacts importer: recipient lists and consent", () => {
     await importPage.expectCount("actual-created", 2);
     await expect(importPage.attestationRecord).toHaveCount(0);
 
-    await new RecipientListsPage(page).expectNoRecipient(list.id, rows[0].email);
-    await new DataProtectionPage(page).expectNoAgreement(consent, rows[0].email);
+    await new RecipientListsPage(page).expectNoRecipient(
+      list.id,
+      rows[0].email,
+    );
+    await new DataProtectionPage(page).expectNoAgreement(
+      consent,
+      rows[0].email,
+    );
   });
 
   test("adds contacts to a recipient list as subscribed and records consent for the rows that say yes", async ({
@@ -123,10 +172,18 @@ test.describe("contacts importer: recipient lists and consent", () => {
     await importPage.chooseRecipientList(list.name);
     await expect(importPage.consentCallout).toBeVisible();
     await expect(importPage.consentCallout).toContainText("double opt-in");
-    await expect(page.locator('input[name="contacts-importer-unsubscribed"][value="keep"]')).toBeChecked();
+    await expect(
+      page.locator(
+        'input[name="contacts-importer-unsubscribed"][value="keep"]',
+      ),
+    ).toBeChecked();
     await importPage.chooseOption("consent", "blanketWithColumnOverride");
     await importPage.chooseConsent(consent.name);
-    await expect(page.locator('input[name="contacts-importer-revokedConsent"][value="keep"]')).toBeChecked();
+    await expect(
+      page.locator(
+        'input[name="contacts-importer-revokedConsent"][value="keep"]',
+      ),
+    ).toBeChecked();
     await importPage.saveOptions();
 
     // Review: what the import would do, as counts of contacts
@@ -135,10 +192,20 @@ test.describe("contacts importer: recipient lists and consent", () => {
     await importPage.expectCount("expected-listAdded", 4);
     await importPage.expectCount("expected-consentRecorded", 2);
     await importPage.expectCount("expected-consentNotGiven", 2);
-    await expect(importPage.consentSummary).toHaveAttribute("data-recipient-list-id", String(list.id));
-    await expect(importPage.consentSummary).toHaveAttribute("data-consent", "blanketWithColumnOverride");
-    await expect(importPage.consentSummary).toContainText(`Recipient list: ${list.name}`);
-    await expect(importPage.consentSummary).toContainText(`Consent: ${consent.name}`);
+    await expect(importPage.consentSummary).toHaveAttribute(
+      "data-recipient-list-id",
+      String(list.id),
+    );
+    await expect(importPage.consentSummary).toHaveAttribute(
+      "data-consent",
+      "blanketWithColumnOverride",
+    );
+    await expect(importPage.consentSummary).toContainText(
+      `Recipient list: ${list.name}`,
+    );
+    await expect(importPage.consentSummary).toContainText(
+      `Consent: ${consent.name}`,
+    );
     // Checks run in a second tab, so the import page stays where it is
     const checks = await page.context().newPage();
     const lists = new RecipientListsPage(checks);
@@ -148,7 +215,9 @@ test.describe("contacts importer: recipient lists and consent", () => {
     await importPage.expectCount("actual-listAdded", 4);
     await importPage.expectCount("actual-consentRecorded", 2);
     await importPage.expectCount("actual-consentNotGiven", 2);
-    await expect(importPage.attestationRecord).toContainText("Consent confirmed by administrator");
+    await expect(importPage.attestationRecord).toContainText(
+      "Consent confirmed by administrator",
+    );
 
     // The list and consent of the import are shown in the imports list
     await importsList.goto();
@@ -166,9 +235,17 @@ test.describe("contacts importer: recipient lists and consent", () => {
     await dataProtection.expectNoAgreement(consent, rows[3].email);
   });
 
-  test("keeps unsubscribed contacts and withdrawn consent unless chosen otherwise", async ({ page, importsList, importPage, uniqueFile }) => {
+  test("keeps unsubscribed contacts and withdrawn consent unless chosen otherwise", async ({
+    page,
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     const sqlProblem = sqlUnavailableReason();
-    test.skip(sqlProblem !== null, `Unsubscribing and withdrawing consent need the database: ${sqlProblem}`);
+    test.skip(
+      sqlProblem !== null,
+      `Unsubscribing and withdrawing consent need the database: ${sqlProblem}`,
+    );
     const runId = newRunId();
     const rows = rowsFor(runId, 1, 3);
     const checks = await page.context().newPage();
@@ -214,8 +291,14 @@ test.describe("contacts importer: recipient lists and consent", () => {
     await importPage.expectCount("expected-listAdded", 0);
     await importPage.expectCount("expected-consentKeptRevoked", 2);
     await importPage.expectCount("expected-consentAlreadyAgreed", 1);
-    await expect(importPage.consentSummary).toHaveAttribute("data-unsubscribed", "keep");
-    await expect(importPage.consentSummary).toHaveAttribute("data-revoked-consent", "keep");
+    await expect(importPage.consentSummary).toHaveAttribute(
+      "data-unsubscribed",
+      "keep",
+    );
+    await expect(importPage.consentSummary).toHaveAttribute(
+      "data-revoked-consent",
+      "keep",
+    );
     await runWithConfirmation(importPage);
     await importPage.expectCount("actual-listKeptUnsubscribed", 2);
     await importPage.expectCount("actual-consentKeptRevoked", 2);
@@ -241,7 +324,9 @@ test.describe("contacts importer: recipient lists and consent", () => {
     await importPage.expectAnalyzed();
     await importPage.expectCount("expected-listResubscribed", 1);
     await importPage.expectCount("expected-consentReAgreed", 1);
-    await expect(importPage.consentSummary).toContainText("are subscribed again");
+    await expect(importPage.consentSummary).toContainText(
+      "are subscribed again",
+    );
     await runWithConfirmation(importPage);
     await importPage.expectCount("actual-listResubscribed", 1);
     await importPage.expectCount("actual-consentReAgreed", 1);

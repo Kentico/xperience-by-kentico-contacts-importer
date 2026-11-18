@@ -1,7 +1,7 @@
-import { DEFAULT_MAX_RECORD_CHARS } from './csv';
-import { ImportError } from './source';
-import type { SourceRow } from './source';
-import type { TextFormatReader } from './text-source';
+import { DEFAULT_MAX_RECORD_CHARS } from "./csv";
+import { ImportError } from "./source";
+import type { SourceRow } from "./source";
+import type { TextFormatReader } from "./text-source";
 
 /** Nesting depth up to which objects are flattened to dotted paths (deeper = JSON text). */
 export const MAX_FLATTEN_DEPTH = 16;
@@ -19,14 +19,14 @@ export interface NdjsonReaderOptions {
  * - A line that is not a JSON object is yielded with `error` set.
  */
 export class NdjsonReader implements TextFormatReader {
-  readonly format = 'ndjson' as const;
+  readonly format = "ndjson" as const;
   readonly dynamicColumns = true;
   readonly columns: string[] = [];
   columnsReady = false;
 
   private readonly maxRecordChars: number;
   private readonly columnIndex = new Map<string, number>();
-  private carry = '';
+  private carry = "";
   private line = 0;
 
   constructor(options: NdjsonReaderOptions = {}) {
@@ -39,14 +39,14 @@ export class NdjsonReader implements TextFormatReader {
 
   push(text: string, out: SourceRow[]): void {
     let start = 0;
-    let newline = text.indexOf('\n');
+    let newline = text.indexOf("\n");
     while (newline !== -1) {
       const piece = text.slice(start, newline);
       const line = this.carry.length > 0 ? this.carry + piece : piece;
-      this.carry = '';
+      this.carry = "";
       this.parseLine(line, out);
       start = newline + 1;
-      newline = text.indexOf('\n', start);
+      newline = text.indexOf("\n", start);
     }
 
     if (start < text.length) {
@@ -54,7 +54,7 @@ export class NdjsonReader implements TextFormatReader {
     }
     if (this.carry.length > this.maxRecordChars) {
       throw new ImportError(
-        'recordTooLarge',
+        "recordTooLarge",
         `Line ${this.line + 1} is larger than ${this.maxRecordChars} characters.`,
         { line: this.line + 1, maxChars: this.maxRecordChars },
       );
@@ -64,7 +64,7 @@ export class NdjsonReader implements TextFormatReader {
   end(out: SourceRow[]): void {
     if (this.carry.length > 0) {
       const line = this.carry;
-      this.carry = '';
+      this.carry = "";
       this.parseLine(line, out);
     }
     this.columnsReady = true;
@@ -81,20 +81,24 @@ export class NdjsonReader implements TextFormatReader {
     try {
       parsed = JSON.parse(text);
     } catch {
-      out.push({ rowNumber: this.line, values: [], error: 'invalidJson' });
+      out.push({ rowNumber: this.line, values: [], error: "invalidJson" });
       this.columnsReady = true;
 
       return;
     }
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      out.push({ rowNumber: this.line, values: [], error: 'notAnObject' });
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      out.push({ rowNumber: this.line, values: [], error: "notAnObject" });
       this.columnsReady = true;
 
       return;
     }
 
-    const values: string[] = new Array<string>(this.columns.length).fill('');
-    this.flatten(parsed as Record<string, unknown>, '', values, 0);
+    const values: string[] = new Array<string>(this.columns.length).fill("");
+    this.flatten(parsed as Record<string, unknown>, "", values, 0);
     out.push({ rowNumber: this.line, values });
     this.columnsReady = true;
   }
@@ -110,11 +114,16 @@ export class NdjsonReader implements TextFormatReader {
       const name = prefix + key;
       if (
         value !== null &&
-        typeof value === 'object' &&
+        typeof value === "object" &&
         !Array.isArray(value) &&
         depth < MAX_FLATTEN_DEPTH
       ) {
-        this.flatten(value as Record<string, unknown>, `${name}.`, values, depth + 1);
+        this.flatten(
+          value as Record<string, unknown>,
+          `${name}.`,
+          values,
+          depth + 1,
+        );
         continue;
       }
 
@@ -125,7 +134,7 @@ export class NdjsonReader implements TextFormatReader {
         this.columnIndex.set(name, index);
       }
       while (values.length < index) {
-        values.push('');
+        values.push("");
       }
       values[index] = toText(value);
     }
@@ -134,14 +143,15 @@ export class NdjsonReader implements TextFormatReader {
 
 function toText(value: unknown): string {
   if (value === null || value === undefined) {
-    return '';
+    return "";
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     return value;
   }
-  if (typeof value === 'object') {
-    return JSON.stringify(value);
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
   }
 
-  return String(value);
+  // Objects and arrays; JSON.parse gives no other types
+  return JSON.stringify(value);
 }

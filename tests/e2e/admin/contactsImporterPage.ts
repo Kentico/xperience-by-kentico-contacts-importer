@@ -1,6 +1,12 @@
 import fs from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
-import { expect, type Download, type Locator, type Page, type Route } from "@playwright/test";
+import {
+  expect,
+  type Download,
+  type Locator,
+  type Page,
+  type Route,
+} from "@playwright/test";
 import { adminBaseUrl } from "../shared/config";
 import { AdminShellPage } from "./adminShellPage";
 
@@ -14,7 +20,8 @@ export const categoryName = "Digital marketing";
 const importsPath = `${applicationSlug}/imports`;
 // Word to type before an import that changes many contacts (contactsimporter.review.confirmword, en-US)
 const confirmWord = "IMPORT";
-const jobIdPattern =/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+const jobIdPattern =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
 
 // Recent imports with "New import" (Client/src/imports-list/ImportsListTemplate.tsx).
 export class ImportsListPage {
@@ -43,49 +50,83 @@ export class ImportsListPage {
     await shell.goto();
     await shell.expectSignedIn();
     await shell.openCategory(categoryName);
-    await this.page.getByRole("link", { name: applicationName }).first().click();
-    await expect(this.page).toHaveURL(new RegExp(`/admin/${importsPath}$`, "i"));
+    await this.page
+      .getByRole("link", { name: applicationName })
+      .first()
+      .click();
+    await expect(this.page).toHaveURL(
+      new RegExp(`/admin/${importsPath}$`, "i"),
+    );
     await this.expectLoaded();
   }
 
   async expectLoaded(): Promise<void> {
-    await expect(this.newImportButton.or(this.noPermissionNotice).first()).toBeVisible({ timeout: 30_000 });
+    await expect(
+      this.newImportButton.or(this.noPermissionNotice).first(),
+    ).toBeVisible({ timeout: 30_000 });
   }
 
   // Starts a new import and returns its job ID (part of the import page URL)
   async startNewImport(): Promise<string> {
     await this.newImportButton.click();
-    await expect(this.page).toHaveURL(new RegExp(`/admin/${importsPath}/${jobIdPattern.source}$`, "i"));
-    return jobIdPattern.exec(this.page.url())![0];
+    await expect(this.page).toHaveURL(
+      new RegExp(`/admin/${importsPath}/${jobIdPattern.source}$`, "i"),
+    );
+    const match = jobIdPattern.exec(this.page.url());
+    if (!match) {
+      throw new Error(`No job ID in ${this.page.url()}`);
+    }
+    return match[0];
   }
 
   // Row of the import of a file; tests use unique file names
   row(fileName: string): Locator {
-    return this.page.getByTestId("contacts-importer-imports").getByTestId("table-row").filter({ hasText: fileName });
+    return this.page
+      .getByTestId("contacts-importer-imports")
+      .getByTestId("table-row")
+      .filter({ hasText: fileName });
   }
 
-  cell(fileName: string, column: "file" | "created" | "state" | "rows" | "contactsCreated" | "contactsUpdated"): Locator {
+  cell(
+    fileName: string,
+    column:
+      | "file"
+      | "created"
+      | "state"
+      | "rows"
+      | "contactsCreated"
+      | "contactsUpdated",
+  ): Locator {
     return this.row(fileName).getByTestId(`table-cell-${column}`);
   }
 
   // Second lines of the File cell (size) and the Created cell (user who created the import)
   fileSize(fileName: string): Locator {
-    return this.cell(fileName, "file").getByTestId("contacts-importer-list-file-size");
+    return this.cell(fileName, "file").getByTestId(
+      "contacts-importer-list-file-size",
+    );
   }
 
   createdBy(fileName: string): Locator {
-    return this.cell(fileName, "created").getByTestId("contacts-importer-list-created-by");
+    return this.cell(fileName, "created").getByTestId(
+      "contacts-importer-list-created-by",
+    );
   }
 
   async openImport(fileName: string): Promise<void> {
     await this.row(fileName).getByTestId("button-open").click();
-    await expect(this.page).toHaveURL(new RegExp(`/admin/${importsPath}/${jobIdPattern.source}$`, "i"));
+    await expect(this.page).toHaveURL(
+      new RegExp(`/admin/${importsPath}/${jobIdPattern.source}$`, "i"),
+    );
   }
 
   // "Delete" row action (D51): removes the whole import; an unfinished one is cancelled first
   async deleteImport(fileName: string): Promise<void> {
     await this.openDeleteDialog(fileName);
-    await this.page.getByRole("button", { name: "Delete import" }).last().click();
+    await this.page
+      .getByRole("button", { name: "Delete import" })
+      .last()
+      .click();
     await expect(this.row(fileName)).toHaveCount(0);
   }
 
@@ -158,19 +199,24 @@ export class ImportPage {
   }
 
   // Step marked as current in the step header
-  async expectStep(step: "file" | "map" | "upload" | "options" | "review" | "run" | "results"): Promise<void> {
-    await expect(this.page.getByTestId("contacts-importer-steps").locator('[aria-current="step"]')).toHaveAttribute(
-      "data-step",
-      step,
-      { timeout: 30_000 },
-    );
+  async expectStep(
+    step: "file" | "map" | "upload" | "options" | "review" | "run" | "results",
+  ): Promise<void> {
+    await expect(
+      this.page
+        .getByTestId("contacts-importer-steps")
+        .locator('[aria-current="step"]'),
+    ).toHaveAttribute("data-step", step, { timeout: 30_000 });
   }
 
   // File step: the input is hidden behind the "Select file" button; a real click opens the file chooser
   async selectFile(path: string): Promise<void> {
     const button = this.page.getByTestId("contacts-importer-file-select");
     await expect(button).toBeVisible({ timeout: 30_000 });
-    const [chooser] = await Promise.all([this.page.waitForEvent("filechooser"), button.click()]);
+    const [chooser] = await Promise.all([
+      this.page.waitForEvent("filechooser"),
+      button.click(),
+    ]);
     await chooser.setFiles(path);
     await expect(this.sampleTable).toBeVisible({ timeout: 30_000 });
   }
@@ -201,15 +247,23 @@ export class ImportPage {
   }
 
   // Map step: the file column that says whether (`agreed`) or when (`date`) a contact gave consent
-  async setConsentColumn(kind: "agreed" | "date", column: string): Promise<void> {
+  async setConsentColumn(
+    kind: "agreed" | "date",
+    column: string,
+  ): Promise<void> {
     const select = this.page.getByTestId(`contacts-importer-consent-${kind}`);
     await select.click();
-    await this.page.getByTestId("menu-item").filter({ hasText: new RegExp(`^${escapeRegExp(column)}$`) }).click();
+    await this.page
+      .getByTestId("menu-item")
+      .filter({ hasText: new RegExp(`^${escapeRegExp(column)}$`) })
+      .click();
     await expect(select).toHaveValue(column);
   }
 
   async expectKeyField(fieldName: string): Promise<void> {
-    await expect(this.page.getByTestId("contacts-importer-key-field")).toHaveValue(fieldName);
+    await expect(
+      this.page.getByTestId("contacts-importer-key-field"),
+    ).toHaveValue(fieldName);
   }
 
   // "Save and upload" goes straight to Options; the upload runs on in the upload bar
@@ -219,27 +273,53 @@ export class ImportPage {
   }
 
   // Step header: how a step shows (current | done | upcoming | locked) and whether it can be opened
-  stepItem(step: "file" | "map" | "upload" | "options" | "review" | "run" | "results"): Locator {
-    return this.page.getByTestId("contacts-importer-steps").locator(`[data-step="${step}"]`);
+  stepItem(
+    step: "file" | "map" | "upload" | "options" | "review" | "run" | "results",
+  ): Locator {
+    return this.page
+      .getByTestId("contacts-importer-steps")
+      .locator(`[data-step="${step}"]`);
   }
 
-  async expectStepState(step: "file" | "map" | "upload" | "options" | "review" | "run" | "results", state: "current" | "done" | "upcoming" | "locked"): Promise<void> {
-    await expect(this.stepItem(step)).toHaveAttribute("data-step-state", state, { timeout: 30_000 });
+  async expectStepState(
+    step: "file" | "map" | "upload" | "options" | "review" | "run" | "results",
+    state: "current" | "done" | "upcoming" | "locked",
+  ): Promise<void> {
+    await expect(this.stepItem(step)).toHaveAttribute(
+      "data-step-state",
+      state,
+      { timeout: 30_000 },
+    );
   }
 
-  stepButton(step: "file" | "map" | "upload" | "options" | "review" | "run" | "results"): Locator {
+  stepButton(
+    step: "file" | "map" | "upload" | "options" | "review" | "run" | "results",
+  ): Locator {
     return this.page.getByTestId(`contacts-importer-step-${step}`);
   }
 
   // Upload (in the background): hidden status element with the phase, the job state and the exact counts
-  async expectUploadPhase(phase: "running" | "paused" | "failed" | "done", timeout = 60_000): Promise<void> {
-    await expect(this.uploadStatus).toHaveAttribute("data-upload-phase", phase, { timeout });
+  async expectUploadPhase(
+    phase: "running" | "paused" | "failed" | "done",
+    timeout = 60_000,
+  ): Promise<void> {
+    await expect(this.uploadStatus).toHaveAttribute(
+      "data-upload-phase",
+      phase,
+      { timeout },
+    );
   }
 
   async expectUploaded(rows: number): Promise<void> {
     await this.expectUploadPhase("done");
-    await expect(this.uploadStatus).toHaveAttribute("data-job-state", "Uploaded");
-    await expect(this.uploadStatus).toHaveAttribute("data-rows-uploaded", String(rows));
+    await expect(this.uploadStatus).toHaveAttribute(
+      "data-job-state",
+      "Uploaded",
+    );
+    await expect(this.uploadStatus).toHaveAttribute(
+      "data-rows-uploaded",
+      String(rows),
+    );
   }
 
   // The bar (progress, or the summary of a finished upload) and its details panel
@@ -253,7 +333,9 @@ export class ImportPage {
 
   async openUploadDetails(): Promise<void> {
     if (!(await this.uploadDetails.isVisible())) {
-      await this.page.getByTestId("contacts-importer-upload-details-toggle").click();
+      await this.page
+        .getByTestId("contacts-importer-upload-details-toggle")
+        .click();
     }
     await expect(this.uploadDetails).toBeVisible();
   }
@@ -267,7 +349,9 @@ export class ImportPage {
     const before = this.page.url();
     await this.startNewButton.click();
     await expect(this.page).not.toHaveURL(before);
-    await expect(this.page).toHaveURL(new RegExp(`/admin/${importsPath}/${jobIdPattern.source}$`, "i"));
+    await expect(this.page).toHaveURL(
+      new RegExp(`/admin/${importsPath}/${jobIdPattern.source}$`, "i"),
+    );
     await this.expectStep("file");
   }
 
@@ -289,15 +373,23 @@ export class ImportPage {
   // Options step: in view since "Save and upload"; "Save and check the file" waits for the upload
   async continueToOptions(): Promise<void> {
     await this.expectStep("options");
-    await expect(this.page.getByTestId("contacts-importer-options-next")).toBeEnabled({ timeout: 60_000 });
+    await expect(
+      this.page.getByTestId("contacts-importer-options-next"),
+    ).toBeEnabled({ timeout: 60_000 });
   }
 
   // Radio button of an option, e.g. ("newContacts", "skip"). The label is clicked: the test ID is on a
   // wrapper that also holds the caption of the choice.
   async chooseOption(name: string, value: string): Promise<void> {
-    const radio = this.page.getByTestId(`contacts-importer-option-${name}-${value}`);
+    const radio = this.page.getByTestId(
+      `contacts-importer-option-${name}-${value}`,
+    );
     await radio.locator("label").click();
-    await expect(this.page.locator(`input[type="radio"][name="contacts-importer-${name}"][value="${value}"]`)).toBeChecked();
+    await expect(
+      this.page.locator(
+        `input[type="radio"][name="contacts-importer-${name}"][value="${value}"]`,
+      ),
+    ).toBeChecked();
   }
 
   // Options step: recipient list and consent selects, by display name
@@ -312,7 +404,10 @@ export class ImportPage {
   private async chooseFromSelect(testId: string, label: string): Promise<void> {
     const select = this.page.getByTestId(testId);
     await select.click();
-    await this.page.getByTestId("menu-item").filter({ hasText: new RegExp(`^${escapeRegExp(label)}$`) }).click();
+    await this.page
+      .getByTestId("menu-item")
+      .filter({ hasText: new RegExp(`^${escapeRegExp(label)}$`) })
+      .click();
     await expect(select).toHaveValue(label);
   }
 
@@ -342,8 +437,15 @@ export class ImportPage {
     return this.page.getByTestId("contacts-importer-process-status");
   }
 
-  async expectProcessStatus(status: "running" | "pausing" | "paused" | "finished", timeout = 60_000): Promise<void> {
-    await expect(this.processStatus).toHaveAttribute("data-process-status", status, { timeout });
+  async expectProcessStatus(
+    status: "running" | "pausing" | "paused" | "finished",
+    timeout = 60_000,
+  ): Promise<void> {
+    await expect(this.processStatus).toHaveAttribute(
+      "data-process-status",
+      status,
+      { timeout },
+    );
   }
 
   // This tab drives the check or the import: the server answered at least one of its calls with progress
@@ -354,7 +456,10 @@ export class ImportPage {
       return false;
     }
 
-    return (await status.getAttribute("data-process-status")) === "running" && Number(await status.getAttribute("data-answers")) > 0;
+    return (
+      (await status.getAttribute("data-process-status")) === "running" &&
+      Number(await status.getAttribute("data-answers")) > 0
+    );
   }
 
   async rowsProcessed(): Promise<number> {
@@ -363,7 +468,11 @@ export class ImportPage {
 
   // The check (dry run) is finished and the review shows its counts
   async expectAnalyzed(timeout = 120_000): Promise<void> {
-    await expect(this.processStatus).toHaveAttribute("data-job-state", "Analyzed", { timeout });
+    await expect(this.processStatus).toHaveAttribute(
+      "data-job-state",
+      "Analyzed",
+      { timeout },
+    );
   }
 
   // Review: the mapping card lists file `column` -> contact field (readable label, as the Map step shows it).
@@ -372,7 +481,9 @@ export class ImportPage {
     const card = this.page.getByTestId("contacts-importer-review-mapping");
     await expect(card).toBeVisible();
     const row = card.locator(`[data-mapping-column="${column}"]`);
-    const showAll = this.page.getByTestId("contacts-importer-review-mapping-show-all");
+    const showAll = this.page.getByTestId(
+      "contacts-importer-review-mapping-show-all",
+    );
     if ((await row.count()) === 0 && (await showAll.isVisible())) {
       await showAll.click();
     }
@@ -399,7 +510,14 @@ export class ImportPage {
   // Run dialog: field for the confirmation word (the test ID is on the input or on its wrapper)
   get confirmWordInput(): Locator {
     const field = this.page.getByTestId("contacts-importer-confirm-input");
-    return field.locator("input").or(this.page.locator('input[data-testid="contacts-importer-confirm-input"]')).first();
+    return field
+      .locator("input")
+      .or(
+        this.page.locator(
+          'input[data-testid="contacts-importer-confirm-input"]',
+        ),
+      )
+      .first();
   }
 
   async openRunDialog(): Promise<void> {
@@ -427,12 +545,17 @@ export class ImportPage {
   }
 
   async requestPause(): Promise<void> {
-    await this.page.getByTestId("contacts-importer-process-pause").click({ timeout: 5_000 });
+    await this.page
+      .getByTestId("contacts-importer-process-pause")
+      .click({ timeout: 5_000 });
   }
 
   async expectPausedByUser(): Promise<void> {
     await this.expectProcessStatus("paused");
-    await expect(this.processStatus).toHaveAttribute("data-pause-reason", "user");
+    await expect(this.processStatus).toHaveAttribute(
+      "data-pause-reason",
+      "user",
+    );
   }
 
   // Keeps an import mid-run however fast the server is: the processing calls (PROCESS_NEXT) go through until one is
@@ -465,13 +588,18 @@ export class ImportPage {
             waiting.delete(done);
             resolve();
           };
-          const timer = delayMs === undefined ? undefined : setTimeout(done, delayMs);
+          const timer =
+            delayMs === undefined ? undefined : setTimeout(done, delayMs);
           waiting.add(done);
         });
       }
 
       // A call of a page that was reloaded or closed meanwhile is gone (errors ignored).
-      await (released === "abort" ? route.abort("connectionfailed") : route.continue()).catch(() => undefined);
+      await (
+        released === "abort"
+          ? route.abort("connectionfailed")
+          : route.continue()
+      ).catch(() => undefined);
     };
     await this.page.route("**/admin/api/cmd", handler);
 
@@ -487,22 +615,36 @@ export class ImportPage {
   }
 
   async continueProcessing(): Promise<void> {
-    await this.page.getByTestId("contacts-importer-process-continue").click({ timeout: 5_000 });
+    await this.page
+      .getByTestId("contacts-importer-process-continue")
+      .click({ timeout: 5_000 });
   }
 
   // Cancel before Run (Options, Review, File waiting for the file): deletes the whole import and returns to the list
   async cancelBeforeRun(): Promise<void> {
     await this.page.getByTestId("contacts-importer-run-cancel").click();
-    await expect(this.page.getByText("No contacts have been changed.")).toBeVisible();
-    await this.page.getByRole("button", { name: "Cancel import" }).last().click();
-    await expect(this.page).toHaveURL(new RegExp(`/admin/${importsPath}$`, "i"));
-    await expect(this.page.getByTestId("contacts-importer-new-import")).toBeVisible({ timeout: 30_000 });
+    await expect(
+      this.page.getByText("No contacts have been changed."),
+    ).toBeVisible();
+    await this.page
+      .getByRole("button", { name: "Cancel import" })
+      .last()
+      .click();
+    await expect(this.page).toHaveURL(
+      new RegExp(`/admin/${importsPath}$`, "i"),
+    );
+    await expect(
+      this.page.getByTestId("contacts-importer-new-import"),
+    ).toBeVisible({ timeout: 30_000 });
   }
 
   // Cancel in the Run step: the import stops and Results shows what was imported
   async cancelRunningImport(): Promise<void> {
     await this.page.getByTestId("contacts-importer-run-cancel").click();
-    await this.page.getByRole("button", { name: "Cancel import" }).last().click();
+    await this.page
+      .getByRole("button", { name: "Cancel import" })
+      .last()
+      .click();
     await this.expectStep("results");
   }
 
@@ -511,18 +653,35 @@ export class ImportPage {
     return this.page.getByTestId("contacts-importer-results-status");
   }
 
-  async expectResults(state: "Completed" | "Cancelled" | "Failed", timeout = 180_000): Promise<void> {
-    await expect(this.resultsStatus).toHaveAttribute("data-job-state", state, { timeout });
+  async expectResults(
+    state: "Completed" | "Cancelled" | "Failed",
+    timeout = 180_000,
+  ): Promise<void> {
+    await expect(this.resultsStatus).toHaveAttribute("data-job-state", state, {
+      timeout,
+    });
     await this.expectStep("results");
   }
 
   // Downloads a row report (gzipped CSV) and returns its lines without the BOM
-  async downloadReport(phase: "analyze" | "execute"): Promise<{ fileName: string; lines: string[] }> {
+  async downloadReport(
+    phase: "analyze" | "execute",
+  ): Promise<{ fileName: string; lines: string[] }> {
     const started = this.page.waitForEvent("download");
-    await this.page.getByTestId(`contacts-importer-download-report-${phase}`).click();
+    await this.page
+      .getByTestId(`contacts-importer-download-report-${phase}`)
+      .click();
     const download = await started;
-    const text = gunzipSync(await fs.readFile(await download.path())).toString("utf8");
-    return { fileName: download.suggestedFilename(), lines: text.replace(/^\uFEFF/, "").trimEnd().split("\n") };
+    const text = gunzipSync(await fs.readFile(await download.path())).toString(
+      "utf8",
+    );
+    return {
+      fileName: download.suggestedFilename(),
+      lines: text
+        .replace(/^\uFEFF/, "")
+        .trimEnd()
+        .split("\n"),
+    };
   }
 
   async pauseUpload(): Promise<void> {
@@ -542,7 +701,9 @@ export class ImportPage {
   async downloadLikelyDuplicates(): Promise<Download> {
     await this.openUploadDetails();
     const download = this.page.waitForEvent("download");
-    await this.page.getByTestId("contacts-importer-download-duplicates").click();
+    await this.page
+      .getByTestId("contacts-importer-download-duplicates")
+      .click();
     return download;
   }
 }

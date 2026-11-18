@@ -1,6 +1,10 @@
-import { Commands } from '../shared/commands';
-import type { ExecuteCommand, RunningImportDto, RunningImportResponse } from '../shared/commands';
-import type { Message } from '../shared/text';
+import { Commands } from "../shared/commands";
+import type {
+  ExecuteCommand,
+  RunningImportDto,
+  RunningImportResponse,
+} from "../shared/commands";
+import type { Message } from "../shared/text";
 
 /** How often the Review and Run steps ask whether another import's Run is unfinished (PLAN D60). */
 export const RUNNING_IMPORT_POLL_MS = 10_000;
@@ -15,49 +19,72 @@ export interface OtherRuns {
 
 /** Headline of the notice about the other import: it runs, it is paused, or it is confirmed and not started. */
 export function runningImportHeadline(running: RunningImportDto): Message {
-  if (running.state === 'Running') {
-    return { key: 'contactsimporter.review.otherrunning.headline' };
+  if (running.state === "Running") {
+    return { key: "contactsimporter.review.otherrunning.headline" };
   }
 
-  return running.state === 'Paused'
-    ? { key: 'contactsimporter.review.otherrunning.headlinepaused' }
-    : { key: 'contactsimporter.review.otherrunning.headlineconfirmed' };
+  return running.state === "Paused"
+    ? { key: "contactsimporter.review.otherrunning.headlinepaused" }
+    : { key: "contactsimporter.review.otherrunning.headlineconfirmed" };
 }
 
 /**
  * The lines that describe the other import whose Run is unfinished: the file, who started it,
  * when, how far it is, and its state. Parts the server does not know are left out.
  */
-export function runningImportLines(running: RunningImportDto, dateTime: (isoUtc: string) => string): Message[] {
-  const lines: Message[] = [{ key: 'contactsimporter.review.otherrunning.file', params: { fileName: running.fileName } }];
+export function runningImportLines(
+  running: RunningImportDto,
+  dateTime: (isoUtc: string) => string,
+): Message[] {
+  const lines: Message[] = [
+    {
+      key: "contactsimporter.review.otherrunning.file",
+      params: { fileName: running.fileName },
+    },
+  ];
   if (running.userName) {
-    lines.push({ key: 'contactsimporter.review.otherrunning.user', params: { user: running.userName } });
+    lines.push({
+      key: "contactsimporter.review.otherrunning.user",
+      params: { user: running.userName },
+    });
   }
 
-  if (running.state === 'Confirmed') {
+  if (running.state === "Confirmed") {
     if (running.confirmedUtc) {
-      lines.push({ key: 'contactsimporter.review.otherrunning.confirmed', params: { time: dateTime(running.confirmedUtc) } });
+      lines.push({
+        key: "contactsimporter.review.otherrunning.confirmed",
+        params: { time: dateTime(running.confirmedUtc) },
+      });
     }
 
-    lines.push({ key: 'contactsimporter.review.otherrunning.starting' });
+    lines.push({ key: "contactsimporter.review.otherrunning.starting" });
 
     return lines;
   }
 
   if (running.startedUtc) {
-    lines.push({ key: 'contactsimporter.review.otherrunning.started', params: { time: dateTime(running.startedUtc) } });
+    lines.push({
+      key: "contactsimporter.review.otherrunning.started",
+      params: { time: dateTime(running.startedUtc) },
+    });
   }
 
   if (running.rowsTotal > 0) {
-    lines.push({ key: 'contactsimporter.review.otherrunning.progress', params: { done: running.rowsProcessed, total: running.rowsTotal } });
+    lines.push({
+      key: "contactsimporter.review.otherrunning.progress",
+      params: { done: running.rowsProcessed, total: running.rowsTotal },
+    });
   }
 
-  if (running.state === 'Paused') {
+  if (running.state === "Paused") {
     if (running.lastProgressUtc) {
-      lines.push({ key: 'contactsimporter.review.otherrunning.lastprogress', params: { time: dateTime(running.lastProgressUtc) } });
+      lines.push({
+        key: "contactsimporter.review.otherrunning.lastprogress",
+        params: { time: dateTime(running.lastProgressUtc) },
+      });
     }
 
-    lines.push({ key: 'contactsimporter.review.otherrunning.paused' });
+    lines.push({ key: "contactsimporter.review.otherrunning.paused" });
   }
 
   return lines;
@@ -67,7 +94,10 @@ export function runningImportLines(running: RunningImportDto, dateTime: (isoUtc:
  * Whether another import's Run ended after the check was made, so the expected counts may differ
  * from what the import does (that import may have changed the same contacts).
  */
-export function isCheckOlderThanOtherRun(analyzedUtc: string | null | undefined, lastRunEndedUtc: string | null | undefined): boolean {
+export function isCheckOlderThanOtherRun(
+  analyzedUtc: string | null | undefined,
+  lastRunEndedUtc: string | null | undefined,
+): boolean {
   if (!analyzedUtc || !lastRunEndedUtc) {
     return false;
   }
@@ -105,7 +135,11 @@ export function watchRunningImport(
     controller = current;
     let response: RunningImportResponse | undefined;
     try {
-      response = await execute<RunningImportResponse>(Commands.GetRunningImport, undefined, current.signal);
+      response = await execute<RunningImportResponse>(
+        Commands.GetRunningImport,
+        undefined,
+        current.signal,
+      );
     } catch {
       response = undefined;
     }
@@ -114,8 +148,11 @@ export function watchRunningImport(
       return;
     }
 
-    if (response?.code === 'ok') {
-      onChange({ blocker: response.import ?? null, lastRunEndedUtc: response.lastRunEndedUtc ?? null });
+    if (response?.code === "ok") {
+      onChange({
+        blocker: response.import ?? null,
+        lastRunEndedUtc: response.lastRunEndedUtc ?? null,
+      });
     }
 
     timer = setTimeout(() => void check(), intervalMs);

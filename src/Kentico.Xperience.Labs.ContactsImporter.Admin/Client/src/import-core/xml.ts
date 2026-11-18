@@ -11,41 +11,44 @@ const ENTITY = /&(#[xX][0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);/g;
 
 function decodeEntity(_match: string, entity: string): string {
   switch (entity) {
-    case 'amp':
-      return '&';
-    case 'lt':
-      return '<';
-    case 'gt':
-      return '>';
-    case 'quot':
+    case "amp":
+      return "&";
+    case "lt":
+      return "<";
+    case "gt":
+      return ">";
+    case "quot":
       return '"';
-    case 'apos':
+    case "apos":
       return "'";
     default: {
       const code =
-        entity[1] === 'x' || entity[1] === 'X'
+        entity[1] === "x" || entity[1] === "X"
           ? parseInt(entity.slice(2), 16)
           : parseInt(entity.slice(1), 10);
 
-      return code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
+      return code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "";
     }
   }
 }
 
 export function decodeXmlEntities(text: string): string {
-  return text.indexOf('&') === -1 ? text : text.replace(ENTITY, decodeEntity);
+  return !text.includes("&") ? text : text.replace(ENTITY, decodeEntity);
 }
 
 /** Local name of a tag: no namespace prefix. */
 function localName(qualified: string): string {
-  const colon = qualified.indexOf(':');
+  const colon = qualified.indexOf(":");
 
   return colon === -1 ? qualified : qualified.slice(colon + 1);
 }
 
+/** Decoded attribute values by name (without namespace prefix); a missing attribute is `undefined`. */
+export type XmlAttributes = Partial<Record<string, string>>;
+
 /** Attributes of a raw attribute text as name -> decoded value (names without namespace prefix). */
-export function parseXmlAttributes(raw: string): Record<string, string> {
-  const result: Record<string, string> = {};
+export function parseXmlAttributes(raw: string): XmlAttributes {
+  const result: XmlAttributes = {};
   const length = raw.length;
   let i = 0;
   while (i < length) {
@@ -54,7 +57,7 @@ export function parseXmlAttributes(raw: string): Record<string, string> {
       i++;
       continue;
     }
-    const eq = raw.indexOf('=', i);
+    const eq = raw.indexOf("=", i);
     if (eq === -1) {
       break;
     }
@@ -85,7 +88,7 @@ export function parseXmlAttributes(raw: string): Record<string, string> {
  */
 export class XmlTokenizer {
   private readonly handler: XmlHandler;
-  private buffer = '';
+  private buffer = "";
 
   constructor(handler: XmlHandler) {
     this.handler = handler;
@@ -94,15 +97,15 @@ export class XmlTokenizer {
   push(chunk: string): void {
     const text = this.buffer.length > 0 ? this.buffer + chunk : chunk;
     const consumed = this.parse(text);
-    this.buffer = consumed < text.length ? text.slice(consumed) : '';
+    this.buffer = consumed < text.length ? text.slice(consumed) : "";
   }
 
   end(): void {
     if (this.buffer.length > 0) {
       const rest = this.buffer;
-      this.buffer = '';
+      this.buffer = "";
       // whatever is left is text, or a tag cut off by the end of the input (ignored)
-      if (rest.indexOf('<') === -1) {
+      if (!rest.includes("<")) {
         this.handler.text(decodeXmlEntities(rest));
       }
     }
@@ -115,11 +118,11 @@ export class XmlTokenizer {
     let pos = 0;
 
     while (pos < length) {
-      const lt = text.indexOf('<', pos);
+      const lt = text.indexOf("<", pos);
       if (lt === -1) {
         // Text up to the end: keep a possibly cut entity for the next piece.
-        const amp = text.lastIndexOf('&');
-        const safeEnd = amp >= pos && text.indexOf(';', amp) === -1 ? amp : length;
+        const amp = text.lastIndexOf("&");
+        const safeEnd = amp >= pos && !text.includes(";", amp) ? amp : length;
         if (safeEnd > pos) {
           handler.text(decodeXmlEntities(text.slice(pos, safeEnd)));
         }
@@ -128,7 +131,6 @@ export class XmlTokenizer {
       }
       if (lt > pos) {
         handler.text(decodeXmlEntities(text.slice(pos, lt)));
-        pos = lt;
       }
       if (lt + 1 >= length) {
         return lt;
@@ -136,7 +138,7 @@ export class XmlTokenizer {
 
       const next = text.charCodeAt(lt + 1);
       if (next === 0x3f /* ? */) {
-        const end = text.indexOf('?>', lt + 2);
+        const end = text.indexOf("?>", lt + 2);
         if (end === -1) {
           return lt;
         }
@@ -147,16 +149,16 @@ export class XmlTokenizer {
         if (length - lt < 9) {
           return lt;
         }
-        if (text.startsWith('<!--', lt)) {
-          const end = text.indexOf('-->', lt + 4);
+        if (text.startsWith("<!--", lt)) {
+          const end = text.indexOf("-->", lt + 4);
           if (end === -1) {
             return lt;
           }
           pos = end + 3;
           continue;
         }
-        if (text.startsWith('<![CDATA[', lt)) {
-          const end = text.indexOf(']]>', lt + 9);
+        if (text.startsWith("<![CDATA[", lt)) {
+          const end = text.indexOf("]]>", lt + 9);
           if (end === -1) {
             return lt;
           }
@@ -164,7 +166,7 @@ export class XmlTokenizer {
           pos = end + 3;
           continue;
         }
-        const end = text.indexOf('>', lt + 2);
+        const end = text.indexOf(">", lt + 2);
         if (end === -1) {
           return lt;
         }
@@ -172,7 +174,7 @@ export class XmlTokenizer {
         continue;
       }
       if (next === 0x2f /* / */) {
-        const end = text.indexOf('>', lt + 2);
+        const end = text.indexOf(">", lt + 2);
         if (end === -1) {
           return lt;
         }
@@ -222,7 +224,9 @@ export class XmlTokenizer {
 
 /** Decodes the `_xHHHH_` escapes OOXML uses in strings for characters XML cannot hold (e.g. `_x000D_`). */
 export function decodeOoxmlEscapes(text: string): string {
-  return text.indexOf('_x') === -1
+  return !text.includes("_x")
     ? text
-    : text.replace(/_x([0-9A-Fa-f]{4})_/g, (_m, hex: string) => String.fromCharCode(parseInt(hex, 16)));
+    : text.replace(/_x([0-9A-Fa-f]{4})_/g, (_m, hex: string) =>
+        String.fromCharCode(parseInt(hex, 16)),
+      );
 }

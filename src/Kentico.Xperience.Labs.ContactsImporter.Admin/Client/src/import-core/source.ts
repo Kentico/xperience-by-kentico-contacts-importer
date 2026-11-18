@@ -1,8 +1,8 @@
 /** Formats with a parser. A `.zip` is a container of one file in one of these formats. */
-export type SourceFormat = 'csv' | 'ndjson' | 'json' | 'xlsx';
+export type SourceFormat = "csv" | "ndjson" | "json" | "xlsx";
 
 /** Why a row could not be parsed. Such rows are yielded (with empty values) so callers can report them. */
-export type RowErrorCode = 'unterminatedQuote' | 'invalidJson' | 'notAnObject';
+export type RowErrorCode = "unterminatedQuote" | "invalidJson" | "notAnObject";
 
 export interface SourceRow {
   /** 1-based data row number in the source file. The header is not counted; blank lines are. */
@@ -70,31 +70,31 @@ export interface FileLike {
 }
 
 export type ImportErrorCode =
-  | 'unsupportedFormat'
-  | 'unsupportedEncoding'
-  | 'recordTooLarge'
-  | 'invalidConfig'
-  | 'sourceConsumed'
+  | "unsupportedFormat"
+  | "unsupportedEncoding"
+  | "recordTooLarge"
+  | "invalidConfig"
+  | "sourceConsumed"
   /** JSON array: the file is not valid JSON (`item`: 1-based array item where it broke). */
-  | 'invalidJson'
+  | "invalidJson"
   /** JSON array: the file does not start with `[` (e.g. NDJSON saved as `.json`). */
-  | 'jsonNotArray'
+  | "jsonNotArray"
   /** The zip file is damaged or not a zip file. */
-  | 'invalidZip'
+  | "invalidZip"
   /** The zip holds no data file. */
-  | 'zipEmpty'
+  | "zipEmpty"
   /** The zip holds more than one data file (`count`). */
-  | 'zipMultipleEntries'
+  | "zipMultipleEntries"
   /** The zip entry is encrypted. */
-  | 'zipEncrypted'
+  | "zipEncrypted"
   /** The zip entry uses a compression method other than stored / deflate (`method`). */
-  | 'unsupportedCompression'
+  | "unsupportedCompression"
   /** The file is not a readable XLSX workbook. */
-  | 'invalidXlsx'
+  | "invalidXlsx"
   /** XLSX: the chosen sheet does not exist (`sheet`). */
-  | 'sheetNotFound'
+  | "sheetNotFound"
   /** XLSX: more data rows than Excel allows (`maxRows`). */
-  | 'tooManyRows';
+  | "tooManyRows";
 
 /**
  * Values that describe an `ImportError`: `encoding` (`unsupportedEncoding`); `record` (CSV),
@@ -103,7 +103,9 @@ export type ImportErrorCode =
  * (`zipMultipleEntries`); `method` (`unsupportedCompression`); `sheet` (`sheetNotFound`);
  * `maxRows` (`tooManyRows`). Never values of the file's rows.
  */
-export type ImportErrorParams = Readonly<Record<string, string | number>>;
+export type ImportErrorParams = Readonly<
+  Partial<Record<string, string | number>>
+>;
 
 /**
  * Fatal error of the import core (as opposed to a rejected row). `message` is for developers
@@ -113,9 +115,13 @@ export class ImportError extends Error {
   readonly code: ImportErrorCode;
   readonly params: ImportErrorParams;
 
-  constructor(code: ImportErrorCode, message: string, params: ImportErrorParams = {}) {
+  constructor(
+    code: ImportErrorCode,
+    message: string,
+    params: ImportErrorParams = {},
+  ) {
     super(message);
-    this.name = 'ImportError';
+    this.name = "ImportError";
     this.code = code;
     this.params = params;
   }

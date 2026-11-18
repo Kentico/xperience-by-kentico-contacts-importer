@@ -11,7 +11,7 @@ import type {
   PipelineResult,
   SampleProfile,
   TargetField,
-} from '../import-core';
+} from "../import-core";
 
 /**
  * Messages between the page (main thread) and the import worker.
@@ -24,11 +24,12 @@ import type {
  * once it is uploaded or skipped, so parsing never runs ahead of the upload and memory stays
  * bounded by `window` chunks.
  */
-export type WorkerRequest = ProfileRequest | StartRequest | AckRequest | AbortRequest;
+export type WorkerRequest =
+  ProfileRequest | StartRequest | AckRequest | AbortRequest;
 
 /** Profile the first rows of a file and compute its fingerprint. Answer: `profiled` or `error`. */
 export interface ProfileRequest {
-  type: 'profile';
+  type: "profile";
   requestId: number;
   file: FileLike;
   source: OpenSourceOptions;
@@ -39,7 +40,7 @@ export interface ProfileRequest {
 
 /** Full pass. Answers: `chunk`*, `progress`*, then `done` or `error`. */
 export interface StartRequest {
-  type: 'start';
+  type: "start";
   requestId: number;
   file: FileLike;
   source: OpenSourceOptions;
@@ -64,52 +65,50 @@ export interface PipelineConfig {
 
 /** The page finished with chunk `index` of request `requestId` (uploaded or skipped). */
 export interface AckRequest {
-  type: 'ack';
+  type: "ack";
   requestId: number;
   index: number;
 }
 
 /** Stops request `requestId`. The worker answers `error` with code `aborted`. */
 export interface AbortRequest {
-  type: 'abort';
+  type: "abort";
   requestId: number;
 }
 
-export type WorkerEvent = ProfiledEvent | ChunkEvent | ProgressEvent | DoneEvent | ErrorEvent;
+export type WorkerEvent =
+  ProfiledEvent | ChunkEvent | ProgressEvent | DoneEvent | ErrorEvent;
 
 export interface ProfiledEvent {
-  type: 'profiled';
+  type: "profiled";
   requestId: number;
   profile: SampleProfile;
   fingerprint: string;
 }
 
 export interface ChunkEvent {
-  type: 'chunk';
+  type: "chunk";
   requestId: number;
   chunk: EncodedChunk;
 }
 
 export interface ProgressEvent {
-  type: 'progress';
+  type: "progress";
   requestId: number;
   progress: PipelineProgress;
 }
 
 export interface DoneEvent {
-  type: 'done';
+  type: "done";
   requestId: number;
   result: PipelineResult;
 }
 
 /** `ImportErrorCode` of the import core, `aborted`, or `failed` for anything unexpected. */
-export type WorkerErrorCode =
-  | ImportErrorCode
-  | 'aborted'
-  | 'failed';
+export type WorkerErrorCode = ImportErrorCode | "aborted" | "failed";
 
 export interface ErrorEvent {
-  type: 'error';
+  type: "error";
   requestId: number;
   code: WorkerErrorCode;
   /** Developer text (English); for `failed` the message of the unexpected error. */
@@ -126,9 +125,13 @@ export class ImportWorkerError extends Error {
   readonly code: WorkerErrorCode;
   readonly params: ImportErrorParams;
 
-  constructor(code: WorkerErrorCode, message: string, params: ImportErrorParams = {}) {
+  constructor(
+    code: WorkerErrorCode,
+    message: string,
+    params: ImportErrorParams = {},
+  ) {
     super(message);
-    this.name = 'ImportWorkerError';
+    this.name = "ImportWorkerError";
     this.code = code;
     this.params = params;
   }

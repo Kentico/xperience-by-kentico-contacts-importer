@@ -1,12 +1,12 @@
-import { concatBytes } from './bytes';
-import { ImportError } from './source';
+import { concatBytes } from "./bytes";
+import { ImportError } from "./source";
 import type {
   FileLike,
   RecordSource,
   SourceFormat,
   SourceInfo,
   SourceRow,
-} from './source';
+} from "./source";
 
 /** Format-specific part of a text source: turns decoded text into rows. */
 export interface TextFormatReader {
@@ -37,23 +37,30 @@ export const DEFAULT_SAMPLE_BYTES = 65_536;
  * UTF-8 when the bytes are valid UTF-8, otherwise windows-1252.
  */
 export function detectEncoding(head: Uint8Array, complete: boolean): string {
-  if (head.length >= 3 && head[0] === 0xef && head[1] === 0xbb && head[2] === 0xbf) {
-    return 'utf-8';
+  if (
+    head.length >= 3 &&
+    head[0] === 0xef &&
+    head[1] === 0xbb &&
+    head[2] === 0xbf
+  ) {
+    return "utf-8";
   }
   if (head.length >= 2 && head[0] === 0xff && head[1] === 0xfe) {
-    return 'utf-16le';
+    return "utf-16le";
   }
   if (head.length >= 2 && head[0] === 0xfe && head[1] === 0xff) {
-    return 'utf-16be';
+    return "utf-16be";
   }
 
   try {
     // stream: true tolerates a multi-byte sequence cut off at the end of the sample
-    new TextDecoder('utf-8', { fatal: true }).decode(head, { stream: !complete });
+    new TextDecoder("utf-8", { fatal: true }).decode(head, {
+      stream: !complete,
+    });
 
-    return 'utf-8';
+    return "utf-8";
   } catch {
-    return 'windows-1252';
+    return "windows-1252";
   }
 }
 
@@ -67,7 +74,7 @@ export class TextRecordSource implements RecordSource {
   private readonly options: TextSourceOptions;
   private readonly describe: (reader: TextFormatReader) => Partial<SourceInfo>;
   private decoder: TextDecoder | undefined;
-  private encoding = 'utf-8';
+  private encoding = "utf-8";
   private pending: SourceRow[] = [];
   private eof = false;
   private consumed = false;
@@ -95,7 +102,7 @@ export class TextRecordSource implements RecordSource {
       stream = stream
         .pipeThrough(counter)
         .pipeThrough(
-          new DecompressionStream('gzip') as unknown as TransformStream<
+          new DecompressionStream("gzip") as unknown as TransformStream<
             Uint8Array,
             Uint8Array
           >,
@@ -145,8 +152,8 @@ export class TextRecordSource implements RecordSource {
   async *batches(): AsyncGenerator<SourceRow[], void, void> {
     if (this.consumed) {
       throw new ImportError(
-        'sourceConsumed',
-        'The record source was already read. Open a new source for another pass.',
+        "sourceConsumed",
+        "The record source was already read. Open a new source for another pass.",
       );
     }
     this.consumed = true;
@@ -206,7 +213,10 @@ export class TextRecordSource implements RecordSource {
   }
 
   private async start(): Promise<void> {
-    const sampleBytes = Math.max(4, this.options.sampleBytes ?? DEFAULT_SAMPLE_BYTES);
+    const sampleBytes = Math.max(
+      4,
+      this.options.sampleBytes ?? DEFAULT_SAMPLE_BYTES,
+    );
     const parts: Uint8Array[] = [];
     let length = 0;
     while (length < sampleBytes) {
@@ -223,14 +233,14 @@ export class TextRecordSource implements RecordSource {
     const head = concatBytes(parts);
     const requested = this.options.encoding;
     this.encoding =
-      requested && requested.toLowerCase() !== 'auto'
+      requested && requested.toLowerCase() !== "auto"
         ? requested
         : detectEncoding(head, this.eof);
     try {
       this.decoder = new TextDecoder(this.encoding);
     } catch {
       throw new ImportError(
-        'unsupportedEncoding',
+        "unsupportedEncoding",
         `Encoding '${this.encoding}' is not supported.`,
         { encoding: this.encoding },
       );
@@ -253,7 +263,10 @@ export class TextRecordSource implements RecordSource {
   }
 
   private async readNext(out: SourceRow[]): Promise<void> {
-    const decoder = this.decoder as TextDecoder;
+    const decoder = this.decoder;
+    if (!decoder) {
+      throw new Error("The source is not open.");
+    }
     const bytes = await this.readBytes();
     if (bytes) {
       const text = decoder.decode(bytes, { stream: true });

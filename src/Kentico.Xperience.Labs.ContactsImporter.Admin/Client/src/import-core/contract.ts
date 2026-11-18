@@ -4,7 +4,7 @@
  */
 
 /** Contact field that holds the email address; lowercased when used as the dedupe key. */
-export const EMAIL_FIELD = 'ContactEmail';
+export const EMAIL_FIELD = "ContactEmail";
 
 /** Maximum length of a normalized dedupe key (server table-valued parameter column is nvarchar(450)). */
 export const MAX_KEY_LENGTH = 450;
@@ -16,7 +16,7 @@ export const MAX_EMAIL_LENGTH = 254;
 export const MAX_RECORD_BYTES = 1024 * 1024;
 
 /** Only flag defined so far: email is invalid and is not the dedupe key (D34). */
-export const INVALID_EMAIL_FLAG = 'invalidEmail';
+export const INVALID_EMAIL_FLAG = "invalidEmail";
 
 export type RecordFlag = typeof INVALID_EMAIL_FLAG;
 
@@ -57,10 +57,16 @@ export interface ConsentMapping {
 }
 
 /** Name used for the consent date column where a target field name is reported (rejected rows). */
-export const CONSENT_DATE_FIELD = 'consent date';
+export const CONSENT_DATE_FIELD = "consent date";
 
 /** Values of the "consent given" column that mean yes (after trim, any letter case). Everything else is no. */
-export const CONSENT_YES_VALUES: readonly string[] = ['y', 'yes', 'true', '1', 'x'];
+export const CONSENT_YES_VALUES: readonly string[] = [
+  "y",
+  "yes",
+  "true",
+  "1",
+  "x",
+];
 
 /** `UPLOAD_CHUNK` page command payload. */
 export interface UploadChunkPayload {
@@ -85,7 +91,7 @@ export interface FieldMapping {
  * Date format of the source values for date/datetime target fields.
  * ISO 8601 input is always accepted; `dmy` / `mdy` add day-first / month-first input.
  */
-export type DateFormat = 'iso' | 'dmy' | 'mdy';
+export type DateFormat = "iso" | "dmy" | "mdy";
 
 /** `job.json` file descriptor. */
 export interface JobFile {

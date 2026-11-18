@@ -10,7 +10,8 @@ const isCi = !!process.env.CI;
 
 // Specs that run imports (Run step). Only one import can be unfinished at a time (PLAN D60), so
 // these run one after another in their own project; the other admin specs stay parallel.
-const importRunSpecs = /[\\/]admin[\\/]contacts-importer-(run|process|consent|flow)\.spec\.ts/;
+const importRunSpecs =
+  /[\\/]admin[\\/]contacts-importer-(run|process|consent|flow)\.spec\.ts/;
 
 export default defineConfig({
   testDir: ".",

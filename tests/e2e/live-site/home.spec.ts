@@ -15,7 +15,11 @@ test.describe("live site", () => {
   test("navigates to articles from the main navigation", async ({ page }) => {
     await page.goto("/");
 
-    await page.getByRole("navigation", { name: "Main" }).locator('a[href="/articles"]').first().click();
+    await page
+      .getByRole("navigation", { name: "Main" })
+      .locator('a[href="/articles"]')
+      .first()
+      .click();
 
     await expect(page).toHaveURL(/\/articles$/);
     await expect(page.locator('a[href^="/articles/"]').first()).toBeVisible();

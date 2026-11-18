@@ -43,6 +43,8 @@ npm run test:admin  # admin-tests and admin-import-runs
 npm run report      # open the last HTML report
 ```
 
+Before a commit: `npm run format`, `npm run lint`, `npm run typecheck`.
+
 `npm run screenshots` (optional, not part of `npm test`) captures the README screenshots into `images/screenshots` with `scripts/capture-readme-screenshots.ts` (config `screenshots.config.ts`). It needs a running DancingGoat (`DANCING_GOAT_BASE_URL`) and imports about 400,000 generated contacts: use a scratch database and an empty importer `StoragePath`. Details in the script header.
 
 ## CI

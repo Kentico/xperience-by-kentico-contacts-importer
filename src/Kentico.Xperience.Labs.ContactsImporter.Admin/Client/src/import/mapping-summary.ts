@@ -1,11 +1,14 @@
-import { isDateDataType } from '../import-core';
-import type { DateFormat } from '../import-core';
-import type { FieldDto, JobDto } from '../shared/commands';
+import { isDateDataType } from "../import-core";
+import type { DateFormat } from "../import-core";
+import type { FieldDto, JobDto } from "../shared/commands";
 
-import { fieldLabel } from './model';
+import { fieldLabel } from "./model";
 
 /** The part of the job the Review mapping card is built from. */
-export type MappingSummaryJob = Pick<JobDto, 'mapping' | 'keyField' | 'dateFormat' | 'consentMapping'>;
+export type MappingSummaryJob = Pick<
+  JobDto,
+  "mapping" | "keyField" | "dateFormat" | "consentMapping"
+>;
 
 /** One imported file column and the contact field it goes to. */
 export interface MappingSummaryRow {
@@ -34,7 +37,10 @@ export interface MappingSummary {
 export const MAPPING_SUMMARY_COLLAPSED_ROWS = 8;
 
 /** Read-only summary of the saved mapping for the Review step. */
-export function mappingSummary(job: MappingSummaryJob, fields: readonly FieldDto[]): MappingSummary {
+export function mappingSummary(
+  job: MappingSummaryJob,
+  fields: readonly FieldDto[],
+): MappingSummary {
   const byName = new Map(fields.map((field) => [field.name, field]));
   const labelOf = (name: string) => {
     const field = byName.get(name);
@@ -42,16 +48,26 @@ export function mappingSummary(job: MappingSummaryJob, fields: readonly FieldDto
     return field ? fieldLabel(field) : name;
   };
   const rows = job.mapping
-    .filter((entry) => entry.target !== '')
-    .map((entry) => ({ column: entry.source, field: entry.target, label: labelOf(entry.target), isKey: entry.target === job.keyField }));
+    .filter((entry) => entry.target !== "")
+    .map((entry) => ({
+      column: entry.source,
+      field: entry.target,
+      label: labelOf(entry.target),
+      isKey: entry.target === job.keyField,
+    }));
   const consentAgreed = job.consentMapping?.agreed || null;
   const consentDate = job.consentMapping?.date || null;
   // Same rule as the Map step: the date format applies to date fields and to the consent date column.
-  const readsDates = consentDate !== null || rows.some((row) => isDateDataType(byName.get(row.field)?.dataType));
+  const readsDates =
+    consentDate !== null ||
+    rows.some((row) => isDateDataType(byName.get(row.field)?.dataType));
 
   return {
     rows,
-    key: job.keyField !== '' ? { field: job.keyField, label: labelOf(job.keyField) } : null,
+    key:
+      job.keyField !== ""
+        ? { field: job.keyField, label: labelOf(job.keyField) }
+        : null,
     dateFormat: readsDates ? job.dateFormat : null,
     consentAgreed,
     consentDate,
@@ -59,11 +75,18 @@ export function mappingSummary(job: MappingSummaryJob, fields: readonly FieldDto
 }
 
 /** Rows to show: all when expanded or few, otherwise the first `MAPPING_SUMMARY_COLLAPSED_ROWS`. */
-export function visibleMappingRows(rows: readonly MappingSummaryRow[], expanded: boolean): readonly MappingSummaryRow[] {
-  return expanded || rows.length <= MAPPING_SUMMARY_COLLAPSED_ROWS ? rows : rows.slice(0, MAPPING_SUMMARY_COLLAPSED_ROWS);
+export function visibleMappingRows(
+  rows: readonly MappingSummaryRow[],
+  expanded: boolean,
+): readonly MappingSummaryRow[] {
+  return expanded || rows.length <= MAPPING_SUMMARY_COLLAPSED_ROWS
+    ? rows
+    : rows.slice(0, MAPPING_SUMMARY_COLLAPSED_ROWS);
 }
 
 /** The card offers "Show all" / "Show fewer". */
-export function canCollapseMapping(rows: readonly MappingSummaryRow[]): boolean {
+export function canCollapseMapping(
+  rows: readonly MappingSummaryRow[],
+): boolean {
   return rows.length > MAPPING_SUMMARY_COLLAPSED_ROWS;
 }

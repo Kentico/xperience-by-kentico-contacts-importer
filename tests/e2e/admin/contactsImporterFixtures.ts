@@ -5,15 +5,20 @@ import { ImportPage, ImportsListPage } from "./contactsImporterPage";
 
 const fixturesPath = path.resolve(__dirname, "../fixtures");
 
-type ImporterFixtures = {
+interface ImporterFixtures {
   importsList: ImportsListPage;
   importPage: ImportPage;
   // Copies a file from tests/e2e/fixtures under a name unique to this test run, so the test finds
   // its own import in the list and can run again. Returns the path and the unique file name.
-  uniqueFixture: (fixtureName: string) => Promise<{ path: string; name: string }>;
+  uniqueFixture: (
+    fixtureName: string,
+  ) => Promise<{ path: string; name: string }>;
   // Writes generated content (text or bytes) to a uniquely named file.
-  uniqueFile: (baseName: string, content: string | Uint8Array) => Promise<{ path: string; name: string }>;
-};
+  uniqueFile: (
+    baseName: string,
+    content: string | Uint8Array,
+  ) => Promise<{ path: string; name: string }>;
+}
 
 // Importer specs use this `test`: page objects plus cleanup of the imports the test created
 // ("Delete" removes the import; an unfinished one is cancelled first). Imported contacts stay.
@@ -45,20 +50,30 @@ export const test = base.extend<ImporterFixtures>({
     for (const name of created) {
       try {
         page.removeAllListeners("dialog");
-        page.on("dialog", (dialog) => void dialog.accept().catch(() => undefined));
+        page.on(
+          "dialog",
+          (dialog) => void dialog.accept().catch(() => undefined),
+        );
         await page.unrouteAll({ behavior: "ignoreErrors" });
         await list.goto();
         if ((await list.row(name).count()) > 0) {
           await list.deleteImport(name);
         }
       } catch (error) {
-        console.warn(`Could not clean up the import of ${name}: ${String(error)}`);
+        console.warn(
+          `Could not clean up the import of ${name}: ${String(error)}`,
+        );
       }
     }
   },
 
   uniqueFixture: async ({ uniqueFile }, use) => {
-    await use(async (fixtureName) => uniqueFile(fixtureName, await fs.readFile(path.join(fixturesPath, fixtureName), "utf8")));
+    await use(async (fixtureName) =>
+      uniqueFile(
+        fixtureName,
+        await fs.readFile(path.join(fixturesPath, fixtureName), "utf8"),
+      ),
+    );
   },
 });
 
@@ -66,7 +81,9 @@ export { expect } from "@playwright/test";
 
 // ID that makes the contacts of one test run unique, so tests can run again on the same database.
 export function newRunId(): string {
-  return `${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36).padStart(2, "0")}`;
+  return `${Date.now().toString(36)}${Math.floor(Math.random() * 1296)
+    .toString(36)
+    .padStart(2, "0")}`;
 }
 
 export interface TestContact {
@@ -77,10 +94,19 @@ export interface TestContact {
 }
 
 // Contacts `e2e.{runId}.{n}@example.com` for n in [from, to].
-export function testContacts(runId: string, from: number, to: number): TestContact[] {
+export function testContacts(
+  runId: string,
+  from: number,
+  to: number,
+): TestContact[] {
   const contacts: TestContact[] = [];
   for (let n = from; n <= to; n++) {
-    contacts.push({ email: `e2e.${runId}.${n}@example.com`, firstName: `First${n}`, lastName: `Last${n}`, company: `Company ${n}` });
+    contacts.push({
+      email: `e2e.${runId}.${n}@example.com`,
+      firstName: `First${n}`,
+      lastName: `Last${n}`,
+      company: `Company ${n}`,
+    });
   }
   return contacts;
 }
@@ -89,7 +115,14 @@ export function testContacts(runId: string, from: number, to: number): TestConta
 export function contactsCsv(contacts: TestContact[]): string {
   const lines = ["Email,First Name,Last Name,Company"];
   for (const contact of contacts) {
-    lines.push([contact.email, contact.firstName, contact.lastName, contact.company].join(","));
+    lines.push(
+      [
+        contact.email,
+        contact.firstName,
+        contact.lastName,
+        contact.company,
+      ].join(","),
+    );
   }
   return `${lines.join("\n")}\n`;
 }

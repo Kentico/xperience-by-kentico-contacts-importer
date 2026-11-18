@@ -13,23 +13,25 @@ module.exports = function inlineWorkerLoader() {};
 module.exports.pitch = function pitch(request) {
   const callback = this.async();
   const { webpack } = this._compiler;
-  const filename = '__inline-worker__.js';
+  const filename = "__inline-worker__.js";
 
   const child = this._compilation.createChildCompiler(
     `inline-worker ${this.resourcePath}`,
     {
       filename,
-      chunkFilename: '__inline-worker__.[id].js',
-      globalObject: 'self',
+      chunkFilename: "__inline-worker__.[id].js",
+      globalObject: "self",
       // The parent builds a SystemJS library with no chunk format; a worker is a plain script.
       library: undefined,
       libraryTarget: undefined,
-      chunkFormat: 'array-push',
-      chunkLoading: 'import-scripts',
+      chunkFormat: "array-push",
+      chunkLoading: "import-scripts",
     },
     [
       new webpack.webworker.WebWorkerTemplatePlugin(),
-      new webpack.EntryPlugin(this.context, `!!${request}`, { name: 'inline-worker' }),
+      new webpack.EntryPlugin(this.context, `!!${request}`, {
+        name: "inline-worker",
+      }),
       // A worker cannot load a second file from a Blob URL.
       new webpack.optimize.LimitChunkCountPlugin({ maxChunks: 1 }),
     ],
@@ -62,7 +64,9 @@ module.exports.pitch = function pitch(request) {
 
     const asset = compilation.assets[filename];
     if (!asset) {
-      callback(new Error('inline-worker-loader: the worker bundle was not produced.'));
+      callback(
+        new Error("inline-worker-loader: the worker bundle was not produced."),
+      );
 
       return;
     }

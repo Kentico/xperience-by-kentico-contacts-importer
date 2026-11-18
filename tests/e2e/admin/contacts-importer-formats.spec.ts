@@ -1,5 +1,11 @@
 import { buildXlsx, buildZip } from "../shared/fileFormats";
-import { contactsCsv, expect, newRunId, test, testContacts } from "./contactsImporterFixtures";
+import {
+  contactsCsv,
+  expect,
+  newRunId,
+  test,
+  testContacts,
+} from "./contactsImporterFixtures";
 import type { TestContact } from "./contactsImporterFixtures";
 import type { ImportPage } from "./contactsImporterPage";
 
@@ -17,7 +23,10 @@ function isoBirthday(n: number): string {
 }
 
 // Map (suggested by column name) -> Upload -> Options (defaults) -> Review: the check counts every row as new.
-async function uploadAndCheck(importPage: ImportPage, rows: number): Promise<void> {
+async function uploadAndCheck(
+  importPage: ImportPage,
+  rows: number,
+): Promise<void> {
   await importPage.continueToMapping();
   await importPage.expectTarget(0, "Email");
   await importPage.expectTarget(1, "First name");
@@ -38,16 +47,29 @@ function number(contact: TestContact): number {
 }
 
 test.describe("contacts importer: file formats", () => {
-  test("reads the chosen sheet of an XLSX workbook, with dates", async ({ importsList, importPage, uniqueFile }) => {
+  test("reads the chosen sheet of an XLSX workbook, with dates", async ({
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     test.setTimeout(180_000);
     const contacts = testContacts(newRunId(), 1, ROWS);
     const workbook = buildXlsx([
-      { name: "Read me", rows: [["Note"], ["The contacts are on the next sheet."]] },
+      {
+        name: "Read me",
+        rows: [["Note"], ["The contacts are on the next sheet."]],
+      },
       {
         name: "Contacts",
         rows: [
           ["Email", "First Name", "Last Name", "Company", "Birthday"],
-          ...contacts.map((c) => [c.email, c.firstName, c.lastName, c.company, birthday(number(c))]),
+          ...contacts.map((c) => [
+            c.email,
+            c.firstName,
+            c.lastName,
+            c.company,
+            birthday(number(c)),
+          ]),
         ],
       },
     ]);
@@ -58,7 +80,9 @@ test.describe("contacts importer: file formats", () => {
     await importPage.selectFile(file.path);
     await expect(importPage.fileFormat).toHaveValue("Excel workbook (.xlsx)");
     await expect(importPage.fileSheet).toHaveValue("Read me");
-    await expect(importPage.sampleTable).toContainText("The contacts are on the next sheet.");
+    await expect(importPage.sampleTable).toContainText(
+      "The contacts are on the next sheet.",
+    );
 
     await importPage.chooseSheet("Contacts");
     await expect(importPage.sampleTable).toContainText(contacts[0].email);
@@ -69,11 +93,21 @@ test.describe("contacts importer: file formats", () => {
     await uploadAndCheck(importPage, ROWS);
   });
 
-  test("reads a JSON array of objects", async ({ importsList, importPage, uniqueFile }) => {
+  test("reads a JSON array of objects", async ({
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     test.setTimeout(180_000);
     const contacts = testContacts(newRunId(), 1, ROWS);
     const json = JSON.stringify(
-      contacts.map((c) => ({ Email: c.email, "First Name": c.firstName, "Last Name": c.lastName, Company: c.company, Address: { City: "Brno" } })),
+      contacts.map((c) => ({
+        Email: c.email,
+        "First Name": c.firstName,
+        "Last Name": c.lastName,
+        Company: c.company,
+        Address: { City: "Brno" },
+      })),
       null,
       2,
     );
@@ -82,7 +116,9 @@ test.describe("contacts importer: file formats", () => {
     await importsList.goto();
     await importsList.startNewImport();
     await importPage.selectFile(file.path);
-    await expect(importPage.fileFormat).toHaveValue("JSON (an array of objects)");
+    await expect(importPage.fileFormat).toHaveValue(
+      "JSON (an array of objects)",
+    );
     await expect(importPage.sampleTable).toContainText(contacts[0].email);
     await expect(importPage.sampleTable).toContainText("Address.City");
     await expect(importPage.fileSummary).toContainText(`${ROWS} rows`);
@@ -90,7 +126,11 @@ test.describe("contacts importer: file formats", () => {
     await uploadAndCheck(importPage, ROWS);
   });
 
-  test("reads the one file inside a zip", async ({ importsList, importPage, uniqueFile }) => {
+  test("reads the one file inside a zip", async ({
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     test.setTimeout(180_000);
     const contacts = testContacts(newRunId(), 1, ROWS);
     const zip = buildZip([
@@ -102,7 +142,9 @@ test.describe("contacts importer: file formats", () => {
     await importsList.goto();
     await importsList.startNewImport();
     await importPage.selectFile(file.path);
-    await expect(importPage.fileFormat).toHaveValue("CSV / TSV (delimited text)");
+    await expect(importPage.fileFormat).toHaveValue(
+      "CSV / TSV (delimited text)",
+    );
     await expect(importPage.zipEntry).toContainText("export/contacts.csv");
     await expect(importPage.sampleTable).toContainText(contacts[0].email);
     await expect(importPage.fileSummary).toContainText(`${ROWS} rows`);
@@ -110,7 +152,12 @@ test.describe("contacts importer: file formats", () => {
     await uploadAndCheck(importPage, ROWS);
   });
 
-  test("explains a zip with more than one file", async ({ page, importsList, importPage, uniqueFile }) => {
+  test("explains a zip with more than one file", async ({
+    page,
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     const contacts = testContacts(newRunId(), 1, 2);
     const zip = buildZip([
       { name: "a.csv", data: contactsCsv(contacts) },
@@ -121,6 +168,10 @@ test.describe("contacts importer: file formats", () => {
     await importsList.goto();
     await importsList.startNewImport();
     await importPage.selectUnreadableFile(file.path);
-    await expect(page.getByText("The zip file holds 2 files. Put only the file to import in the zip.")).toBeVisible({ timeout: 30_000 });
+    await expect(
+      page.getByText(
+        "The zip file holds 2 files. Put only the file to import in the zip.",
+      ),
+    ).toBeVisible({ timeout: 30_000 });
   });
 });

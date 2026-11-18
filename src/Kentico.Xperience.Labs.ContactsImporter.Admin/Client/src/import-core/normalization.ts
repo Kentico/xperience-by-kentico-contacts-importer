@@ -1,17 +1,12 @@
-import {
-  DateFormat,
-  EMAIL_FIELD,
-  MAX_EMAIL_LENGTH,
-  MAX_KEY_LENGTH,
-} from './contract';
+import type { DateFormat } from "./contract";
+import { EMAIL_FIELD, MAX_EMAIL_LENGTH, MAX_KEY_LENGTH } from "./contract";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export type KeyRejectReason = 'missingKey' | 'keyTooLong' | 'invalidEmailKey';
+export type KeyRejectReason = "missingKey" | "keyTooLong" | "invalidEmailKey";
 
 export type KeyResult =
-  | { ok: true; key: string }
-  | { ok: false; reason: KeyRejectReason };
+  { ok: true; key: string } | { ok: false; reason: KeyRejectReason };
 
 /** Trims with `String.prototype.trim` semantics (the parity rule shared with the server). */
 export function trimValue(value: string): string {
@@ -34,13 +29,13 @@ export function checkKey(keyField: string, raw: string): KeyResult {
   const key = isEmail ? normalizeEmail(raw) : raw.trim();
 
   if (key.length === 0) {
-    return { ok: false, reason: 'missingKey' };
+    return { ok: false, reason: "missingKey" };
   }
   if (key.length > MAX_KEY_LENGTH) {
-    return { ok: false, reason: 'keyTooLong' };
+    return { ok: false, reason: "keyTooLong" };
   }
   if (isEmail && !isValidEmail(key)) {
-    return { ok: false, reason: 'invalidEmailKey' };
+    return { ok: false, reason: "invalidEmailKey" };
   }
 
   return { ok: true, key };
@@ -58,8 +53,16 @@ const ISO_DATE =
 const LOCAL_DATE =
   /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:[T ]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
 
+/** A capture group that may not have matched; `RegExpExecArray` types every group as `string`. */
+function optionalGroup(
+  match: RegExpExecArray,
+  index: number,
+): string | undefined {
+  return match[index];
+}
+
 function pad(value: number, length = 2): string {
-  return String(value).padStart(length, '0');
+  return String(value).padStart(length, "0");
 }
 
 function daysInMonth(year: number, month: number): number {
@@ -87,13 +90,13 @@ function isValidTime(hour: number, minute: number, second: number): boolean {
 }
 
 function normalizeOffset(offset: string): string {
-  if (offset === 'Z' || offset === 'z') {
-    return 'Z';
+  if (offset === "Z" || offset === "z") {
+    return "Z";
   }
 
-  const digits = offset.slice(1).replace(':', '');
+  const digits = offset.slice(1).replace(":", "");
   const hours = digits.slice(0, 2);
-  const minutes = digits.length > 2 ? digits.slice(2, 4) : '00';
+  const minutes = digits.length > 2 ? digits.slice(2, 4) : "00";
 
   return `${offset[0]}${hours}:${minutes}`;
 }
@@ -104,7 +107,10 @@ function normalizeOffset(offset: string): string {
  * `D.M.YYYY`-style values with `.`, `/` or `-` separators. No time zone conversion is done.
  * Returns `null` when the value is not a valid date.
  */
-export function parseDateToIso(value: string, format: DateFormat): string | null {
+export function parseDateToIso(
+  value: string,
+  format: DateFormat,
+): string | null {
   const iso = ISO_DATE.exec(value);
   if (iso) {
     const year = Number(iso[1]);
@@ -115,22 +121,25 @@ export function parseDateToIso(value: string, format: DateFormat): string | null
     }
 
     const date = `${iso[1]}-${iso[2]}-${iso[3]}`;
-    if (iso[4] === undefined) {
+    const hour = optionalGroup(iso, 4);
+    if (hour === undefined) {
       return date;
     }
 
-    const second = iso[6] ?? '00';
-    if (!isValidTime(Number(iso[4]), Number(iso[5]), Number(second))) {
+    const second = optionalGroup(iso, 6) ?? "00";
+    if (!isValidTime(Number(hour), Number(iso[5]), Number(second))) {
       return null;
     }
 
-    const fraction = iso[7] !== undefined ? `.${iso[7]}` : '';
-    const offset = iso[8] !== undefined ? normalizeOffset(iso[8]) : '';
+    const fractionDigits = optionalGroup(iso, 7);
+    const offsetText = optionalGroup(iso, 8);
+    const fraction = fractionDigits !== undefined ? `.${fractionDigits}` : "";
+    const offset = offsetText !== undefined ? normalizeOffset(offsetText) : "";
 
-    return `${date}T${iso[4]}:${iso[5]}:${second}${fraction}${offset}`;
+    return `${date}T${hour}:${iso[5]}:${second}${fraction}${offset}`;
   }
 
-  if (format === 'iso') {
+  if (format === "iso") {
     return null;
   }
 
@@ -142,20 +151,21 @@ export function parseDateToIso(value: string, format: DateFormat): string | null
   const first = Number(local[1]);
   const second = Number(local[2]);
   const year = Number(local[3]);
-  const day = format === 'dmy' ? first : second;
-  const month = format === 'dmy' ? second : first;
+  const day = format === "dmy" ? first : second;
+  const month = format === "dmy" ? second : first;
   if (!isValidDate(year, month, day)) {
     return null;
   }
 
   const date = `${pad(year, 4)}-${pad(month)}-${pad(day)}`;
-  if (local[4] === undefined) {
+  const hourText = optionalGroup(local, 4);
+  if (hourText === undefined) {
     return date;
   }
 
-  const hour = Number(local[4]);
+  const hour = Number(hourText);
   const minute = Number(local[5]);
-  const sec = Number(local[6] ?? '0');
+  const sec = Number(optionalGroup(local, 6) ?? "0");
   if (!isValidTime(hour, minute, sec)) {
     return null;
   }
@@ -165,5 +175,5 @@ export function parseDateToIso(value: string, format: DateFormat): string | null
 
 /** Whether values of the Xperience data type are parsed as dates by the pipeline. */
 export function isDateDataType(dataType: string | undefined): boolean {
-  return dataType === 'date' || dataType === 'datetime';
+  return dataType === "date" || dataType === "datetime";
 }

@@ -25,7 +25,11 @@ export interface RetryInfo {
   delayMs: number;
 }
 
-export const DEFAULT_RETRY = { maxAttempts: 6, baseDelayMs: 1000, maxDelayMs: 30_000 } as const;
+export const DEFAULT_RETRY = {
+  maxAttempts: 6,
+  baseDelayMs: 1000,
+  maxDelayMs: 30_000,
+} as const;
 
 /** Thrown when every attempt failed. */
 export class RetryExhaustedError extends Error {
@@ -33,7 +37,7 @@ export class RetryExhaustedError extends Error {
 
   constructor(attempts: number) {
     super(`The request failed ${attempts} times.`);
-    this.name = 'RetryExhaustedError';
+    this.name = "RetryExhaustedError";
     this.attempts = attempts;
   }
 }
@@ -45,7 +49,10 @@ export function backoffDelay(
   maxDelayMs: number,
   random: () => number = Math.random,
 ): number {
-  const exponential = Math.min(maxDelayMs, baseDelayMs * 2 ** Math.max(0, attempt - 1));
+  const exponential = Math.min(
+    maxDelayMs,
+    baseDelayMs * 2 ** Math.max(0, attempt - 1),
+  );
   const jitter = 0.75 + random() * 0.5;
 
   return Math.round(Math.min(maxDelayMs, exponential * jitter));
@@ -55,6 +62,7 @@ export function backoffDelay(
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     if (signal?.aborted) {
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the abort reason, as fetch rejects
       reject(signal.reason);
 
       return;
@@ -62,13 +70,14 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 
     const onAbort = () => {
       clearTimeout(timer);
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the abort reason, as fetch rejects
       reject(signal?.reason);
     };
     const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
+      signal?.removeEventListener("abort", onAbort);
       resolve();
     }, ms);
-    signal?.addEventListener('abort', onAbort, { once: true });
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -81,7 +90,10 @@ export async function withRetry<T>(
   attempt: (attemptNumber: number) => Promise<T | undefined>,
   options: RetryOptions = {},
 ): Promise<T> {
-  const maxAttempts = Math.max(1, options.maxAttempts ?? DEFAULT_RETRY.maxAttempts);
+  const maxAttempts = Math.max(
+    1,
+    options.maxAttempts ?? DEFAULT_RETRY.maxAttempts,
+  );
   const baseDelayMs = options.baseDelayMs ?? DEFAULT_RETRY.baseDelayMs;
   const maxDelayMs = options.maxDelayMs ?? DEFAULT_RETRY.maxDelayMs;
   const wait = options.sleep ?? sleep;
@@ -105,7 +117,12 @@ export async function withRetry<T>(
       throw new RetryExhaustedError(number);
     }
 
-    const delayMs = backoffDelay(number, baseDelayMs, maxDelayMs, options.random);
+    const delayMs = backoffDelay(
+      number,
+      baseDelayMs,
+      maxDelayMs,
+      options.random,
+    );
     options.onRetry?.({ attempt: number, maxAttempts, delayMs });
     await wait(delayMs, signal);
   }

@@ -1,16 +1,31 @@
-import { contactsCsv, expect, generateContactsCsv, newRunId, test, testContacts } from "./contactsImporterFixtures";
+import {
+  contactsCsv,
+  expect,
+  generateContactsCsv,
+  newRunId,
+  test,
+  testContacts,
+} from "./contactsImporterFixtures";
 
 // Step flow (D50): the upload runs in the background while Options is in view, File/Map/Upload lock
 // once it has started, the step header opens only reachable steps, "Start a new import" replaces going
 // back. The run test creates contacts; every run uses its own email addresses (e2e.{runId}.{n}@example.com).
 
 test.describe("contacts importer: step flow", () => {
-  test("uploads in the background while the options are chosen", async ({ page, importsList, importPage, uniqueFile }) => {
+  test("uploads in the background while the options are chosen", async ({
+    page,
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     test.setTimeout(120_000);
     const runId = newRunId();
     const rows = 3000;
     // Random notes compress badly, so the file is uploaded in several chunks (small chunks in appsettings.CI.json)
-    const file = await uniqueFile("contacts-background.csv", generateContactsCsv(rows, `bg${runId}`));
+    const file = await uniqueFile(
+      "contacts-background.csv",
+      generateContactsCsv(rows, `bg${runId}`),
+    );
 
     // Hold the chunk uploads after the first one until the checks below are done, so the upload is still running
     // while Options shows (the bar appears only after a short delay; a few small chunks upload in about a second)
@@ -20,7 +35,10 @@ test.describe("contacts importer: step flow", () => {
       releaseChunks = resolve;
     });
     await page.route("**/admin/api/cmd", async (route) => {
-      if ((route.request().postData() ?? "").includes("UPLOAD_CHUNK") && ++chunks > 1) {
+      if (
+        (route.request().postData() ?? "").includes("UPLOAD_CHUNK") &&
+        ++chunks > 1
+      ) {
         await chunksReleased;
       }
       await route.continue().catch(() => undefined);
@@ -36,13 +54,22 @@ test.describe("contacts importer: step flow", () => {
 
     // Options while uploading: the bar shows the progress, checking waits for the upload
     await importPage.expectUploadPhase("running");
-    await expect(importPage.uploadBar).toHaveAttribute("data-bar-mode", "progress");
+    await expect(importPage.uploadBar).toHaveAttribute(
+      "data-bar-mode",
+      "progress",
+    );
     await expect(importPage.uploadBar).toContainText("Uploading");
-    await expect(page.getByText("Waiting for the upload to finish")).toBeVisible();
-    await expect(page.getByTestId("contacts-importer-options-next")).toBeDisabled();
+    await expect(
+      page.getByText("Waiting for the upload to finish"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("contacts-importer-options-next"),
+    ).toBeDisabled();
     // A new import can be started only once this upload is complete; cancelling is possible at any time
     await expect(importPage.startNewButton).toHaveCount(0);
-    await expect(page.getByTestId("contacts-importer-run-cancel")).toBeVisible();
+    await expect(
+      page.getByTestId("contacts-importer-run-cancel"),
+    ).toBeVisible();
     for (const step of ["file", "map"] as const) {
       await importPage.expectStepState(step, "locked");
       await expect(importPage.stepButton(step)).toHaveCount(0);
@@ -52,14 +79,26 @@ test.describe("contacts importer: step flow", () => {
 
     // An option chosen during the upload is kept when the upload completes
     await importPage.chooseOption("newContacts", "skip");
-    expect(chunks, "the file is uploaded in more than one chunk").toBeGreaterThan(1);
+    expect(
+      chunks,
+      "the file is uploaded in more than one chunk",
+    ).toBeGreaterThan(1);
     releaseChunks();
     await importPage.expectUploaded(rows);
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await importPage.expectStepState("upload", "locked");
-    await expect(importPage.uploadBar).toHaveAttribute("data-bar-mode", "summary");
-    await expect(page.getByText("Waiting for the upload to finish")).toHaveCount(0);
-    await expect(page.locator('input[type="radio"][name="contacts-importer-newContacts"][value="skip"]')).toBeChecked();
+    await expect(importPage.uploadBar).toHaveAttribute(
+      "data-bar-mode",
+      "summary",
+    );
+    await expect(
+      page.getByText("Waiting for the upload to finish"),
+    ).toHaveCount(0);
+    await expect(
+      page.locator(
+        'input[type="radio"][name="contacts-importer-newContacts"][value="skip"]',
+      ),
+    ).toBeChecked();
 
     await importPage.saveOptions();
     await importPage.expectAnalyzed();
@@ -67,9 +106,16 @@ test.describe("contacts importer: step flow", () => {
     await importPage.expectCount("expected-skippedNew", rows);
   });
 
-  test("a small file goes to Options without showing the upload bar", async ({ importsList, importPage, uniqueFile }) => {
+  test("a small file goes to Options without showing the upload bar", async ({
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     const runId = newRunId();
-    const file = await uniqueFile("contacts-quick.csv", contactsCsv(testContacts(runId, 1, 5)));
+    const file = await uniqueFile(
+      "contacts-quick.csv",
+      contactsCsv(testContacts(runId, 1, 5)),
+    );
 
     await importsList.goto();
     await importsList.startNewImport();
@@ -78,14 +124,25 @@ test.describe("contacts importer: step flow", () => {
     await importPage.saveAndUpload();
     await importPage.expectUploaded(5);
     // The bar never showed progress: only the summary of the finished upload is there
-    await expect(importPage.uploadBar).toHaveAttribute("data-bar-mode", "summary");
+    await expect(importPage.uploadBar).toHaveAttribute(
+      "data-bar-mode",
+      "summary",
+    );
     await importPage.expectStepState("upload", "locked");
     await importPage.continueToOptions();
   });
 
-  test("the step header opens Options and Review until the run and only Results after it", async ({ page, importsList, importPage, uniqueFile }) => {
+  test("the step header opens Options and Review until the run and only Results after it", async ({
+    page,
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     const runId = newRunId();
-    const file = await uniqueFile("contacts-header.csv", contactsCsv(testContacts(runId, 1, 6)));
+    const file = await uniqueFile(
+      "contacts-header.csv",
+      contactsCsv(testContacts(runId, 1, 6)),
+    );
 
     await importsList.goto();
     await importsList.startNewImport();
@@ -109,16 +166,32 @@ test.describe("contacts importer: step flow", () => {
     // After the run every earlier step is locked; Results is the only step left
     await importPage.runImport();
     await importPage.expectResults("Completed");
-    for (const step of ["file", "map", "upload", "options", "review", "run"] as const) {
+    for (const step of [
+      "file",
+      "map",
+      "upload",
+      "options",
+      "review",
+      "run",
+    ] as const) {
       await importPage.expectStepState(step, "locked");
     }
     await importPage.expectStepState("results", "current");
-    await expect(page.getByTestId("contacts-importer-steps").locator("button")).toHaveCount(0);
+    await expect(
+      page.getByTestId("contacts-importer-steps").locator("button"),
+    ).toHaveCount(0);
   });
 
-  test("starts a new import from Review, keeping this one", async ({ importsList, importPage, uniqueFile }) => {
+  test("starts a new import from Review, keeping this one", async ({
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     const runId = newRunId();
-    const file = await uniqueFile("contacts-start-new.csv", contactsCsv(testContacts(runId, 1, 4)));
+    const file = await uniqueFile(
+      "contacts-start-new.csv",
+      contactsCsv(testContacts(runId, 1, 4)),
+    );
 
     await importsList.goto();
     await importsList.startNewImport();
@@ -138,9 +211,16 @@ test.describe("contacts importer: step flow", () => {
     await importsList.deleteImport(file.name);
   });
 
-  test("cancelling on Options deletes the import and returns to the list", async ({ importsList, importPage, uniqueFile }) => {
+  test("cancelling on Options deletes the import and returns to the list", async ({
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     const runId = newRunId();
-    const file = await uniqueFile("contacts-cancel-options.csv", contactsCsv(testContacts(runId, 1, 4)));
+    const file = await uniqueFile(
+      "contacts-cancel-options.csv",
+      contactsCsv(testContacts(runId, 1, 4)),
+    );
 
     await importsList.goto();
     await importsList.startNewImport();
@@ -153,10 +233,21 @@ test.describe("contacts importer: step flow", () => {
     await expect(importsList.row(file.name)).toHaveCount(0);
   });
 
-  test("deletes an unfinished and a finished import from the list", async ({ page, importsList, importPage, uniqueFile }) => {
+  test("deletes an unfinished and a finished import from the list", async ({
+    page,
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     const runId = newRunId();
-    const unfinished = await uniqueFile("contacts-delete-unfinished.csv", contactsCsv(testContacts(runId, 1, 3)));
-    const finished = await uniqueFile("contacts-delete-finished.csv", contactsCsv(testContacts(runId, 4, 6)));
+    const unfinished = await uniqueFile(
+      "contacts-delete-unfinished.csv",
+      contactsCsv(testContacts(runId, 1, 3)),
+    );
+    const finished = await uniqueFile(
+      "contacts-delete-finished.csv",
+      contactsCsv(testContacts(runId, 4, 6)),
+    );
 
     // An uploaded import that waits for its options
     await importsList.goto();
@@ -177,15 +268,24 @@ test.describe("contacts importer: step flow", () => {
     await importPage.expectAnalyzed();
     await importPage.runImport();
     await importPage.expectResults("Completed");
-    await expect(page.getByTestId("contacts-importer-results-delete")).toBeVisible();
+    await expect(
+      page.getByTestId("contacts-importer-results-delete"),
+    ).toBeVisible();
 
     await importsList.goto();
-    await expect(importsList.cell(unfinished.name, "state")).toHaveText("Uploaded");
-    await expect(importsList.cell(finished.name, "state")).toHaveText("Completed");
+    await expect(importsList.cell(unfinished.name, "state")).toHaveText(
+      "Uploaded",
+    );
+    await expect(importsList.cell(finished.name, "state")).toHaveText(
+      "Completed",
+    );
 
     // Closing the dialog keeps the import
     await importsList.openDeleteDialog(unfinished.name);
-    await page.getByRole("button", { name: "Cancel", exact: true }).last().click();
+    await page
+      .getByRole("button", { name: "Cancel", exact: true })
+      .last()
+      .click();
     await expect(importsList.row(unfinished.name)).toHaveCount(1);
 
     await importsList.deleteImport(unfinished.name);

@@ -1,5 +1,5 @@
-import type { ChunkRecord } from './contract';
-import type { FileLike, RecordSource, SourceRow } from './source';
+import type { ChunkRecord } from "./contract";
+import type { FileLike, RecordSource, SourceRow } from "./source";
 
 export interface TestFile extends FileLike {
   /** Number of chunks the consumer pulled from the stream so far. */
@@ -18,10 +18,10 @@ export function utf8(text: string): Uint8Array {
  */
 export function makeFile(
   content: string | Uint8Array,
-  name = 'test.csv',
+  name = "test.csv",
   chunkSize = 0,
 ): TestFile {
-  const bytes = typeof content === 'string' ? utf8(content) : content;
+  const bytes = typeof content === "string" ? utf8(content) : content;
   const step = chunkSize > 0 ? chunkSize : Math.max(1, bytes.byteLength);
   const file: TestFile = {
     name,
@@ -29,7 +29,7 @@ export function makeFile(
     pulls: 0,
     cancelled: false,
     slice: (start = 0, end = bytes.byteLength) => ({
-      arrayBuffer: async () => bytes.slice(start, end).buffer as ArrayBuffer,
+      arrayBuffer: () => Promise.resolve(bytes.slice(start, end).buffer),
     }),
     stream: () => {
       let offset = 0;
@@ -70,7 +70,7 @@ export async function collectRows(source: RecordSource): Promise<SourceRow[]> {
 export async function gzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
   const stream = new Blob([bytes as BlobPart])
     .stream()
-    .pipeThrough(new CompressionStream('gzip'));
+    .pipeThrough(new CompressionStream("gzip"));
 
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
@@ -78,7 +78,7 @@ export async function gzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
 export async function gunzipBytes(bytes: Uint8Array): Promise<Uint8Array> {
   const stream = new Blob([bytes as BlobPart])
     .stream()
-    .pipeThrough(new DecompressionStream('gzip'));
+    .pipeThrough(new DecompressionStream("gzip"));
 
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
@@ -89,12 +89,13 @@ export function fromBase64(data: string): Uint8Array {
 
 /** Decodes an `UPLOAD_CHUNK` `data` value back into its records. */
 export async function decodeChunkData(data: string): Promise<ChunkRecord[]> {
-  const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
-    await gunzipBytes(fromBase64(data)),
-  );
+  const text = new TextDecoder("utf-8", {
+    fatal: true,
+    ignoreBOM: true,
+  }).decode(await gunzipBytes(fromBase64(data)));
 
   return text
-    .split('\n')
+    .split("\n")
     .filter((line) => line.length > 0)
     .map((line) => JSON.parse(line) as ChunkRecord);
 }
@@ -113,7 +114,7 @@ export function randomSource(seed: number): () => number {
 }
 
 export function randomWord(random: () => number, length: number): string {
-  let word = '';
+  let word = "";
   for (let i = 0; i < length; i++) {
     word += String.fromCharCode(97 + Math.floor(random() * 26));
   }

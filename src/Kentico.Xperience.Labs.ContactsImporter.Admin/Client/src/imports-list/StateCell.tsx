@@ -1,12 +1,15 @@
-import { CellType, Icon } from '@kentico/xperience-admin-components';
-import type { ComponentCell, TableCell } from '@kentico/xperience-admin-components';
-import React from 'react';
+import { CellType, Icon } from "@kentico/xperience-admin-components";
+import type {
+  ComponentCell,
+  TableCell,
+} from "@kentico/xperience-admin-components";
+import React from "react";
 
-import type { JobState } from '../shared/commands';
-import { stateIcon } from './stateIcon';
+import { stateIcon } from "./stateIcon";
 
 interface StateCellProps {
-  readonly state: JobState | string;
+  /** A `JobState`, or a state this client does not know yet. */
+  readonly state: string;
   readonly label: string;
 }
 
@@ -15,19 +18,42 @@ const StateCell = ({ state, label }: StateCellProps) => {
   const { name, color } = stateIcon(state);
 
   return (
-    <div title={label} style={{ display: 'flex', alignItems: 'center', gap: '0.5em', minWidth: 0 }}>
-      <span aria-hidden="true" style={{ display: 'inline-flex', flexShrink: 0, color }}>
+    <div
+      title={label}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5em",
+        minWidth: 0,
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{ display: "inline-flex", flexShrink: 0, color }}
+      >
         <Icon name={name} />
       </span>
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      <span
+        style={{
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+      </span>
     </div>
   );
 };
 
 /** Table cell for the state column; the admin `Table` renders `component` without props, so it closes over them. */
-export function stateCell(columnName: string, state: JobState | string, label: string): TableCell {
+export function stateCell(
+  columnName: string,
+  state: string,
+  label: string,
+): TableCell {
   const component = () => <StateCell state={state} label={label} />;
-  component.displayName = 'ImportStateCell';
+  component.displayName = "ImportStateCell";
 
   return { type: CellType.Component, columnName, component } as ComponentCell;
 }

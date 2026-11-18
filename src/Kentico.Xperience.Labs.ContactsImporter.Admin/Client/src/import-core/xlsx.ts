@@ -1,10 +1,10 @@
-import { normalizeHeaders } from './csv';
-import { ImportError } from './source';
-import type { FileLike, RecordSource, SourceInfo, SourceRow } from './source';
-import { XmlTokenizer, decodeOoxmlEscapes, parseXmlAttributes } from './xml';
-import type { XmlHandler } from './xml';
-import { ZipArchive } from './zip';
-import type { ZipEntry } from './zip';
+import { normalizeHeaders } from "./csv";
+import { ImportError } from "./source";
+import type { FileLike, RecordSource, SourceInfo, SourceRow } from "./source";
+import { XmlTokenizer, decodeOoxmlEscapes, parseXmlAttributes } from "./xml";
+import type { XmlAttributes, XmlHandler } from "./xml";
+import { ZipArchive } from "./zip";
+import type { ZipEntry } from "./zip";
 
 /** Most rows an Excel worksheet can have. */
 export const XLSX_MAX_ROWS = 1_048_576;
@@ -20,8 +20,8 @@ export interface XlsxSourceOptions {
 
 /** Built-in number formats that show dates / times (ECMA-376 §18.8.30, incl. the East Asian ones). */
 const BUILTIN_DATE_FORMATS = new Set([
-  14, 15, 16, 17, 18, 19, 20, 21, 22, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 45, 46, 47, 50, 51,
-  52, 53, 54, 55, 56, 57, 58,
+  14, 15, 16, 17, 18, 19, 20, 21, 22, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+  45, 46, 47, 50, 51, 52, 53, 54, 55, 56, 57, 58,
 ]);
 
 /**
@@ -30,18 +30,18 @@ const BUILTIN_DATE_FORMATS = new Set([
  */
 export function isDateFormatCode(code: string): boolean {
   const section = code
-    .replace(/"[^"]*"/g, '')
-    .replace(/\[[^\]]*\]/g, '')
-    .replace(/\\./g, '')
-    .replace(/[_*]./g, '')
-    .split(';')[0]
-    .replace(/general/gi, '');
+    .replace(/"[^"]*"/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/\\./g, "")
+    .replace(/[_*]./g, "")
+    .split(";")[0]
+    .replace(/general/gi, "");
 
   return /[dmyhs]/i.test(section);
 }
 
 function pad(value: number, length = 2): string {
-  return String(value).padStart(length, '0');
+  return String(value).padStart(length, "0");
 }
 
 const DAY_MS = 86_400_000;
@@ -57,7 +57,10 @@ const MAX_SERIAL = 2_958_465;
  * that does not exist, kept as Excel shows it); 1904 system: serial 0 = 1904-01-01.
  * Returns `null` for values that are no date (negative, too large, not a number).
  */
-export function excelSerialToIso(serial: number, date1904: boolean): string | null {
+export function excelSerialToIso(
+  serial: number,
+  date1904: boolean,
+): string | null {
   if (!Number.isFinite(serial) || serial < 0 || serial > MAX_SERIAL) {
     return null;
   }
@@ -67,14 +70,14 @@ export function excelSerialToIso(serial: number, date1904: boolean): string | nu
   const seconds = totalSeconds - days * 86_400;
   const time =
     seconds === 0
-      ? ''
+      ? ""
       : `T${pad(Math.floor(seconds / 3600))}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)}`;
 
   let date: string;
   if (date1904) {
     date = isoDate(EPOCH_1904 + days * DAY_MS);
   } else if (days === 60) {
-    date = '1900-02-29';
+    date = "1900-02-29";
   } else {
     date = isoDate((days < 60 ? EPOCH_1900_EARLY : EPOCH_1900) + days * DAY_MS);
   }
@@ -104,29 +107,36 @@ export function columnIndex(reference: string): number {
 }
 
 function invalidXlsx(message: string): ImportError {
-  return new ImportError('invalidXlsx', message);
+  return new ImportError("invalidXlsx", message);
 }
 
 /** Text decoder for an XML part: UTF-16 by byte order mark, otherwise UTF-8. */
 function decoderFor(head: Uint8Array): TextDecoder {
   if (head.length >= 2 && head[0] === 0xff && head[1] === 0xfe) {
-    return new TextDecoder('utf-16le');
+    return new TextDecoder("utf-16le");
   }
   if (head.length >= 2 && head[0] === 0xfe && head[1] === 0xff) {
-    return new TextDecoder('utf-16be');
+    return new TextDecoder("utf-16be");
   }
 
-  return new TextDecoder('utf-8');
+  return new TextDecoder("utf-8");
 }
 
-async function readXmlText(archive: ZipArchive, entry: ZipEntry): Promise<string> {
+async function readXmlText(
+  archive: ZipArchive,
+  entry: ZipEntry,
+): Promise<string> {
   const bytes = await archive.readBytes(entry);
 
   return decoderFor(bytes).decode(bytes);
 }
 
 /** Streams an XML part through a handler (for parts that can be large, e.g. shared strings). */
-async function streamXml(archive: ZipArchive, entry: ZipEntry, handler: XmlHandler): Promise<void> {
+async function streamXml(
+  archive: ZipArchive,
+  entry: ZipEntry,
+  handler: XmlHandler,
+): Promise<void> {
   const reader = (await archive.stream(entry)).getReader();
   const tokenizer = new XmlTokenizer(handler);
   let decoder: TextDecoder | undefined;
@@ -145,9 +155,14 @@ async function streamXml(archive: ZipArchive, entry: ZipEntry, handler: XmlHandl
 }
 
 /** Calls `onOpen` for every start tag of a small, fully read XML text. */
-function scanTags(text: string, onOpen: (name: string, attributes: Record<string, string>) => void): void {
+function scanTags(
+  text: string,
+  onOpen: (name: string, attributes: XmlAttributes) => void,
+): void {
   const tokenizer = new XmlTokenizer({
-    open: (name, raw) => onOpen(name, parseXmlAttributes(raw)),
+    open: (name, raw) => {
+      onOpen(name, parseXmlAttributes(raw));
+    },
     close: () => undefined,
     text: () => undefined,
   });
@@ -162,27 +177,32 @@ interface Relationship {
 
 /** Folder of a part path, with a trailing slash (`xl/workbook.xml` -> `xl/`). */
 function folderOf(path: string): string {
-  const slash = path.lastIndexOf('/');
+  const slash = path.lastIndexOf("/");
 
-  return slash === -1 ? '' : path.slice(0, slash + 1);
+  return slash === -1 ? "" : path.slice(0, slash + 1);
 }
 
 /** Resolves a relationship target against the folder of its source part. */
 function resolvePart(folder: string, target: string): string {
-  const parts = (target.startsWith('/') ? target.slice(1) : folder + target).split('/');
+  const parts = (
+    target.startsWith("/") ? target.slice(1) : folder + target
+  ).split("/");
   const result: string[] = [];
   for (const part of parts) {
-    if (part === '..') {
+    if (part === "..") {
       result.pop();
-    } else if (part !== '.' && part !== '') {
+    } else if (part !== "." && part !== "") {
       result.push(part);
     }
   }
 
-  return result.join('/');
+  return result.join("/");
 }
 
-async function readRelationships(archive: ZipArchive, partPath: string): Promise<Map<string, Relationship>> {
+async function readRelationships(
+  archive: ZipArchive,
+  partPath: string,
+): Promise<Map<string, Relationship>> {
   const relsPath = `${folderOf(partPath)}_rels/${partPath.slice(folderOf(partPath).length)}.rels`;
   const entry = archive.find(relsPath);
   const result = new Map<string, Relationship>();
@@ -192,9 +212,14 @@ async function readRelationships(archive: ZipArchive, partPath: string): Promise
 
   const folder = folderOf(partPath);
   scanTags(await readXmlText(archive, entry), (name, attributes) => {
-    if (name === 'Relationship' && attributes.Id && attributes.Target && attributes.TargetMode !== 'External') {
+    if (
+      name === "Relationship" &&
+      attributes.Id &&
+      attributes.Target &&
+      attributes.TargetMode !== "External"
+    ) {
       result.set(attributes.Id, {
-        type: attributes.Type ?? '',
+        type: attributes.Type ?? "",
         target: resolvePart(folder, attributes.Target),
       });
     }
@@ -211,31 +236,39 @@ interface Workbook {
 }
 
 async function readWorkbook(archive: ZipArchive): Promise<Workbook> {
-  const rootRels = await readRelationships(archive, '');
-  let workbookPath = 'xl/workbook.xml';
+  const rootRels = await readRelationships(archive, "");
+  let workbookPath = "xl/workbook.xml";
   for (const rel of rootRels.values()) {
-    if (rel.type.endsWith('/officeDocument')) {
+    if (rel.type.endsWith("/officeDocument")) {
       workbookPath = rel.target;
     }
   }
 
   const workbookEntry = archive.find(workbookPath);
   if (!workbookEntry) {
-    throw invalidXlsx('The file is not an Excel workbook (no workbook part).');
+    throw invalidXlsx("The file is not an Excel workbook (no workbook part).");
   }
 
   const rels = await readRelationships(archive, workbookPath);
-  const sheets: Workbook['sheets'] = [];
+  const sheets: Workbook["sheets"] = [];
   let date1904 = false;
   scanTags(await readXmlText(archive, workbookEntry), (name, attributes) => {
-    if (name === 'workbookPr') {
-      const value = (attributes.date1904 ?? '').toLowerCase();
-      date1904 = value === '1' || value === 'true';
-    } else if (name === 'sheet') {
+    if (name === "workbookPr") {
+      const value = (attributes.date1904 ?? "").toLowerCase();
+      date1904 = value === "1" || value === "true";
+    } else if (name === "sheet") {
       const rel = attributes.id ? rels.get(attributes.id) : undefined;
       // chartsheets / dialog sheets have no cells
-      if (rel && rel.type.endsWith('/worksheet') && attributes.name !== undefined) {
-        sheets.push({ name: attributes.name, path: rel.target, hidden: (attributes.state ?? 'visible') !== 'visible' });
+      if (
+        rel &&
+        rel.type.endsWith("/worksheet") &&
+        attributes.name !== undefined
+      ) {
+        sheets.push({
+          name: attributes.name,
+          path: rel.target,
+          hidden: (attributes.state ?? "visible") !== "visible",
+        });
       }
     }
   });
@@ -243,9 +276,9 @@ async function readWorkbook(archive: ZipArchive): Promise<Workbook> {
   let sharedStringsPath: string | undefined;
   let stylesPath: string | undefined;
   for (const rel of rels.values()) {
-    if (rel.type.endsWith('/sharedStrings')) {
+    if (rel.type.endsWith("/sharedStrings")) {
       sharedStringsPath = rel.target;
-    } else if (rel.type.endsWith('/styles')) {
+    } else if (rel.type.endsWith("/styles")) {
       stylesPath = rel.target;
     }
   }
@@ -254,7 +287,10 @@ async function readWorkbook(archive: ZipArchive): Promise<Workbook> {
 }
 
 /** Per cell style index (`s`): whether its number format is a date / time. */
-async function readDateStyles(archive: ZipArchive, path: string | undefined): Promise<boolean[]> {
+async function readDateStyles(
+  archive: ZipArchive,
+  path: string | undefined,
+): Promise<boolean[]> {
   const entry = path ? archive.find(path) : undefined;
   if (!entry) {
     return [];
@@ -265,19 +301,26 @@ async function readDateStyles(archive: ZipArchive, path: string | undefined): Pr
   let inCellXfs = false;
   const tokenizer = new XmlTokenizer({
     open: (name, raw, selfClosing) => {
-      if (name === 'numFmt') {
+      if (name === "numFmt") {
         const attributes = parseXmlAttributes(raw);
-        customFormats.set(Number(attributes.numFmtId), attributes.formatCode ?? '');
-      } else if (name === 'cellXfs') {
+        customFormats.set(
+          Number(attributes.numFmtId),
+          attributes.formatCode ?? "",
+        );
+      } else if (name === "cellXfs") {
         inCellXfs = !selfClosing;
-      } else if (name === 'xf' && inCellXfs) {
+      } else if (name === "xf" && inCellXfs) {
         const id = Number(parseXmlAttributes(raw).numFmtId ?? 0);
         const custom = customFormats.get(id);
-        styles.push(custom !== undefined ? isDateFormatCode(custom) : BUILTIN_DATE_FORMATS.has(id));
+        styles.push(
+          custom !== undefined
+            ? isDateFormatCode(custom)
+            : BUILTIN_DATE_FORMATS.has(id),
+        );
       }
     },
     close: (name) => {
-      if (name === 'cellXfs') {
+      if (name === "cellXfs") {
         inCellXfs = false;
       }
     },
@@ -293,44 +336,47 @@ async function readDateStyles(archive: ZipArchive, path: string | undefined): Pr
  * Shared strings table, fully in memory (memory ≈ the unique strings of the workbook). Rich text
  * runs are joined; phonetic runs (`rPh`) are left out.
  */
-async function readSharedStrings(archive: ZipArchive, path: string | undefined): Promise<string[]> {
+async function readSharedStrings(
+  archive: ZipArchive,
+  path: string | undefined,
+): Promise<string[]> {
   const entry = path ? archive.find(path) : undefined;
   if (!entry) {
     return [];
   }
 
   const strings: string[] = [];
-  let current = '';
+  let current = "";
   let inItem = false;
   let phonetic = 0;
   let capture = false;
   await streamXml(archive, entry, {
     open: (name, _raw, selfClosing) => {
       if (selfClosing) {
-        if (name === 'si') {
+        if (name === "si") {
           inItem = true;
-          current = '';
+          current = "";
         }
 
         return;
       }
-      if (name === 'si') {
+      if (name === "si") {
         inItem = true;
-        current = '';
-      } else if (name === 'rPh') {
+        current = "";
+      } else if (name === "rPh") {
         phonetic++;
-      } else if (name === 't' && inItem && phonetic === 0) {
+      } else if (name === "t" && inItem && phonetic === 0) {
         capture = true;
       }
     },
     close: (name) => {
-      if (name === 't') {
+      if (name === "t") {
         capture = false;
-      } else if (name === 'rPh') {
+      } else if (name === "rPh") {
         phonetic--;
-      } else if (name === 'si') {
+      } else if (name === "si") {
         strings.push(decodeOoxmlEscapes(current));
-        current = '';
+        current = "";
         inItem = false;
       }
     },
@@ -346,7 +392,7 @@ async function readSharedStrings(archive: ZipArchive, path: string | undefined):
 
 /** Excel's own `TRUE` / `FALSE` text for boolean cells. */
 function booleanText(value: string): string {
-  return value === '1' ? 'TRUE' : value === '0' ? 'FALSE' : value;
+  return value === "1" ? "TRUE" : value === "0" ? "FALSE" : value;
 }
 
 /** Parses `<sheetData>` into rows: sparse cells, shared / inline strings, dates. */
@@ -360,16 +406,21 @@ class SheetHandler implements XmlHandler {
   private readonly date1904: boolean;
   private headerRow = -1;
   private row = 0;
-  private cells: string[] = [];
+  /** Sparse: a column without a `<c>` element is a hole. */
+  private cells: (string | undefined)[] = [];
   private column = -1;
-  private cellType = '';
+  private cellType = "";
   private cellStyle = 0;
-  private value = '';
+  private value = "";
   private capture = false;
   private inInlineString = false;
   private phonetic = 0;
 
-  constructor(strings: readonly string[], dateStyles: readonly boolean[], date1904: boolean) {
+  constructor(
+    strings: readonly string[],
+    dateStyles: readonly boolean[],
+    date1904: boolean,
+  ) {
     this.strings = strings;
     this.dateStyles = dateStyles;
     this.date1904 = date1904;
@@ -377,36 +428,37 @@ class SheetHandler implements XmlHandler {
 
   open(name: string, raw: string, selfClosing: boolean): void {
     switch (name) {
-      case 'row': {
+      case "row": {
         const r = Number(parseXmlAttributes(raw).r);
         this.row = Number.isInteger(r) && r > 0 ? r : this.row + 1;
         this.cells = [];
         this.column = -1;
         break;
       }
-      case 'c': {
+      case "c": {
         const attributes = parseXmlAttributes(raw);
         const reference = attributes.r;
         const column = reference ? columnIndex(reference) : -1;
         this.column = column >= 0 ? column : this.column + 1;
-        this.cellType = attributes.t ?? 'n';
+        this.cellType = attributes.t ?? "n";
         this.cellStyle = Number(attributes.s ?? 0);
-        this.value = '';
+        this.value = "";
         break;
       }
-      case 'v':
+      case "v":
         this.capture = !selfClosing;
         break;
-      case 'is':
+      case "is":
         this.inInlineString = !selfClosing;
         break;
-      case 'rPh':
+      case "rPh":
         if (!selfClosing) {
           this.phonetic++;
         }
         break;
-      case 't':
-        this.capture = this.inInlineString && this.phonetic === 0 && !selfClosing;
+      case "t":
+        this.capture =
+          this.inInlineString && this.phonetic === 0 && !selfClosing;
         break;
       default:
         break;
@@ -415,24 +467,24 @@ class SheetHandler implements XmlHandler {
 
   close(name: string): void {
     switch (name) {
-      case 'v':
-      case 't':
+      case "v":
+      case "t":
         this.capture = false;
         break;
-      case 'is':
+      case "is":
         this.inInlineString = false;
         break;
-      case 'rPh':
+      case "rPh":
         this.phonetic = Math.max(0, this.phonetic - 1);
         break;
-      case 'c': {
+      case "c": {
         const text = this.cellText();
-        if (text !== '') {
+        if (text !== "") {
           this.cells[this.column] = text;
         }
         break;
       }
-      case 'row':
+      case "row":
         this.endRow();
         break;
       default:
@@ -452,21 +504,21 @@ class SheetHandler implements XmlHandler {
 
   private cellText(): string {
     const value = this.value;
-    if (value === '') {
-      return '';
+    if (value === "") {
+      return "";
     }
     switch (this.cellType) {
-      case 's':
-        return this.strings[Number(value)] ?? '';
-      case 'inlineStr':
-      case 'str':
+      case "s":
+        return this.strings[Number(value)] ?? "";
+      case "inlineStr":
+      case "str":
         return decodeOoxmlEscapes(value);
-      case 'b':
+      case "b":
         return booleanText(value);
-      case 'e':
-        return '';
-      case 'd':
-        return value.replace(/T00:00:00(\.0+)?Z?$/, '');
+      case "e":
+        return "";
+      case "d":
+        return value.replace(/T00:00:00(\.0+)?Z?$/, "");
       default: {
         if (!this.dateStyles[this.cellStyle]) {
           return value;
@@ -486,8 +538,8 @@ class SheetHandler implements XmlHandler {
 
     if (!this.columnsReady) {
       const header: string[] = [];
-      for (let i = 0; i < cells.length; i++) {
-        header.push(cells[i] ?? '');
+      for (const cell of cells) {
+        header.push(cell ?? "");
       }
       this.columns = normalizeHeaders(header);
       this.headerRow = this.row;
@@ -497,15 +549,19 @@ class SheetHandler implements XmlHandler {
     }
 
     if (this.row > XLSX_MAX_ROWS) {
-      throw new ImportError('tooManyRows', `The sheet has more than ${XLSX_MAX_ROWS} rows.`, {
-        maxRows: XLSX_MAX_ROWS,
-      });
+      throw new ImportError(
+        "tooManyRows",
+        `The sheet has more than ${XLSX_MAX_ROWS} rows.`,
+        {
+          maxRows: XLSX_MAX_ROWS,
+        },
+      );
     }
 
     const length = Math.max(this.columns.length, cells.length);
     const values = new Array<string>(length);
     for (let i = 0; i < length; i++) {
-      values[i] = cells[i] ?? '';
+      values[i] = cells[i] ?? "";
     }
     this.out.push({ rowNumber: this.row - this.headerRow, values });
   }
@@ -519,13 +575,13 @@ class SheetHandler implements XmlHandler {
  * - Date-formatted numbers -> ISO date (`yyyy-MM-dd[THH:mm:ss]`); other numbers keep their stored text.
  */
 export class XlsxRecordSource implements RecordSource {
-  readonly format = 'xlsx' as const;
+  readonly format = "xlsx" as const;
   readonly dynamicColumns = false;
   readonly totalBytes: number;
 
   private readonly handler: SheetHandler;
   private readonly sheetBytes: number;
-  private readonly sheetInfo: Pick<SourceInfo, 'sheet' | 'sheets' | 'zipEntry'>;
+  private readonly sheetInfo: Pick<SourceInfo, "sheet" | "sheets" | "zipEntry">;
   private reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   private readonly tokenizer: XmlTokenizer;
   private decoder: TextDecoder | undefined;
@@ -539,7 +595,7 @@ export class XlsxRecordSource implements RecordSource {
     handler: SheetHandler,
     totalBytes: number,
     sheetBytes: number,
-    sheetInfo: Pick<SourceInfo, 'sheet' | 'sheets' | 'zipEntry'>,
+    sheetInfo: Pick<SourceInfo, "sheet" | "sheets" | "zipEntry">,
   ) {
     this.handler = handler;
     this.totalBytes = totalBytes;
@@ -549,30 +605,39 @@ export class XlsxRecordSource implements RecordSource {
   }
 
   /** Opens the workbook and reads the sheet far enough to know the columns. */
-  static async open(file: FileLike, options: XlsxSourceOptions = {}): Promise<XlsxRecordSource> {
+  static async open(
+    file: FileLike,
+    options: XlsxSourceOptions = {},
+  ): Promise<XlsxRecordSource> {
     let archive: ZipArchive;
     try {
       archive = await ZipArchive.open(file);
     } catch (error) {
-      if (error instanceof ImportError && error.code === 'invalidZip') {
-        throw invalidXlsx('The file is not an Excel workbook (.xlsx).');
+      if (error instanceof ImportError && error.code === "invalidZip") {
+        throw invalidXlsx("The file is not an Excel workbook (.xlsx).");
       }
       throw error;
     }
 
     const workbook = await readWorkbook(archive);
     if (workbook.sheets.length === 0) {
-      throw invalidXlsx('The workbook has no worksheets.');
+      throw invalidXlsx("The workbook has no worksheets.");
     }
 
     let sheet;
-    if (options.sheet !== undefined && options.sheet !== '') {
+    if (options.sheet !== undefined && options.sheet !== "") {
       const wanted = options.sheet;
       sheet =
         workbook.sheets.find((s) => s.name === wanted) ??
-        workbook.sheets.find((s) => s.name.toLowerCase() === wanted.toLowerCase());
+        workbook.sheets.find(
+          (s) => s.name.toLowerCase() === wanted.toLowerCase(),
+        );
       if (!sheet) {
-        throw new ImportError('sheetNotFound', `The workbook has no sheet '${wanted}'.`, { sheet: wanted });
+        throw new ImportError(
+          "sheetNotFound",
+          `The workbook has no sheet '${wanted}'.`,
+          { sheet: wanted },
+        );
       }
     } else {
       sheet = workbook.sheets.find((s) => !s.hidden) ?? workbook.sheets[0];
@@ -580,20 +645,33 @@ export class XlsxRecordSource implements RecordSource {
 
     const sheetEntry = archive.find(sheet.path);
     if (!sheetEntry) {
-      throw invalidXlsx(`The workbook part of sheet '${sheet.name}' is missing.`);
+      throw invalidXlsx(
+        `The workbook part of sheet '${sheet.name}' is missing.`,
+      );
     }
 
     const [dateStyles, strings] = [
       await readDateStyles(archive, workbook.stylesPath),
-      await readSharedStrings(archive, workbook.sharedStringsPath ?? (archive.find('xl/sharedStrings.xml') ? 'xl/sharedStrings.xml' : undefined)),
+      await readSharedStrings(
+        archive,
+        workbook.sharedStringsPath ??
+          (archive.find("xl/sharedStrings.xml")
+            ? "xl/sharedStrings.xml"
+            : undefined),
+      ),
     ];
 
     const handler = new SheetHandler(strings, dateStyles, workbook.date1904);
-    const source = new XlsxRecordSource(handler, options.totalBytes ?? file.size, sheetEntry.compressedSize, {
-      sheet: sheet.name,
-      sheets: workbook.sheets.map((s) => s.name),
-      ...(options.zipEntry !== undefined && { zipEntry: options.zipEntry }),
-    });
+    const source = new XlsxRecordSource(
+      handler,
+      options.totalBytes ?? file.size,
+      sheetEntry.compressedSize,
+      {
+        sheet: sheet.name,
+        sheets: workbook.sheets.map((s) => s.name),
+        ...(options.zipEntry !== undefined && { zipEntry: options.zipEntry }),
+      },
+    );
     source.reader = (
       await archive.stream(sheetEntry, (bytes) => {
         source.sheetRead += bytes;
@@ -623,18 +701,21 @@ export class XlsxRecordSource implements RecordSource {
       return this.eof ? this.totalBytes : 0;
     }
 
-    return Math.min(this.totalBytes, Math.round((this.sheetRead / this.sheetBytes) * this.totalBytes));
+    return Math.min(
+      this.totalBytes,
+      Math.round((this.sheetRead / this.sheetBytes) * this.totalBytes),
+    );
   }
 
   get info(): SourceInfo {
-    return { encoding: 'utf-8', compressed: false, ...this.sheetInfo };
+    return { encoding: "utf-8", compressed: false, ...this.sheetInfo };
   }
 
   async *batches(): AsyncGenerator<SourceRow[], void, void> {
     if (this.consumed) {
       throw new ImportError(
-        'sourceConsumed',
-        'The record source was already read. Open a new source for another pass.',
+        "sourceConsumed",
+        "The record source was already read. Open a new source for another pass.",
       );
     }
     this.consumed = true;
@@ -681,7 +762,10 @@ export class XlsxRecordSource implements RecordSource {
   }
 
   private async readNext(): Promise<void> {
-    const reader = this.reader as ReadableStreamDefaultReader<Uint8Array>;
+    const reader = this.reader;
+    if (!reader) {
+      throw new Error("The sheet is not open.");
+    }
     const { done, value } = await reader.read();
     if (!done) {
       this.decoder ??= decoderFor(value);

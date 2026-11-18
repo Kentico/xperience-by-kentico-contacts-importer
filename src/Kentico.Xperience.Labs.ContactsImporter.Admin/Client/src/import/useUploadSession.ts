@@ -1,19 +1,34 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
-import type { PipelineResult, TargetField } from '../import-core';
-import { Commands } from '../shared/commands';
-import type { ExecuteCommand, ImportJobResponse, JobDto, LimitsDto, StatusDto } from '../shared/commands';
-import { useIsMounted } from '../shared/hooks';
-import { useText } from '../shared/i18n';
-import { RateEstimator, percent } from '../upload/progress';
-import type { UploadPhase } from '../upload/upload-bar';
-import { uploadFailureMessage } from '../upload/upload-messages';
-import { UploadSessionError, startUploadSession } from '../upload/upload-session';
-import type { UploadProgress, UploadSession } from '../upload/upload-session';
-import type { ImportWorkerClient } from '../worker/client';
+import type { PipelineResult, TargetField } from "../import-core";
+import { Commands } from "../shared/commands";
+import type {
+  ExecuteCommand,
+  ImportJobResponse,
+  JobDto,
+  LimitsDto,
+  StatusDto,
+} from "../shared/commands";
+import { useIsMounted } from "../shared/hooks";
+import { useText } from "../shared/i18n";
+import { RateEstimator, percent } from "../upload/progress";
+import type { UploadPhase } from "../upload/upload-bar";
+import { uploadFailureMessage } from "../upload/upload-messages";
+import {
+  UploadSessionError,
+  startUploadSession,
+} from "../upload/upload-session";
+import type { UploadProgress, UploadSession } from "../upload/upload-session";
+import type { ImportWorkerClient } from "../worker/client";
 
-import { chunkSizes, toOpenOptions } from './model';
-import type { SourceSettings } from './model';
+import { chunkSizes, toOpenOptions } from "./model";
+import type { SourceSettings } from "./model";
 
 /** What one upload pass needs: the saved job and the file selected in this tab. */
 export interface UploadInput {
@@ -59,39 +74,54 @@ export interface UploadController {
  * on while the Options step is in view (D50). One pass at a time; stopped when the page closes.
  * Warns before the tab closes and shows the progress in the tab title while it runs.
  */
-export function useUploadSession({ worker, execute, limits, targetFields, onStatus }: UploadSessionOptions): UploadController {
+export function useUploadSession({
+  worker,
+  execute,
+  limits,
+  targetFields,
+  onStatus,
+}: UploadSessionOptions): UploadController {
   const { t, m, percent: formatPercent } = useText();
   const isMounted = useIsMounted();
   const sessionRef = useRef<UploadSession | null>(null);
   const inputRef = useRef<UploadInput | null>(null);
-  const estimatorRef = useRef(new RateEstimator());
+  const [estimator] = useState(() => new RateEstimator());
   const startedAtRef = useRef(0);
   const startingRef = useRef(false);
   const pauseRequestedRef = useRef(false);
   const onStatusRef = useRef(onStatus);
-  onStatusRef.current = onStatus;
-  const [phase, setPhase] = useState<UploadPhase>('idle');
+  useLayoutEffect(() => {
+    onStatusRef.current = onStatus;
+  });
+  const [phase, setPhase] = useState<UploadPhase>("idle");
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [result, setResult] = useState<PipelineResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState<number | null>(null);
-  const [hasFile, setHasFile] = useState(false);
+  /** Name of the selected file; null when no file is selected. */
+  const [fileName, setFileName] = useState<string | null>(null);
 
   const run = useCallback(async () => {
     const input = inputRef.current;
-    if (!input || !worker || !limits || sessionRef.current || startingRef.current) {
+    if (
+      !input ||
+      !worker ||
+      !limits ||
+      sessionRef.current ||
+      startingRef.current
+    ) {
       return;
     }
 
     startingRef.current = true;
     pauseRequestedRef.current = false;
-    estimatorRef.current.reset();
+    estimator.reset();
     startedAtRef.current = Date.now();
     setError(null);
     setResult(null);
     setProgress(null);
     setElapsedSeconds(null);
-    setPhase('running');
+    setPhase("running");
 
     // Ask what the server has now: chunks stored before a pause in this visit are not in the input.
     const current = await execute<ImportJobResponse>(Commands.GetJob);
@@ -99,17 +129,19 @@ export function useUploadSession({ worker, execute, limits, targetFields, onStat
     if (!isMounted() || inputRef.current !== input) {
       return;
     }
+    // pause() can set the flag while GetJob is awaited; TS keeps the narrowing from the reset above
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (pauseRequestedRef.current) {
       pauseRequestedRef.current = false;
-      setPhase('paused');
+      setPhase("paused");
 
       return;
     }
 
     const currentStatus = current?.status ?? input.status;
-    if (currentStatus.state !== 'Uploading') {
+    if (currentStatus.state !== "Uploading") {
       // Finished or changed elsewhere (another tab or user): show what the server says.
-      setPhase(currentStatus.state === 'Uploaded' ? 'done' : 'idle');
+      setPhase(currentStatus.state === "Uploaded" ? "done" : "idle");
       onStatusRef.current(currentStatus);
 
       return;
@@ -137,7 +169,7 @@ export function useUploadSession({ worker, execute, limits, targetFields, onStat
           return;
         }
 
-        estimatorRef.current.add(Date.now(), snapshot.pipeline.bytesRead);
+        estimator.add(Date.now(), snapshot.pipeline.bytesRead);
         setProgress(snapshot);
       },
     });
@@ -156,7 +188,7 @@ export function useUploadSession({ worker, execute, limits, targetFields, onStat
 
         setResult(outcome.result);
         setElapsedSeconds((Date.now() - startedAtRef.current) / 1000);
-        setPhase('done');
+        setPhase("done");
         onStatusRef.current(outcome.status);
       },
       (reason: unknown) => {
@@ -169,26 +201,29 @@ export function useUploadSession({ worker, execute, limits, targetFields, onStat
           return;
         }
 
-        const failure = reason instanceof UploadSessionError ? reason : new UploadSessionError('worker', String(reason));
+        const failure =
+          reason instanceof UploadSessionError
+            ? reason
+            : new UploadSessionError("worker", String(reason));
         if (failure.result) {
           setResult(failure.result);
         }
-        if (failure.kind === 'aborted') {
-          setPhase('paused');
+        if (failure.kind === "aborted") {
+          setPhase("paused");
         } else {
           setError(m(uploadFailureMessage(failure)));
-          setPhase('failed');
+          setPhase("failed");
         }
       },
     );
-  }, [execute, isMounted, limits, m, targetFields, worker]);
+  }, [estimator, execute, isMounted, limits, m, targetFields, worker]);
 
   const begin = useCallback(
     (input: UploadInput) => {
       sessionRef.current?.abort();
       sessionRef.current = null;
       inputRef.current = input;
-      setHasFile(true);
+      setFileName(input.job.file.name);
       void run();
     },
     [run],
@@ -208,8 +243,8 @@ export function useUploadSession({ worker, execute, limits, targetFields, onStat
     sessionRef.current = null;
     inputRef.current = null;
     session?.abort();
-    setHasFile(false);
-    setPhase('idle');
+    setFileName(null);
+    setPhase("idle");
   }, []);
 
   // Closing the page stops the pass; stored chunks stay for a resume.
@@ -221,10 +256,11 @@ export function useUploadSession({ worker, execute, limits, targetFields, onStat
     [],
   );
 
-  const running = phase === 'running';
+  const running = phase === "running";
   const pipeline = progress?.pipeline;
-  const completed = pipeline ? percent(pipeline.bytesRead, pipeline.totalBytes) : 0;
-  const fileName = inputRef.current?.job.file.name ?? '';
+  const completed = pipeline
+    ? percent(pipeline.bytesRead, pipeline.totalBytes)
+    : 0;
 
   // Show progress in the tab title, so it is visible from other tabs.
   useEffect(() => {
@@ -233,7 +269,10 @@ export function useUploadSession({ worker, execute, limits, targetFields, onStat
     }
 
     const original = document.title;
-    document.title = t('contactsimporter.run.title', { percent: formatPercent(completed), fileName });
+    document.title = t("contactsimporter.run.title", {
+      percent: formatPercent(completed),
+      fileName: fileName ?? "",
+    });
 
     return () => {
       document.title = original;
@@ -248,11 +287,15 @@ export function useUploadSession({ worker, execute, limits, targetFields, onStat
 
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
+      // Legacy way to show the prompt, for browsers that ignore preventDefault() here
+      // eslint-disable-next-line @typescript-eslint/no-deprecated
       event.returnValue = true;
     };
-    window.addEventListener('beforeunload', onBeforeUnload);
+    window.addEventListener("beforeunload", onBeforeUnload);
 
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
   }, [running]);
 
   return {
@@ -261,8 +304,8 @@ export function useUploadSession({ worker, execute, limits, targetFields, onStat
     result,
     error,
     elapsedSeconds,
-    estimator: estimatorRef.current,
-    hasFile,
+    estimator,
+    hasFile: fileName !== null,
     begin,
     resume,
     pause,

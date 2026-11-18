@@ -1,84 +1,97 @@
-import { CellType, ColumnContentType, Headline, HeadlineSize, MenuItem, Paper, Select, Spacing } from '@kentico/xperience-admin-components';
-import type { TableCell, TableColumn, TestId } from '@kentico/xperience-admin-components';
-import React, { useEffect, useState } from 'react';
+import {
+  CellType,
+  ColumnContentType,
+  Headline,
+  HeadlineSize,
+  MenuItem,
+  Paper,
+  Select,
+  Spacing,
+} from "@kentico/xperience-admin-components";
+import type {
+  TableCell,
+  TableColumn,
+  TestId,
+} from "@kentico/xperience-admin-components";
+import React, { useEffect, useState } from "react";
 
 /** Test IDs of the importer UI, used by the e2e page objects (tests/e2e/admin). */
 export const TestIds = {
-  newImport: 'contacts-importer-new-import',
-  importsTable: 'contacts-importer-imports',
+  newImport: "contacts-importer-new-import",
+  importsTable: "contacts-importer-imports",
   /** Imports list: second line of the File cell (size) and of the Created cell (user). */
-  listFileSize: 'contacts-importer-list-file-size',
-  listCreatedBy: 'contacts-importer-list-created-by',
-  steps: 'contacts-importer-steps',
-  fileInput: 'contacts-importer-file-input',
-  fileDropzone: 'contacts-importer-file-dropzone',
-  fileSelect: 'contacts-importer-file-select',
-  fileSummary: 'contacts-importer-file-summary',
-  fileFormat: 'contacts-importer-file-format',
-  fileSheet: 'contacts-importer-file-sheet',
-  fileZipEntry: 'contacts-importer-file-zip-entry',
-  sampleTable: 'contacts-importer-sample',
-  fileNext: 'contacts-importer-file-next',
-  mapNext: 'contacts-importer-map-next',
-  mapBack: 'contacts-importer-map-back',
-  keyField: 'contacts-importer-key-field',
-  consentAgreed: 'contacts-importer-consent-agreed',
-  consentDate: 'contacts-importer-consent-date',
-  recipientList: 'contacts-importer-recipient-list',
-  consentSelect: 'contacts-importer-consent-select',
-  consentCallout: 'contacts-importer-consent-callout',
-  consentSummary: 'contacts-importer-consent-summary',
-  attestationStatement: 'contacts-importer-attestation-statement',
-  attestationNoPermission: 'contacts-importer-attestation-no-permission',
-  attestationRecord: 'contacts-importer-attestation-record',
-  uploadStatus: 'contacts-importer-upload-status',
-  uploadPause: 'contacts-importer-upload-pause',
-  uploadResume: 'contacts-importer-upload-resume',
-  uploadBar: 'contacts-importer-upload-bar',
-  uploadBarText: 'contacts-importer-upload-bar-text',
-  uploadDetails: 'contacts-importer-upload-details',
-  uploadDetailsToggle: 'contacts-importer-upload-details-toggle',
-  startNewImport: 'contacts-importer-start-new',
-  resultsDelete: 'contacts-importer-results-delete',
+  listFileSize: "contacts-importer-list-file-size",
+  listCreatedBy: "contacts-importer-list-created-by",
+  steps: "contacts-importer-steps",
+  fileInput: "contacts-importer-file-input",
+  fileDropzone: "contacts-importer-file-dropzone",
+  fileSelect: "contacts-importer-file-select",
+  fileSummary: "contacts-importer-file-summary",
+  fileFormat: "contacts-importer-file-format",
+  fileSheet: "contacts-importer-file-sheet",
+  fileZipEntry: "contacts-importer-file-zip-entry",
+  sampleTable: "contacts-importer-sample",
+  fileNext: "contacts-importer-file-next",
+  mapNext: "contacts-importer-map-next",
+  mapBack: "contacts-importer-map-back",
+  keyField: "contacts-importer-key-field",
+  consentAgreed: "contacts-importer-consent-agreed",
+  consentDate: "contacts-importer-consent-date",
+  recipientList: "contacts-importer-recipient-list",
+  consentSelect: "contacts-importer-consent-select",
+  consentCallout: "contacts-importer-consent-callout",
+  consentSummary: "contacts-importer-consent-summary",
+  attestationStatement: "contacts-importer-attestation-statement",
+  attestationNoPermission: "contacts-importer-attestation-no-permission",
+  attestationRecord: "contacts-importer-attestation-record",
+  uploadStatus: "contacts-importer-upload-status",
+  uploadPause: "contacts-importer-upload-pause",
+  uploadResume: "contacts-importer-upload-resume",
+  uploadBar: "contacts-importer-upload-bar",
+  uploadBarText: "contacts-importer-upload-bar-text",
+  uploadDetails: "contacts-importer-upload-details",
+  uploadDetailsToggle: "contacts-importer-upload-details-toggle",
+  startNewImport: "contacts-importer-start-new",
+  resultsDelete: "contacts-importer-results-delete",
   /** Followed by the step name (`file`, `map`, ...): the step's button in the step header. */
-  stepPrefix: 'contacts-importer-step-',
-  downloadRejected: 'contacts-importer-download-rejected',
-  downloadDuplicates: 'contacts-importer-download-duplicates',
-  noPermission: 'contacts-importer-no-permission',
-  optionsNext: 'contacts-importer-options-next',
-  optionsWaiting: 'contacts-importer-options-waiting',
+  stepPrefix: "contacts-importer-step-",
+  downloadRejected: "contacts-importer-download-rejected",
+  downloadDuplicates: "contacts-importer-download-duplicates",
+  noPermission: "contacts-importer-no-permission",
+  optionsNext: "contacts-importer-options-next",
+  optionsWaiting: "contacts-importer-options-waiting",
   /** Followed by the option name and value, e.g. `...-option-emptyValues-clear`. */
-  optionPrefix: 'contacts-importer-option-',
-  sourceField: 'contacts-importer-source-field',
-  sourceValue: 'contacts-importer-source-value',
-  reportIncludesKey: 'contacts-importer-report-includes-key',
-  processStatus: 'contacts-importer-process-status',
-  processPause: 'contacts-importer-process-pause',
-  processContinue: 'contacts-importer-process-continue',
-  processWaitingForOther: 'contacts-importer-process-waiting-for-other',
-  processPausing: 'contacts-importer-process-pausing',
-  reviewBack: 'contacts-importer-review-back',
-  reviewRun: 'contacts-importer-review-run',
+  optionPrefix: "contacts-importer-option-",
+  sourceField: "contacts-importer-source-field",
+  sourceValue: "contacts-importer-source-value",
+  reportIncludesKey: "contacts-importer-report-includes-key",
+  processStatus: "contacts-importer-process-status",
+  processPause: "contacts-importer-process-pause",
+  processContinue: "contacts-importer-process-continue",
+  processWaitingForOther: "contacts-importer-process-waiting-for-other",
+  processPausing: "contacts-importer-process-pausing",
+  reviewBack: "contacts-importer-review-back",
+  reviewRun: "contacts-importer-review-run",
   /** Review: another import runs (`data-other-job-id`); Run waits for it. */
-  otherImportRunning: 'contacts-importer-other-import-running',
+  otherImportRunning: "contacts-importer-other-import-running",
   /** Button that opens the import whose Run blocks this one. */
-  openOtherImport: 'contacts-importer-open-other-import',
+  openOtherImport: "contacts-importer-open-other-import",
   /** Review: another import's Run ended after this check (`data-last-run-ended`). */
-  checkOlderThanOtherRun: 'contacts-importer-check-older-than-other-run',
+  checkOlderThanOtherRun: "contacts-importer-check-older-than-other-run",
   /** Review mapping card; each row has `data-mapping-column` and `data-mapping-field`. */
-  reviewMapping: 'contacts-importer-review-mapping',
-  reviewMappingShowAll: 'contacts-importer-review-mapping-show-all',
+  reviewMapping: "contacts-importer-review-mapping",
+  reviewMappingShowAll: "contacts-importer-review-mapping-show-all",
   /** Review examples of changes; each field has `data-sample-field` and `data-sample-kind` (cleared, changed), each row `data-sample-row`. */
-  reviewSamples: 'contacts-importer-review-samples',
-  reviewSamplesShowAll: 'contacts-importer-review-samples-show-all',
-  confirmInput: 'contacts-importer-confirm-input',
-  runCancel: 'contacts-importer-run-cancel',
-  resultsStatus: 'contacts-importer-results-status',
+  reviewSamples: "contacts-importer-review-samples",
+  reviewSamplesShowAll: "contacts-importer-review-samples-show-all",
+  confirmInput: "contacts-importer-confirm-input",
+  runCancel: "contacts-importer-run-cancel",
+  resultsStatus: "contacts-importer-results-status",
   /** Followed by `analyze` or `execute`. */
-  downloadReportPrefix: 'contacts-importer-download-report-',
-  contactGroupsLink: 'contacts-importer-contact-groups',
+  downloadReportPrefix: "contacts-importer-download-report-",
+  contactGroupsLink: "contacts-importer-contact-groups",
   /** Followed by rows-read, rows-uploaded, rows-skipped or likely-duplicates. */
-  countPrefix: 'contacts-importer-count-',
+  countPrefix: "contacts-importer-count-",
 } as const;
 
 /** The admin components brand their test ID type; plain strings are what ends up in `data-testid`. */
@@ -87,7 +100,12 @@ export function testId(id: string): TestId {
 }
 
 /** Plain text column for the admin `Table` (not sortable, not searchable). */
-export function textColumn(name: string, caption: string, minWidth: number, maxWidth: number): TableColumn {
+export function textColumn(
+  name: string,
+  caption: string,
+  minWidth: number,
+  maxWidth: number,
+): TableColumn {
   return {
     name,
     caption,
@@ -100,8 +118,16 @@ export function textColumn(name: string, caption: string, minWidth: number, maxW
   };
 }
 
-export function actionColumn(name: string, caption: string, minWidth: number, maxWidth: number): TableColumn {
-  return { ...textColumn(name, caption, minWidth, maxWidth), contentType: ColumnContentType.Action };
+export function actionColumn(
+  name: string,
+  caption: string,
+  minWidth: number,
+  maxWidth: number,
+): TableColumn {
+  return {
+    ...textColumn(name, caption, minWidth, maxWidth),
+    contentType: ColumnContentType.Action,
+  };
 }
 
 /** Plain single-line string cell for the admin `Table`. */
@@ -128,17 +154,32 @@ export interface OptionSelectProps {
 }
 
 /** Admin `Select` over a list of options. */
-export const OptionSelect = ({ label, value, options, onChange, disabled, explanationText, dataTestId }: OptionSelectProps) => (
+export const OptionSelect = ({
+  label,
+  value,
+  options,
+  onChange,
+  disabled,
+  explanationText,
+  dataTestId,
+}: OptionSelectProps) => (
   <Select
     label={label}
     value={value}
     disabled={disabled}
     explanationText={explanationText}
     dataTestId={dataTestId ? testId(dataTestId) : undefined}
-    onChange={(selected) => onChange(selected ?? '')}
+    onChange={(selected) => {
+      onChange(selected ?? "");
+    }}
   >
     {options.map((option) => (
-      <MenuItem key={option.value} value={option.value} primaryLabel={option.label} secondaryLabel={option.secondaryLabel} />
+      <MenuItem
+        key={option.value}
+        value={option.value}
+        primaryLabel={option.label}
+        secondaryLabel={option.secondaryLabel}
+      />
     ))}
   </Select>
 );
@@ -154,7 +195,7 @@ export interface TextProps extends React.HTMLAttributes<HTMLDivElement> {
  * read. Applies to `Text` (and so to `Section` intros and step intros) and, through `ImporterRoot`, to the explanation
  * texts of admin form fields, radio button captions and callout texts. Never to tables, card rows or form controls.
  */
-export const PROSE_MAX_WIDTH = '80ch';
+export const PROSE_MAX_WIDTH = "80ch";
 
 /**
  * The admin components take no width for their help texts, so `ImporterRoot` caps them by their CSS module class
@@ -162,17 +203,21 @@ export const PROSE_MAX_WIDTH = '80ch';
  * `with-explanation-text___…` (the whole form field) is not narrowed. A rename in a later admin version only means the
  * texts are full width again.
  */
-const PROSE_CSS = [
+const PROSE_CSS = `${[
   '.contacts-importer [class^="explanation-text"]',
   '.contacts-importer [class*=" explanation-text"]',
   '.contacts-importer [class^="caption___"]',
   '.contacts-importer [class*=" caption___"]',
   '.contacts-importer [class*="callout___"] [class^="content___"]',
   '.contacts-importer [class*="callout___"] [class*=" content___"]',
-].join(',\n') + ` { max-width: ${PROSE_MAX_WIDTH}; }`;
+].join(",\n")} { max-width: ${PROSE_MAX_WIDTH}; }`;
 
 /** Root of each importer page: applies the prose width to the help texts of the admin components. */
-export const ImporterRoot = ({ children }: { readonly children: React.ReactNode }) => (
+export const ImporterRoot = ({
+  children,
+}: {
+  readonly children: React.ReactNode;
+}) => (
   <div className="contacts-importer">
     <style>{PROSE_CSS}</style>
     {children}
@@ -188,10 +233,12 @@ export const Text = ({ hint, strong, style, children, ...rest }: TextProps) => (
   <div
     {...rest}
     style={{
-      color: hint ? 'var(--color-text-low-emphasis)' : 'var(--color-text-default-on-light)',
+      color: hint
+        ? "var(--color-text-low-emphasis)"
+        : "var(--color-text-default-on-light)",
       fontWeight: strong ? 700 : undefined,
-      lineHeight: '20px',
-      overflowWrap: 'anywhere',
+      lineHeight: "20px",
+      overflowWrap: "anywhere",
       maxWidth: PROSE_MAX_WIDTH,
       ...style,
     }}
@@ -219,7 +266,11 @@ export const Section = ({ title, intro, children }: SectionProps) => (
           </Text>
         )}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: Spacing.XL }}>{children}</div>
+      <div
+        style={{ display: "flex", flexDirection: "column", gap: Spacing.XL }}
+      >
+        {children}
+      </div>
     </div>
   </Paper>
 );
@@ -235,7 +286,10 @@ export interface ProgressTrackProps {
  * tile), so on a card it is hard to see how much is left. Same fill (the admin product gradient), 8 px high.
  */
 export const ProgressTrack = ({ completed, label }: ProgressTrackProps) => {
-  const percent = Math.min(100, Math.max(0, Number.isFinite(completed) ? completed : 0));
+  const percent = Math.min(
+    100,
+    Math.max(0, Number.isFinite(completed) ? completed : 0),
+  );
 
   return (
     <div
@@ -247,11 +301,20 @@ export const ProgressTrack = ({ completed, label }: ProgressTrackProps) => {
       style={{
         height: 8,
         borderRadius: 4,
-        overflow: 'hidden',
-        background: 'var(--color-switch-off-background, var(--color-background-disabled))',
+        overflow: "hidden",
+        background:
+          "var(--color-switch-off-background, var(--color-background-disabled))",
       }}
     >
-      <div style={{ width: `${percent}%`, height: '100%', borderRadius: 4, background: 'var(--gradient-product)', transition: 'width 1s ease-in-out' }} />
+      <div
+        style={{
+          width: `${percent}%`,
+          height: "100%",
+          borderRadius: 4,
+          background: "var(--gradient-product)",
+          transition: "width 1s ease-in-out",
+        }}
+      />
     </div>
   );
 };
@@ -263,14 +326,33 @@ export const DIALOG_MAX_WIDTH = 640;
  * Shows its content only after `delayMs`, with a short fade. Wraps progress views: a check or a
  * run of a small file finishes before that, so the next step appears without a flash of progress.
  */
-export const DelayedReveal = ({ delayMs = 400, children }: { readonly delayMs?: number; readonly children: React.ReactNode }) => {
+export const DelayedReveal = ({
+  delayMs = 400,
+  children,
+}: {
+  readonly delayMs?: number;
+  readonly children: React.ReactNode;
+}) => {
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setShown(true), delayMs);
+    const timer = window.setTimeout(() => {
+      setShown(true);
+    }, delayMs);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [delayMs]);
 
-  return <div style={{ opacity: shown ? 1 : 0, transition: shown ? 'opacity 150ms ease-in' : undefined }}>{children}</div>;
+  return (
+    <div
+      style={{
+        opacity: shown ? 1 : 0,
+        transition: shown ? "opacity 150ms ease-in" : undefined,
+      }}
+    >
+      {children}
+    </div>
+  );
 };

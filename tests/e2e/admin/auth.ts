@@ -39,7 +39,10 @@ export interface SignInOptions {
   readySelectors?: string[];
 }
 
-export async function signInToAdmin(page: Page, options: SignInOptions = {}): Promise<void> {
+export async function signInToAdmin(
+  page: Page,
+  options: SignInOptions = {},
+): Promise<void> {
   const username = options.username ?? adminUsername;
   const password = options.password ?? adminPassword;
   const readySelectors = options.readySelectors ?? adminShellSelectors;
@@ -50,8 +53,16 @@ export async function signInToAdmin(page: Page, options: SignInOptions = {}): Pr
     return;
   }
 
-  const usernameInput = await waitForAnyVisible(page, usernameSelectors, 30_000);
-  const passwordInput = await waitForAnyVisible(page, passwordSelectors, 30_000);
+  const usernameInput = await waitForAnyVisible(
+    page,
+    usernameSelectors,
+    30_000,
+  );
+  const passwordInput = await waitForAnyVisible(
+    page,
+    passwordSelectors,
+    30_000,
+  );
 
   await usernameInput.fill(username);
   await passwordInput.fill(password);
@@ -63,14 +74,20 @@ export async function signInToAdmin(page: Page, options: SignInOptions = {}): Pr
         if (await isVisibleWithin(page, readySelectors, 1_000)) {
           return "ready";
         }
-        return new URL(page.url()).pathname.toLowerCase().includes("sign") ? "sign-in" : "loading";
+        return new URL(page.url()).pathname.toLowerCase().includes("sign")
+          ? "sign-in"
+          : "loading";
       },
       { timeout: 60_000, message: "Admin shell did not render after sign-in." },
     )
     .toBe("ready");
 }
 
-async function isVisibleWithin(page: Page, selectors: string[], timeoutMs: number): Promise<boolean> {
+async function isVisibleWithin(
+  page: Page,
+  selectors: string[],
+  timeoutMs: number,
+): Promise<boolean> {
   try {
     await waitForAnyVisible(page, selectors, timeoutMs);
     return true;
@@ -79,18 +96,17 @@ async function isVisibleWithin(page: Page, selectors: string[], timeoutMs: numbe
   }
 }
 
-async function waitForAnyVisible(page: Page, selectors: string[], timeoutMs: number): Promise<Locator> {
-  const startedAt = Date.now();
+async function waitForAnyVisible(
+  page: Page,
+  selectors: string[],
+  timeoutMs: number,
+): Promise<Locator> {
+  const locator = selectors
+    .map((selector) => page.locator(selector))
+    .reduce((any, next) => any.or(next))
+    .filter({ visible: true })
+    .first();
 
-  while (Date.now() - startedAt < timeoutMs) {
-    for (const selector of selectors) {
-      const locator = page.locator(selector).first();
-      if ((await locator.count()) > 0 && (await locator.isVisible())) {
-        return locator;
-      }
-    }
-    await page.waitForTimeout(150);
-  }
-
-  throw new Error(`No visible element for [${selectors.join(", ")}].`);
+  await locator.waitFor({ state: "visible", timeout: timeoutMs });
+  return locator;
 }

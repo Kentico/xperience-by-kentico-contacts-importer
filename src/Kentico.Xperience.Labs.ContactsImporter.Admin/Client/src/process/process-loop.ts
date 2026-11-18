@@ -1,5 +1,15 @@
-import type { JobState, ProcessNextRequest, ProcessPhase, ProgressDto } from '../shared/commands';
-import { RetryExhaustedError, backoffDelay, sleep as defaultSleep, withRetry } from '../upload/retry';
+import type {
+  JobState,
+  ProcessNextRequest,
+  ProcessPhase,
+  ProgressDto,
+} from "../shared/commands";
+import {
+  RetryExhaustedError,
+  backoffDelay,
+  sleep as defaultSleep,
+  withRetry,
+} from "../upload/retry";
 
 /**
  * Driver of the `PROCESS_NEXT` loop (PLAN D11): the browser asks the server to do the next piece
@@ -20,48 +30,48 @@ import { RetryExhaustedError, backoffDelay, sleep as defaultSleep, withRetry } f
  *   other driver stopped long enough, instead of failing at once.
  */
 
-export type LoopStatus = 'idle' | 'running' | 'pausing' | 'paused' | 'finished';
+export type LoopStatus = "idle" | "running" | "pausing" | "paused" | "finished";
 
 /** Why the loop waits for the user. */
 export type PauseReason =
   /** The user paused. */
-  | 'user'
+  | "user"
   /** The server could not be reached after all retries. */
-  | 'network'
+  | "network"
   /** The server kept reporting a temporary problem. */
-  | 'server'
+  | "server"
   /** Another tab or user is processing the import right now. */
-  | 'activeElsewhere'
+  | "activeElsewhere"
   /** Another tab or user started processing and went away; "Continue import" takes over. */
-  | 'stale'
+  | "stale"
   /** Another tab or user took the import over while this tab was processing it. */
-  | 'takenOver'
+  | "takenOver"
   /**
    * The Run could not start: another import's Run was confirmed and has not ended (PLAN D60).
    * Nothing changed; "Continue" starts it once the other import is finished or cancelled.
    */
-  | 'otherImportRunning';
+  | "otherImportRunning";
 
 /** Why the loop ended; nothing more is sent. */
 export type FinishReason =
   /** Analysis done (job Analyzed) or import done (job Completed). */
-  | 'phaseFinished'
-  | 'failed'
+  | "phaseFinished"
+  | "failed"
   /**
    * The job configuration does not fit the contact fields (found before anything was written).
    * The job is back at Uploaded with the uploaded data kept: the options or mapping must change.
    */
-  | 'configError'
-  | 'cancelled'
+  | "configError"
+  | "cancelled"
   /** The analysis is too old to import from; the job is back at Uploaded. */
-  | 'analysisExpired'
+  | "analysisExpired"
   /** The job is in a state this phase cannot run from (changed elsewhere): reload it. */
-  | 'invalidState'
-  | 'jobNotFound';
+  | "invalidState"
+  | "jobNotFound";
 
 export interface LoopRetry {
   /** `network`: the request failed. `server`: the server answered with a temporary problem. */
-  kind: 'network' | 'server';
+  kind: "network" | "server";
   /** Number of the attempt that failed. */
   attempt: number;
   maxAttempts: number;
@@ -107,7 +117,10 @@ export interface ProcessLoopOptions {
    * Sends one `PROCESS_NEXT`. Resolves with the server's answer, or `undefined` / rejects when the
    * request failed. `signal` aborts only when the loop is disposed.
    */
-  call: (request: ProcessNextRequest, signal: AbortSignal) => Promise<ProgressDto | undefined>;
+  call: (
+    request: ProcessNextRequest,
+    signal: AbortSignal,
+  ) => Promise<ProgressDto | undefined>;
   tokens: TokenStore;
   /**
    * Sends `PAUSE_PROCESSING` after the user paused (the call in flight was answered), so the server shows the import
@@ -138,15 +151,23 @@ export interface ProcessLoopOptions {
   random?: () => number;
 }
 
-export const DEFAULT_NETWORK_RETRY: BackoffOptions = { maxAttempts: 6, baseDelayMs: 1000, maxDelayMs: 30_000 };
-export const DEFAULT_SERVER_RETRY: BackoffOptions = { maxAttempts: 8, baseDelayMs: 2000, maxDelayMs: 30_000 };
+export const DEFAULT_NETWORK_RETRY: BackoffOptions = {
+  maxAttempts: 6,
+  baseDelayMs: 1000,
+  maxDelayMs: 30_000,
+};
+export const DEFAULT_SERVER_RETRY: BackoffOptions = {
+  maxAttempts: 8,
+  baseDelayMs: 2000,
+  maxDelayMs: 30_000,
+};
 export const DEFAULT_TAKE_OVER_POLL_MS = 5000;
 
 /** New driver token: a GUID without dashes (the server accepts only that form). */
 export function newDriverToken(): string {
   const cryptoApi = globalThis.crypto;
-  if (typeof cryptoApi?.randomUUID === 'function') {
-    return cryptoApi.randomUUID().replace(/-/g, '');
+  if (typeof cryptoApi.randomUUID === "function") {
+    return cryptoApi.randomUUID().replace(/-/g, "");
   }
 
   const bytes = new Uint8Array(16);
@@ -154,7 +175,7 @@ export function newDriverToken(): string {
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
 
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export class ProcessLoop {
@@ -181,7 +202,11 @@ export class ProcessLoop {
     this.now = options.now ?? Date.now;
     this.sleep = options.sleep ?? defaultSleep;
     this.resumeTakesOver = options.pausedByUser ?? false;
-    this.current = initialSnapshot(options.phase, options.initialProgress ?? null, this.resumeTakesOver);
+    this.current = initialSnapshot(
+      options.phase,
+      options.initialProgress ?? null,
+      this.resumeTakesOver,
+    );
   }
 
   get snapshot(): LoopSnapshot {
@@ -204,7 +229,7 @@ export class ProcessLoop {
    * @param takeOver The user chose to continue an import another tab or user left.
    */
   start(start: { takeOver?: boolean } = {}): boolean {
-    if (this.disposed || this.active || this.current.status === 'finished') {
+    if (this.disposed || this.active || this.current.status === "finished") {
       return false;
     }
 
@@ -212,7 +237,13 @@ export class ProcessLoop {
     this.resumeTakesOver = false;
     this.pauseRequested = false;
     this.waits = new AbortController();
-    this.update({ status: 'running', pauseReason: null, retry: null, error: null, waitingForOther: false });
+    this.update({
+      status: "running",
+      pauseReason: null,
+      retry: null,
+      error: null,
+      waitingForOther: false,
+    });
     const run = this.run(takeOver).finally(() => {
       if (this.active === run) {
         this.active = null;
@@ -233,7 +264,7 @@ export class ProcessLoop {
     }
 
     this.pauseRequested = true;
-    this.update({ status: 'pausing' });
+    this.update({ status: "pausing" });
     this.waits.abort();
   }
 
@@ -268,12 +299,16 @@ export class ProcessLoop {
         return;
       }
       if (this.pauseRequested) {
-        this.pauseFor('user');
+        this.pauseFor("user");
 
         return;
       }
 
-      const request: ProcessNextRequest = { phase, driverToken: tokens.get(), takeOver };
+      const request: ProcessNextRequest = {
+        phase,
+        driverToken: tokens.get(),
+        takeOver,
+      };
       let answer: ProgressDto | undefined;
       try {
         await withRetry(
@@ -288,57 +323,88 @@ export class ProcessLoop {
             signal: this.waits.signal,
             sleep: this.sleep,
             random: this.options.random,
-            onRetry: (info) => this.update({ retry: { kind: 'network', ...info } }),
+            onRetry: (info) => {
+              this.update({ retry: { kind: "network", ...info } });
+            },
           },
         );
       } catch (error) {
+        // dispose() can run while the call is awaited; TS keeps the narrowing from the loop start
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (this.disposed) {
           return;
         }
         if (answer === undefined) {
           // Either every attempt failed, or a pause ended the wait before the next attempt.
-          this.pauseFor(error instanceof RetryExhaustedError ? 'network' : 'user');
+          this.pauseFor(
+            error instanceof RetryExhaustedError ? "network" : "user",
+          );
 
           return;
         }
         // A pause was requested while the call was in flight; its answer is applied below.
       }
+      // Same as above: dispose() can run while the call is awaited
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (this.disposed || answer === undefined) {
         return;
       }
 
       const result: ProgressDto = answer;
-      this.current = { ...this.current, calls: this.current.calls + 1, lastAnswerAtMs: this.now() };
+      this.current = {
+        ...this.current,
+        calls: this.current.calls + 1,
+        lastAnswerAtMs: this.now(),
+      };
 
       switch (result.outcome) {
-        case 'processed':
+        case "processed":
           tokens.set(result.driverToken);
           takeOver = false;
           serverRetries = 0;
-          this.update({ progress: result, retry: null, error: null, waitingForOther: false, processedCalls: this.current.processedCalls + 1 });
-          if ((this.options.delayBetweenCallsMs ?? 0) > 0 && !(await this.wait(this.options.delayBetweenCallsMs ?? 0))) {
+          this.update({
+            progress: result,
+            retry: null,
+            error: null,
+            waitingForOther: false,
+            processedCalls: this.current.processedCalls + 1,
+          });
+          if (
+            (this.options.delayBetweenCallsMs ?? 0) > 0 &&
+            !(await this.wait(this.options.delayBetweenCallsMs ?? 0))
+          ) {
             return;
           }
           break;
 
-        case 'transientError':
-        case 'busy': {
+        case "transientError":
+        case "busy": {
           if (result.driverToken) {
             tokens.set(result.driverToken);
           }
 
           serverRetries++;
           if (serverRetries >= this.server.maxAttempts) {
-            this.pauseFor('server', result);
+            this.pauseFor("server", result);
 
             return;
           }
 
-          const delayMs = backoffDelay(serverRetries, this.server.baseDelayMs, this.server.maxDelayMs, this.options.random);
+          const delayMs = backoffDelay(
+            serverRetries,
+            this.server.baseDelayMs,
+            this.server.maxDelayMs,
+            this.options.random,
+          );
           this.update({
             progress: result,
             error: result.error,
-            retry: { kind: 'server', attempt: serverRetries, maxAttempts: this.server.maxAttempts, delayMs },
+            retry: {
+              kind: "server",
+              attempt: serverRetries,
+              maxAttempts: this.server.maxAttempts,
+              delayMs,
+            },
           });
           if (!(await this.wait(delayMs))) {
             return;
@@ -346,69 +412,81 @@ export class ProcessLoop {
           break;
         }
 
-        case 'phaseFinished':
+        case "phaseFinished":
           tokens.set(null);
-          this.finish('phaseFinished', result);
+          this.finish("phaseFinished", result);
 
           return;
 
-        case 'activeElsewhere':
+        case "activeElsewhere":
           // The user chose to continue here: ask again until the other driver has stopped long enough.
           if (takeOver) {
-            this.update({ progress: result, retry: null, error: null, waitingForOther: true });
-            if (!(await this.wait(this.options.takeOverPollMs ?? DEFAULT_TAKE_OVER_POLL_MS))) {
+            this.update({
+              progress: result,
+              retry: null,
+              error: null,
+              waitingForOther: true,
+            });
+            if (
+              !(await this.wait(
+                this.options.takeOverPollMs ?? DEFAULT_TAKE_OVER_POLL_MS,
+              ))
+            ) {
               return;
             }
             break;
           }
 
-          this.pauseFor('activeElsewhere', result);
+          this.pauseFor("activeElsewhere", result);
 
           return;
 
-        case 'staleRequiresTakeOver':
-          this.pauseFor('stale', result);
+        case "staleRequiresTakeOver":
+          this.pauseFor("stale", result);
 
           return;
 
-        case 'otherImportRunning':
-          this.pauseFor('otherImportRunning', result);
+        case "otherImportRunning":
+          this.pauseFor("otherImportRunning", result);
 
           return;
 
-        case 'interrupted':
+        case "interrupted":
           tokens.set(null);
           this.endInterrupted(result);
 
           return;
 
-        case 'analysisExpired':
+        case "analysisExpired":
           tokens.set(null);
-          this.finish('analysisExpired', result);
+          this.finish("analysisExpired", result);
 
           return;
 
-        case 'failed':
+        case "failed":
           tokens.set(null);
           // Failed with a job that is not Failed: nothing was written, the configuration must be fixed.
-          this.finish(result.state === 'Failed' ? 'failed' : 'configError', result);
+          this.finish(
+            result.state === "Failed" ? "failed" : "configError",
+            result,
+          );
 
           return;
 
-        case 'jobNotFound':
+        case "jobNotFound":
           tokens.set(null);
-          this.finish('jobNotFound', null);
+          this.finish("jobNotFound", null);
 
           return;
 
-        case 'invalidState':
-          this.finish('invalidState', result);
+        case "invalidState":
+          this.finish("invalidState", result);
 
           return;
 
-        case 'invalidRequest':
+        case "invalidRequest":
         default:
-          this.finish('invalidState', null);
+          this.finish("invalidState", null);
 
           return;
       }
@@ -418,14 +496,18 @@ export class ProcessLoop {
   /** The job was cancelled, failed or changed by someone else during the call. */
   private endInterrupted(result: ProgressDto): void {
     const state: JobState = result.state;
-    if (state === 'Cancelled') {
-      this.finish('cancelled', result);
-    } else if (state === 'Failed') {
-      this.finish('failed', result);
-    } else if (state === 'Analyzing' || state === 'Running' || state === 'Paused') {
-      this.pauseFor('takenOver', result);
+    if (state === "Cancelled") {
+      this.finish("cancelled", result);
+    } else if (state === "Failed") {
+      this.finish("failed", result);
+    } else if (
+      state === "Analyzing" ||
+      state === "Running" ||
+      state === "Paused"
+    ) {
+      this.pauseFor("takenOver", result);
     } else {
-      this.finish('invalidState', result);
+      this.finish("invalidState", result);
     }
   }
 
@@ -440,7 +522,7 @@ export class ProcessLoop {
       return false;
     }
     if (this.pauseRequested) {
-      this.pauseFor('user');
+      this.pauseFor("user");
 
       return false;
     }
@@ -449,12 +531,12 @@ export class ProcessLoop {
   }
 
   private pauseFor(reason: PauseReason, result?: ProgressDto): void {
-    if (reason === 'user') {
+    if (reason === "user") {
       this.releaseDriver();
     }
 
     this.update({
-      status: 'paused',
+      status: "paused",
       pauseReason: reason,
       retry: null,
       waitingForOther: false,
@@ -469,7 +551,12 @@ export class ProcessLoop {
    */
   private releaseDriver(): void {
     const token = this.options.tokens.get();
-    if (!this.options.release || this.disposed || token === null || this.current.processedCalls === 0) {
+    if (
+      !this.options.release ||
+      this.disposed ||
+      token === null ||
+      this.current.processedCalls === 0
+    ) {
       return;
     }
 
@@ -482,7 +569,7 @@ export class ProcessLoop {
 
   private finish(reason: FinishReason, result: ProgressDto | null): void {
     this.update({
-      status: 'finished',
+      status: "finished",
       finishReason: reason,
       pauseReason: null,
       retry: null,
@@ -503,12 +590,16 @@ export class ProcessLoop {
  * Snapshot of a loop before its first start: idle, or paused by the user when a user paused the import with Pause
  * before the loop was made (it waits for Continue).
  */
-export function initialSnapshot(phase: ProcessPhase, progress: ProgressDto | null, pausedByUser = false): LoopSnapshot {
+export function initialSnapshot(
+  phase: ProcessPhase,
+  progress: ProgressDto | null,
+  pausedByUser = false,
+): LoopSnapshot {
   return {
-    status: pausedByUser ? 'paused' : 'idle',
+    status: pausedByUser ? "paused" : "idle",
     phase,
     progress,
-    pauseReason: pausedByUser ? 'user' : null,
+    pauseReason: pausedByUser ? "user" : null,
     finishReason: null,
     retry: null,
     error: null,
@@ -520,7 +611,10 @@ export function initialSnapshot(phase: ProcessPhase, progress: ProgressDto | nul
 }
 
 /** `TokenStore` over a `Storage` (session storage); storage errors are ignored (the token is then per page load). */
-export function storageTokenStore(storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | undefined, key: string): TokenStore {
+export function storageTokenStore(
+  storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> | undefined,
+  key: string,
+): TokenStore {
   let memory: string | null = null;
 
   return {

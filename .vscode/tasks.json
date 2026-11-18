@@ -11,6 +11,22 @@
       "detail": "install dependencies from package"
     },
     {
+      "type": "npm",
+      "script": "lint",
+      "path": "src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client",
+      "problemMatcher": ["$eslint-stylish"],
+      "label": "npm: lint - admin client",
+      "detail": "eslint --max-warnings=0"
+    },
+    {
+      "type": "npm",
+      "script": "format",
+      "path": "src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client",
+      "problemMatcher": [],
+      "label": "npm: format - admin client",
+      "detail": "prettier --write ."
+    },
+    {
       "type": "dotnet",
       "task": "build",
       "problemMatcher": ["$msCompile"],

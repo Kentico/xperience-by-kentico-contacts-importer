@@ -1,12 +1,18 @@
-import { CsvReader } from './csv';
-import { JsonArrayReader } from './json';
-import { NdjsonReader } from './ndjson';
-import { ImportError } from './source';
-import type { FileLike, RecordSource, SourceFormat, SourceInfo, SourceRow } from './source';
-import { TextRecordSource } from './text-source';
-import type { TextFormatReader, TextSourceOptions } from './text-source';
-import { XlsxRecordSource } from './xlsx';
-import { ZipArchive, baseName, hasZipSignature, singleDataEntry } from './zip';
+import { CsvReader } from "./csv";
+import { JsonArrayReader } from "./json";
+import { NdjsonReader } from "./ndjson";
+import { ImportError } from "./source";
+import type {
+  FileLike,
+  RecordSource,
+  SourceFormat,
+  SourceInfo,
+  SourceRow,
+} from "./source";
+import { TextRecordSource } from "./text-source";
+import type { TextFormatReader, TextSourceOptions } from "./text-source";
+import { XlsxRecordSource } from "./xlsx";
+import { ZipArchive, baseName, hasZipSignature, singleDataEntry } from "./zip";
 
 export interface OpenSourceOptions {
   /** Format override (of the file inside a `.zip`); detected from the file name when not set. */
@@ -29,22 +35,28 @@ export interface OpenSourceOptions {
   sampleBytes?: number;
 }
 
-const CSV_EXTENSIONS = new Set(['csv', 'tsv', 'tab', 'txt']);
-const NDJSON_EXTENSIONS = new Set(['ndjson', 'jsonl']);
+const CSV_EXTENSIONS = new Set(["csv", "tsv", "tab", "txt"]);
+const NDJSON_EXTENSIONS = new Set(["ndjson", "jsonl"]);
 /** Spreadsheet formats people try that have no reader: a clear "save as .xlsx or CSV" message. */
-const UNSUPPORTED_SPREADSHEETS = new Set(['xls', 'xlsb', 'xlsm', 'ods', 'numbers']);
+const UNSUPPORTED_SPREADSHEETS = new Set([
+  "xls",
+  "xlsb",
+  "xlsm",
+  "ods",
+  "numbers",
+]);
 /** Containers that cannot be nested in a `.zip`. */
-const NESTED_CONTAINERS = new Set(['zip', 'gz', '7z', 'rar']);
+const NESTED_CONTAINERS = new Set(["zip", "gz", "7z", "rar"]);
 
 function extensionOf(name: string): string {
-  const dot = name.lastIndexOf('.');
+  const dot = name.lastIndexOf(".");
 
-  return dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+  return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
 /** File name without a trailing `.gz`. */
 function innerName(name: string): string {
-  return extensionOf(name) === 'gz' ? name.slice(0, -3) : name;
+  return extensionOf(name) === "gz" ? name.slice(0, -3) : name;
 }
 
 /**
@@ -54,16 +66,16 @@ function innerName(name: string): string {
 export function detectFormat(fileName: string): SourceFormat | null {
   const extension = extensionOf(innerName(fileName));
   if (CSV_EXTENSIONS.has(extension)) {
-    return 'csv';
+    return "csv";
   }
   if (NDJSON_EXTENSIONS.has(extension)) {
-    return 'ndjson';
+    return "ndjson";
   }
-  if (extension === 'json') {
-    return 'json';
+  if (extension === "json") {
+    return "json";
   }
-  if (extension === 'xlsx') {
-    return 'xlsx';
+  if (extension === "xlsx") {
+    return "xlsx";
   }
 
   return null;
@@ -74,7 +86,9 @@ async function readHead(file: FileLike, length: number): Promise<Uint8Array> {
     return new Uint8Array(0);
   }
 
-  return new Uint8Array(await file.slice(0, Math.min(length, file.size)).arrayBuffer());
+  return new Uint8Array(
+    await file.slice(0, Math.min(length, file.size)).arrayBuffer(),
+  );
 }
 
 function startsWithGzip(head: Uint8Array): boolean {
@@ -90,21 +104,21 @@ function unsupported(name: string): ImportError {
   const extension = extensionOf(innerName(name));
   if (UNSUPPORTED_SPREADSHEETS.has(extension)) {
     return new ImportError(
-      'unsupportedFormat',
+      "unsupportedFormat",
       `'.${extension}' files are not supported. Save the sheet as .xlsx or CSV.`,
       { extension },
     );
   }
 
   return new ImportError(
-    'unsupportedFormat',
+    "unsupportedFormat",
     `The format of '${name}' is not supported. Supported: CSV, TSV, NDJSON, JSON, XLSX; text formats optionally gzipped; any of them in a zip.`,
   );
 }
 
 /** An OOXML package (XLSX) rather than a zip of data files. */
 function isOfficePackage(archive: ZipArchive): boolean {
-  return archive.find('[Content_Types].xml') !== undefined;
+  return archive.find("[Content_Types].xml") !== undefined;
 }
 
 /**
@@ -118,7 +132,7 @@ export async function openRecordSource(
   file: FileLike,
   options: OpenSourceOptions = {},
 ): Promise<RecordSource> {
-  const name = file.name ?? '';
+  const name = file.name ?? "";
   const head = await readHead(file, 4);
 
   if (hasZipSignature(head)) {
@@ -136,14 +150,17 @@ export async function openRecordSource(
   }
 
   const compressed = options.compressed ?? startsWithGzip(head);
-  if (format === 'xlsx') {
+  if (format === "xlsx") {
     if (compressed) {
       throw new ImportError(
-        'unsupportedFormat',
-        'Gzipped XLSX files are not supported. Use the .xlsx file as is (it is already compressed).',
+        "unsupportedFormat",
+        "Gzipped XLSX files are not supported. Use the .xlsx file as is (it is already compressed).",
       );
     }
-    throw new ImportError('invalidXlsx', 'The file is not an Excel workbook (.xlsx).');
+    throw new ImportError(
+      "invalidXlsx",
+      "The file is not an Excel workbook (.xlsx).",
+    );
   }
 
   return openText(file, name, format, options, {
@@ -156,13 +173,13 @@ export async function openRecordSource(
 function openText(
   file: FileLike,
   name: string,
-  format: Exclude<SourceFormat, 'xlsx'>,
+  format: Exclude<SourceFormat, "xlsx">,
   options: OpenSourceOptions,
   textOptions: TextSourceOptions,
 ): Promise<TextRecordSource> {
-  if (format === 'ndjson' || format === 'json') {
+  if (format === "ndjson" || format === "json") {
     const reader: TextFormatReader =
-      format === 'ndjson'
+      format === "ndjson"
         ? new NdjsonReader({ maxRecordChars: options.maxRecordChars })
         : new JsonArrayReader({ maxRecordChars: options.maxRecordChars });
 
@@ -172,7 +189,7 @@ function openText(
   const extension = extensionOf(innerName(name));
   const reader = new CsvReader({
     delimiter: options.delimiter,
-    fallbackDelimiter: extension === 'tsv' || extension === 'tab' ? '\t' : ',',
+    fallbackDelimiter: extension === "tsv" || extension === "tab" ? "\t" : ",",
     quote: options.quote,
     hasHeader: options.hasHeader,
     maxRecordChars: options.maxRecordChars,
@@ -194,8 +211,8 @@ async function openZipEntry(
   const entryName = baseName(entry.name);
   if (NESTED_CONTAINERS.has(extensionOf(entryName))) {
     throw new ImportError(
-      'unsupportedFormat',
-      'The file inside the zip is compressed again. Put the data file itself in the zip.',
+      "unsupportedFormat",
+      "The file inside the zip is compressed again. Put the data file itself in the zip.",
     );
   }
 
@@ -204,7 +221,7 @@ async function openZipEntry(
     throw unsupported(entryName);
   }
 
-  if (format === 'xlsx') {
+  if (format === "xlsx") {
     // Random access needs the workbook as a file of its own: stored = a view, deflated = inflated once.
     return XlsxRecordSource.open(await archive.entryFile(entry), {
       sheet: options.sheet,
@@ -222,7 +239,10 @@ async function openZipEntry(
     size: entry.uncompressedSize,
     stream: () => stream,
     slice: () => {
-      throw new ImportError('invalidConfig', 'A zip entry stream has no random access.');
+      throw new ImportError(
+        "invalidConfig",
+        "A zip entry stream has no random access.",
+      );
     },
   };
   const inner = await openText(entryFile, entryName, format, options, {
@@ -231,7 +251,13 @@ async function openZipEntry(
     sampleBytes: options.sampleBytes,
   });
 
-  return new ZipEntrySource(inner, file.size, entry.compressedSize, entry.name, () => compressedRead);
+  return new ZipEntrySource(
+    inner,
+    file.size,
+    entry.compressedSize,
+    entry.name,
+    () => compressedRead,
+  );
 }
 
 /**

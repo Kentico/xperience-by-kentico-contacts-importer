@@ -1,4 +1,4 @@
-// Provides recommended TypeScript configuration 
+// Provides recommended TypeScript configuration
 {
   "compilerOptions": {
     "baseUrl": ".",

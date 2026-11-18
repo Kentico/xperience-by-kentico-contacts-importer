@@ -1,5 +1,11 @@
 import { adminStorageStatePath } from "../shared/config";
-import { contactsCsv, expect, newRunId, test, testContacts } from "./contactsImporterFixtures";
+import {
+  contactsCsv,
+  expect,
+  newRunId,
+  test,
+  testContacts,
+} from "./contactsImporterFixtures";
 import { ContactsListPage } from "./contactsListPage";
 import { ImportPage } from "./contactsImporterPage";
 
@@ -9,7 +15,11 @@ import { ImportPage } from "./contactsImporterPage";
 // tests that interrupt an import hold its processing calls after the first answered one (holdProcessingAfterProgress):
 // on a fast database (CI) one call of a second imports more than a thousand rows.
 
-async function uploadToOptions(importPage: ImportPage, filePath: string, rows: number): Promise<void> {
+async function uploadToOptions(
+  importPage: ImportPage,
+  filePath: string,
+  rows: number,
+): Promise<void> {
   await importPage.selectFile(filePath);
   await importPage.continueToMapping();
   await importPage.expectKeyField("Email");
@@ -19,7 +29,12 @@ async function uploadToOptions(importPage: ImportPage, filePath: string, rows: n
 }
 
 test.describe("contacts importer: options, cancel, reload and take over", () => {
-  test("changing the options after the check runs the check again", async ({ page, importsList, importPage, uniqueFile }) => {
+  test("changing the options after the check runs the check again", async ({
+    page,
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     const runId = newRunId();
     const rows = testContacts(runId, 1, 12);
     const file = await uniqueFile("contacts-options.csv", contactsCsv(rows));
@@ -33,10 +48,14 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
 
     // Back to the options: new contacts are not created any more
     await importPage.backToOptions();
-    await expect(page.getByText("Saving changed options checks it again")).toBeVisible();
+    await expect(
+      page.getByText("Saving changed options checks it again"),
+    ).toBeVisible();
     await importPage.chooseOption("newContacts", "skip");
     await importPage.chooseOption("emptyValues", "clear");
-    await expect(page.getByText("Every empty value in a mapped column deletes the value")).toBeVisible();
+    await expect(
+      page.getByText("Every empty value in a mapped column deletes the value"),
+    ).toBeVisible();
     await importPage.saveOptions();
     await importPage.expectAnalyzed();
     await importPage.expectCount("review-created", 0);
@@ -61,7 +80,12 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     await new ContactsListPage(page).expectNoContact(rows[0].email);
   });
 
-  test("continues a running import after a reload", async ({ page, importsList, importPage, uniqueFile }) => {
+  test("continues a running import after a reload", async ({
+    page,
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     test.setTimeout(240_000);
     const runId = newRunId();
     const total = 6000;
@@ -79,7 +103,9 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
 
     // Wait until the import is under way
     await importPage.expectStep("run");
-    await expect.poll(() => importPage.rowsProcessed(), { timeout: 60_000 }).toBeGreaterThan(0);
+    await expect
+      .poll(() => importPage.rowsProcessed(), { timeout: 60_000 })
+      .toBeGreaterThan(0);
     expect(await importPage.rowsProcessed()).toBeLessThan(total);
 
     // Reload mid-run (the held call is dropped): the browser asks before leaving; the page comes back at the Run step
@@ -90,7 +116,10 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     await expect(page).toHaveURL(new RegExp(`${jobId}$`));
     await importPage.expectStep("run");
     await importPage.expectProcessStatus("running");
-    await expect(importPage.processStatus).toHaveAttribute("data-pause-reason", "");
+    await expect(importPage.processStatus).toHaveAttribute(
+      "data-pause-reason",
+      "",
+    );
 
     await importPage.expectResults("Completed");
     await importPage.expectCount("actual-rows", total);
@@ -98,14 +127,21 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     await importPage.expectCount("actual-updated", 0);
     const report = await importPage.downloadReport("execute");
     expect(report.lines).toHaveLength(total + 1);
-    expect(new Set(report.lines).size, "no row is reported twice").toBe(total + 1);
+    expect(new Set(report.lines).size, "no row is reported twice").toBe(
+      total + 1,
+    );
 
     const contacts = new ContactsListPage(page);
     await contacts.expectContact(rows[0]);
     await contacts.expectContact(rows[total - 1]);
   });
 
-  test("an import paused with Pause stays paused when it is opened again", async ({ page, importsList, importPage, uniqueFile }) => {
+  test("an import paused with Pause stays paused when it is opened again", async ({
+    page,
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     test.setTimeout(240_000);
     const runId = newRunId();
     const total = 6000;
@@ -120,7 +156,9 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     const gate = await importPage.holdProcessingAfterProgress();
     await importPage.runImport();
     await importPage.expectStep("run");
-    await expect.poll(() => importPage.rowsProcessed(), { timeout: 60_000 }).toBeGreaterThan(0);
+    await expect
+      .poll(() => importPage.rowsProcessed(), { timeout: 60_000 })
+      .toBeGreaterThan(0);
 
     // Pause waits for the call in flight (held until now), then sends no further one
     await importPage.requestPause();
@@ -134,8 +172,15 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     await expect(page).toHaveURL(new RegExp(`${jobId}$`));
     await importPage.expectStep("run");
     await importPage.expectProcessStatus("paused");
-    await expect(importPage.processStatus).toHaveAttribute("data-pause-reason", "user");
-    await expect(page.getByTestId("contacts-importer-process-continue")).toBeVisible();
+    await expect(importPage.processStatus).toHaveAttribute(
+      "data-pause-reason",
+      "user",
+    );
+    await expect(
+      page.getByTestId("contacts-importer-process-continue"),
+    ).toBeVisible();
+    // Checks that nothing happens for a while: no event to wait for
+    // eslint-disable-next-line playwright/no-wait-for-timeout
     await page.waitForTimeout(3_000);
     await expect(importPage.processStatus).toHaveAttribute("data-calls", "0");
     expect(await importPage.rowsProcessed()).toBe(pausedAt);
@@ -146,7 +191,12 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     await importPage.expectCount("actual-created", total);
   });
 
-  test("cancels a running import and keeps what was imported", async ({ page, importsList, importPage, uniqueFile }) => {
+  test("cancels a running import and keeps what was imported", async ({
+    page,
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     test.setTimeout(240_000);
     const runId = newRunId();
     const total = 3000;
@@ -161,14 +211,21 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     const gate = await importPage.holdProcessingAfterProgress();
     await importPage.runImport();
     await importPage.expectStep("run");
-    await expect.poll(() => importPage.rowsProcessed(), { timeout: 60_000 }).toBeGreaterThan(0);
+    await expect
+      .poll(() => importPage.rowsProcessed(), { timeout: 60_000 })
+      .toBeGreaterThan(0);
 
     // Cancelled while the next call is held; that call never reaches the server
     await importPage.cancelRunningImport();
     await gate.release("abort");
     await importPage.expectResults("Cancelled");
-    await expect(importPage.resultsStatus).toHaveAttribute("data-import-started", "true");
-    await expect(page.getByText("Cached contact data may be outdated")).toBeVisible();
+    await expect(importPage.resultsStatus).toHaveAttribute(
+      "data-import-started",
+      "true",
+    );
+    await expect(
+      page.getByText("Cached contact data may be outdated"),
+    ).toBeVisible();
 
     // Part of the file was imported; the counts say how much, and those contacts exist
     const imported = await importPage.readCount("actual-rows");
@@ -191,10 +248,18 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
 
     await importsList.goto();
     await expect(importsList.cell(file.name, "state")).toHaveText("Cancelled");
-    await expect(importsList.cell(file.name, "contactsCreated")).toHaveText(imported.toLocaleString("en-US"));
+    await expect(importsList.cell(file.name, "contactsCreated")).toHaveText(
+      imported.toLocaleString("en-US"),
+    );
   });
 
-  test("another browser sees a running import and takes it over when it is left", async ({ page, browser, importsList, importPage, uniqueFile }) => {
+  test("another browser sees a running import and takes it over when it is left", async ({
+    page,
+    browser,
+    importsList,
+    importPage,
+    uniqueFile,
+  }) => {
     test.setTimeout(300_000);
     const runId = newRunId();
     const total = 10000;
@@ -210,18 +275,29 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     const gate = await importPage.holdProcessingAfterProgress(3_000);
     await importPage.runImport();
     await importPage.expectStep("run");
-    await expect.poll(() => importPage.rowsProcessed(), { timeout: 60_000 }).toBeGreaterThan(0);
+    await expect
+      .poll(() => importPage.rowsProcessed(), { timeout: 60_000 })
+      .toBeGreaterThan(0);
 
     // A second browser (own session storage, so not the same driver) opens the import while it runs
-    const otherContext = await browser.newContext({ storageState: adminStorageStatePath });
+    const otherContext = await browser.newContext({
+      storageState: adminStorageStatePath,
+    });
     try {
       const otherPage = await otherContext.newPage();
       const other = new ImportPage(otherPage);
       await other.goto(jobId);
       await other.expectStep("run");
       await other.expectProcessStatus("paused");
-      await expect(other.processStatus).toHaveAttribute("data-pause-reason", "activeElsewhere");
-      await expect(otherPage.getByText("is being processed in another browser tab or by another user")).toBeVisible();
+      await expect(other.processStatus).toHaveAttribute(
+        "data-pause-reason",
+        "activeElsewhere",
+      );
+      await expect(
+        otherPage.getByText(
+          "is being processed in another browser tab or by another user",
+        ),
+      ).toBeVisible();
 
       // The first browser loses its connection (its processing calls no longer arrive): the import pauses
       await page.route("**/admin/api/cmd", async (route) => {
@@ -232,7 +308,9 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
         }
       });
       await gate.release("abort");
-      await expect(page.getByText(/Connection problem: trying again/)).toBeVisible({ timeout: 30_000 });
+      await expect(
+        page.getByText(/Connection problem: trying again/),
+      ).toBeVisible({ timeout: 30_000 });
 
       // One "Continue here": while the first browser still counts as active this browser waits (with a notice) and asks
       // again; it takes the import over once the first browser's last sign of life is old enough. (With the CI heartbeat

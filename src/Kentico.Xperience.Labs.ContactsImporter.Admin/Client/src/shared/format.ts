@@ -3,7 +3,7 @@
  * UI culture (`useGlobalization().uiLocale`, see `useText` in `i18n.ts`); no React here.
  */
 
-const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
+const UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
 
 /** `1536` -> `1.5 KB`. Binary units (1 KB = 1024 B), one decimal below 100. */
 export function formatBytes(bytes: number, locale?: string): string {
@@ -27,14 +27,24 @@ export function formatNumber(value: number, locale?: string): string {
 export function formatPercent(value: number, locale?: string): string {
   const digits = value < 10 && value > 0 ? 1 : 0;
 
-  return value.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: digits });
+  return value.toLocaleString(locale, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  });
 }
 
 interface DurationFormatLike {
-  format(duration: { hours?: number; minutes?: number; seconds?: number }): string;
+  format(duration: {
+    hours?: number;
+    minutes?: number;
+    seconds?: number;
+  }): string;
 }
 
-type DurationFormatConstructor = new (locale?: string, options?: { style: 'short' }) => DurationFormatLike;
+type DurationFormatConstructor = new (
+  locale?: string,
+  options?: { style: "short" },
+) => DurationFormatLike;
 
 /**
  * `75` -> `1 min, 15 sec`, `3700` -> `1 hr, 1 min` (en-US). Hours and minutes, or minutes and
@@ -46,27 +56,38 @@ export function formatDuration(seconds: number, locale?: string): string {
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const rest = total % 60;
-  const parts = hours > 0 ? { hours, minutes } : minutes > 0 ? { minutes, seconds: rest } : { seconds: rest };
+  const parts =
+    hours > 0
+      ? { hours, minutes }
+      : minutes > 0
+        ? { minutes, seconds: rest }
+        : { seconds: rest };
 
-  const DurationFormat = (Intl as unknown as { DurationFormat?: DurationFormatConstructor }).DurationFormat;
+  const DurationFormat = (
+    Intl as unknown as { DurationFormat?: DurationFormatConstructor }
+  ).DurationFormat;
   if (DurationFormat) {
-    return new DurationFormat(locale, { style: 'short' }).format(parts);
+    return new DurationFormat(locale, { style: "short" }).format(parts);
   }
 
-  const unit = (value: number, name: 'hour' | 'minute' | 'second') =>
-    new Intl.NumberFormat(locale, { style: 'unit', unit: name, unitDisplay: 'short' }).format(value);
+  const unit = (value: number, name: "hour" | "minute" | "second") =>
+    new Intl.NumberFormat(locale, {
+      style: "unit",
+      unit: name,
+      unitDisplay: "short",
+    }).format(value);
   const units: string[] = [];
   if (parts.hours !== undefined) {
-    units.push(unit(parts.hours, 'hour'));
+    units.push(unit(parts.hours, "hour"));
   }
   if (parts.minutes !== undefined) {
-    units.push(unit(parts.minutes, 'minute'));
+    units.push(unit(parts.minutes, "minute"));
   }
   if (parts.seconds !== undefined) {
-    units.push(unit(parts.seconds, 'second'));
+    units.push(unit(parts.seconds, "second"));
   }
 
-  return units.join(' ');
+  return units.join(" ");
 }
 
 /** ISO timestamp from the server (UTC) -> local date and time. */
@@ -77,17 +98,17 @@ export function formatDateTime(isoUtc: string, locale?: string): string {
 
   return Number.isNaN(date.getTime())
     ? isoUtc
-    : date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
+    : date.toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
 }
 
 /** The formatters bound to one culture. */
 export interface Formatters {
   readonly locale: string | undefined;
-  number(value: number): string;
-  bytes(bytes: number): string;
-  percent(value: number): string;
-  duration(seconds: number): string;
-  dateTime(isoUtc: string): string;
+  number: (value: number) => string;
+  bytes: (bytes: number) => string;
+  percent: (value: number) => string;
+  duration: (seconds: number) => string;
+  dateTime: (isoUtc: string) => string;
 }
 
 export function createFormatters(locale: string | undefined): Formatters {
@@ -109,10 +130,16 @@ export type TextParams = Readonly<Record<string, string | number>>;
  * where the culture writes `1,234,567`. `count` stays a number: i18next picks the plural form
  * from it (the text shows the count through another, formatted placeholder).
  */
-export function localizeParams(params: TextParams, formatters: Pick<Formatters, 'number'>): Record<string, string | number> {
+export function localizeParams(
+  params: TextParams,
+  formatters: Pick<Formatters, "number">,
+): Record<string, string | number> {
   const result: Record<string, string | number> = {};
   for (const [name, value] of Object.entries(params)) {
-    result[name] = typeof value === 'number' && name !== 'count' ? formatters.number(value) : value;
+    result[name] =
+      typeof value === "number" && name !== "count"
+        ? formatters.number(value)
+        : value;
   }
 
   return result;

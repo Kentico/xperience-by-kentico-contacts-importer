@@ -1,7 +1,7 @@
-import { EMAIL_FIELD } from './contract';
-import type { FieldMapping, TargetField } from './contract';
-import { isValidEmail, normalizeEmail } from './normalization';
-import type { RecordSource, SourceFormat, SourceInfo } from './source';
+import { EMAIL_FIELD } from "./contract";
+import type { FieldMapping, TargetField } from "./contract";
+import { isValidEmail, normalizeEmail } from "./normalization";
+import type { RecordSource, SourceFormat, SourceInfo } from "./source";
 
 export interface ProfileOptions {
   /** Rows to profile. Default 1000. */
@@ -59,25 +59,50 @@ const EMAIL_COLUMN_MIN_RATE = 0.8;
 
 /** Well-known contact fields -> source column names that usually mean the same thing (simplified form). */
 const SYNONYMS: Readonly<Record<string, readonly string[]>> = {
-  ContactEmail: ['email', 'emailaddress', 'mail', 'emailadresse'],
-  ContactFirstName: ['firstname', 'first', 'givenname', 'forename', 'fname'],
-  ContactLastName: ['lastname', 'last', 'surname', 'familyname', 'lname'],
-  ContactMiddleName: ['middlename', 'middle'],
-  ContactBusinessPhone: ['phone', 'phonenumber', 'businessphone', 'telephone', 'tel', 'workphone'],
-  ContactMobilePhone: ['mobile', 'mobilephone', 'cell', 'cellphone', 'mobilenumber'],
-  ContactCompanyName: ['company', 'companyname', 'organization', 'organisation', 'account'],
-  ContactJobTitle: ['jobtitle', 'title', 'position', 'role'],
-  ContactAddress1: ['address', 'address1', 'street', 'streetaddress', 'addressline1'],
-  ContactCity: ['city', 'town'],
-  ContactZIP: ['zip', 'zipcode', 'postalcode', 'postcode'],
-  ContactBirthday: ['birthday', 'birthdate', 'dateofbirth', 'dob'],
-  ContactGender: ['gender', 'sex'],
-  ContactNotes: ['notes', 'note', 'comment', 'comments'],
+  ContactEmail: ["email", "emailaddress", "mail", "emailadresse"],
+  ContactFirstName: ["firstname", "first", "givenname", "forename", "fname"],
+  ContactLastName: ["lastname", "last", "surname", "familyname", "lname"],
+  ContactMiddleName: ["middlename", "middle"],
+  ContactBusinessPhone: [
+    "phone",
+    "phonenumber",
+    "businessphone",
+    "telephone",
+    "tel",
+    "workphone",
+  ],
+  ContactMobilePhone: [
+    "mobile",
+    "mobilephone",
+    "cell",
+    "cellphone",
+    "mobilenumber",
+  ],
+  ContactCompanyName: [
+    "company",
+    "companyname",
+    "organization",
+    "organisation",
+    "account",
+  ],
+  ContactJobTitle: ["jobtitle", "title", "position", "role"],
+  ContactAddress1: [
+    "address",
+    "address1",
+    "street",
+    "streetaddress",
+    "addressline1",
+  ],
+  ContactCity: ["city", "town"],
+  ContactZIP: ["zip", "zipcode", "postalcode", "postcode"],
+  ContactBirthday: ["birthday", "birthdate", "dateofbirth", "dob"],
+  ContactGender: ["gender", "sex"],
+  ContactNotes: ["notes", "note", "comment", "comments"],
 };
 
 /** Lowercase letters and digits only: `E-mail Address` -> `emailaddress`. */
 function simplify(name: string): string {
-  return name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  return name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
 /**
@@ -87,12 +112,16 @@ function simplify(name: string): string {
  * used at most once; columns without a match are left out.
  */
 export function suggestMapping(
-  columns: readonly Pick<ColumnProfile, 'name' | 'emailRate' | 'filled'>[],
+  columns: readonly Pick<ColumnProfile, "name" | "emailRate" | "filled">[],
   targetFields: readonly TargetField[],
 ): FieldMapping[] {
   const exact = new Map<string, string>();
   const loose = new Map<string, string>();
-  const register = (map: Map<string, string>, alias: string, target: string) => {
+  const register = (
+    map: Map<string, string>,
+    alias: string,
+    target: string,
+  ) => {
     const key = simplify(alias);
     if (key.length > 0 && !map.has(key)) {
       map.set(key, target);
@@ -102,7 +131,7 @@ export function suggestMapping(
   for (const field of targetFields) {
     register(exact, field.name, field.name);
     if (/^contact./i.test(field.name)) {
-      register(exact, field.name.slice('contact'.length), field.name);
+      register(exact, field.name.slice("contact".length), field.name);
     }
     if (field.caption) {
       register(exact, field.caption, field.name);
@@ -130,7 +159,10 @@ export function suggestMapping(
     }
   }
 
-  if (!usedTargets.has(EMAIL_FIELD) && targetFields.some((f) => f.name === EMAIL_FIELD)) {
+  if (
+    !usedTargets.has(EMAIL_FIELD) &&
+    targetFields.some((f) => f.name === EMAIL_FIELD)
+  ) {
     let best: (typeof columns)[number] | undefined;
     for (const column of columns) {
       if (
@@ -199,7 +231,7 @@ export async function profileSample(
         raggedRows++;
       }
       for (let i = 0; i < columnCount; i++) {
-        const value = (values[i] ?? '').trim();
+        const value = (values[i] ?? "").trim();
         if (value.length === 0) {
           continue;
         }
@@ -209,7 +241,10 @@ export async function profileSample(
           validEmails[i] = (validEmails[i] ?? 0) + 1;
         }
         const columnExamples = (examples[i] ??= []);
-        if (columnExamples.length < MAX_EXAMPLES && !columnExamples.includes(value)) {
+        if (
+          columnExamples.length < MAX_EXAMPLES &&
+          !columnExamples.includes(value)
+        ) {
           columnExamples.push(value);
         }
       }
@@ -240,7 +275,7 @@ export async function profileSample(
     };
   });
   for (const row of sampleRows) {
-    row.values = names.map((_, i) => row.values[i] ?? '');
+    row.values = names.map((_, i) => row.values[i] ?? "");
   }
 
   const totalBytes = source.totalBytes;
@@ -261,6 +296,8 @@ export async function profileSample(
     bytesRead,
     totalBytes,
     estimatedTotalRows,
-    suggestions: options.targetFields ? suggestMapping(columns, options.targetFields) : [],
+    suggestions: options.targetFields
+      ? suggestMapping(columns, options.targetFields)
+      : [],
   };
 }

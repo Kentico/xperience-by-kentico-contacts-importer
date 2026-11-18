@@ -1,5 +1,5 @@
-import { concatBytes, sha256Hex } from './bytes';
-import type { FileLike } from './source';
+import { concatBytes, sha256Hex } from "./bytes";
+import type { FileLike } from "./source";
 
 /** Bytes hashed from each end of the file. */
 export const FINGERPRINT_EDGE_BYTES = 1024 * 1024;
@@ -19,7 +19,9 @@ export async function fingerprintFile(
     parts.push(new Uint8Array(await file.slice(0, size).arrayBuffer()));
   } else {
     parts.push(new Uint8Array(await file.slice(0, edgeBytes).arrayBuffer()));
-    parts.push(new Uint8Array(await file.slice(size - edgeBytes, size).arrayBuffer()));
+    parts.push(
+      new Uint8Array(await file.slice(size - edgeBytes, size).arrayBuffer()),
+    );
   }
 
   return sha256Hex(concatBytes(parts));

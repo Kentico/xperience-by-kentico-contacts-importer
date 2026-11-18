@@ -4,8 +4,8 @@ import {
   fingerprintFile,
   openRecordSource,
   profileSample,
-} from '../import-core';
-import type { ImportErrorParams, PipelineProgress } from '../import-core';
+} from "../import-core";
+import type { ImportErrorParams, PipelineProgress } from "../import-core";
 
 import type {
   ProfileRequest,
@@ -13,7 +13,7 @@ import type {
   WorkerErrorCode,
   WorkerEvent,
   WorkerRequest,
-} from './protocol';
+} from "./protocol";
 
 const DEFAULT_PROGRESS_INTERVAL_MS = 200;
 
@@ -34,7 +34,10 @@ export class ImportWorkerSession {
   private readonly now: () => number;
   private readonly runs = new Map<number, ActiveRun>();
 
-  constructor(post: (event: WorkerEvent) => void, now: () => number = () => Date.now()) {
+  constructor(
+    post: (event: WorkerEvent) => void,
+    now: () => number = () => Date.now(),
+  ) {
     this.post = post;
     this.now = now;
   }
@@ -42,15 +45,15 @@ export class ImportWorkerSession {
   /** Handles one request. The returned promise settles when the request finished (tests await it). */
   handle(request: WorkerRequest): Promise<void> {
     switch (request.type) {
-      case 'profile':
+      case "profile":
         return this.guard(request.requestId, () => this.profile(request));
-      case 'start':
+      case "start":
         return this.guard(request.requestId, () => this.start(request));
-      case 'ack':
+      case "ack":
         this.acknowledge(request.requestId);
 
         return Promise.resolve();
-      case 'abort':
+      case "abort":
         this.abort(request.requestId);
 
         return Promise.resolve();
@@ -72,12 +75,21 @@ export class ImportWorkerSession {
     }
 
     const fingerprint = await fingerprintFile(request.file);
-    this.post({ type: 'profiled', requestId: request.requestId, profile, fingerprint });
+    this.post({
+      type: "profiled",
+      requestId: request.requestId,
+      profile,
+      fingerprint,
+    });
   }
 
   private async start(request: StartRequest): Promise<void> {
     const { requestId } = request;
-    const run: ActiveRun = { abort: new AbortController(), inFlight: 0, wake: undefined };
+    const run: ActiveRun = {
+      abort: new AbortController(),
+      inFlight: 0,
+      wake: undefined,
+    };
     this.runs.set(requestId, run);
 
     const interval = request.progressIntervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS;
@@ -86,7 +98,7 @@ export class ImportWorkerSession {
       const time = this.now();
       if (time - lastProgress >= interval) {
         lastProgress = time;
-        this.post({ type: 'progress', requestId, progress });
+        this.post({ type: "progress", requestId, progress });
       }
     };
 
@@ -101,7 +113,7 @@ export class ImportWorkerSession {
 
       for await (const chunk of pipeline.chunks()) {
         run.inFlight++;
-        this.post({ type: 'chunk', requestId, chunk });
+        this.post({ type: "chunk", requestId, chunk });
 
         // Backpressure: stop pulling the pipeline until the page caught up.
         while (run.inFlight >= window && !run.abort.signal.aborted) {
@@ -112,8 +124,8 @@ export class ImportWorkerSession {
         run.abort.signal.throwIfAborted();
       }
 
-      this.post({ type: 'progress', requestId, progress: pipeline.progress() });
-      this.post({ type: 'done', requestId, result: pipeline.result() });
+      this.post({ type: "progress", requestId, progress: pipeline.progress() });
+      this.post({ type: "done", requestId, result: pipeline.result() });
     } finally {
       this.runs.delete(requestId);
     }
@@ -135,7 +147,7 @@ export class ImportWorkerSession {
       return;
     }
 
-    run.abort.abort(new DOMException('The import was stopped.', 'AbortError'));
+    run.abort.abort(new DOMException("The import was stopped.", "AbortError"));
     this.wake(run);
   }
 
@@ -145,23 +157,33 @@ export class ImportWorkerSession {
     wake?.();
   }
 
-  private async guard(requestId: number, work: () => Promise<void>): Promise<void> {
+  private async guard(
+    requestId: number,
+    work: () => Promise<void>,
+  ): Promise<void> {
     try {
       await work();
     } catch (error) {
-      this.post({ type: 'error', requestId, ...describeError(error) });
+      this.post({ type: "error", requestId, ...describeError(error) });
     }
   }
 }
 
-function describeError(error: unknown): { code: WorkerErrorCode; message: string; params?: ImportErrorParams } {
+function describeError(error: unknown): {
+  code: WorkerErrorCode;
+  message: string;
+  params?: ImportErrorParams;
+} {
   if (error instanceof ImportError) {
     return { code: error.code, message: error.message, params: error.params };
   }
-  if (error instanceof Error && error.name === 'AbortError') {
-    return { code: 'aborted', message: error.message };
+  if (error instanceof Error && error.name === "AbortError") {
+    return { code: "aborted", message: error.message };
   }
 
   // Parser messages never include row values, so the message is safe to show.
-  return { code: 'failed', message: error instanceof Error ? error.message : String(error) };
+  return {
+    code: "failed",
+    message: error instanceof Error ? error.message : String(error),
+  };
 }

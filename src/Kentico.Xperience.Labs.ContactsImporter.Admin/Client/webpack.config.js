@@ -1,9 +1,9 @@
-const webpackMerge = require('webpack-merge');
-const path = require('path');
-const fs = require('fs');
-const spawn = require('child_process').spawn;
+const webpackMerge = require("webpack-merge");
+const path = require("path");
+const fs = require("fs");
+const spawn = require("child_process").spawn;
 
-const baseWebpackConfig = require('@kentico/xperience-webpack-config');
+const baseWebpackConfig = require("@kentico/xperience-webpack-config");
 
 const { cert, key } = getDotnetCertPaths();
 
@@ -12,8 +12,8 @@ module.exports = (opts, argv) => {
     return baseWebpackConfig({
       // Must match RegisterClientModule(org, project) on the backend
       // and AdminOrgName/ProjectName in the .csproj
-      orgName: 'kentico',
-      projectName: 'xperience-labs-contacts-importer-admin',
+      orgName: "kentico",
+      projectName: "xperience-labs-contacts-importer-admin",
       webpackConfigEnv,
       argv,
     });
@@ -23,7 +23,7 @@ module.exports = (opts, argv) => {
     // Skip cert/key creation for prod builds or if the cert/key exist
     // See: https://github.com/dotnet/aspnetcore/issues/58330#issuecomment-2423338006
     if (
-      argv.mode === 'production' ||
+      argv.mode === "production" ||
       (fs.existsSync(cert) && fs.existsSync(key))
     ) {
       resolve(buildConfig(baseConfig, opts, argv));
@@ -31,20 +31,20 @@ module.exports = (opts, argv) => {
       return;
     }
 
-    console.info('Creating aspnet core dev-certs');
+    console.info("Creating aspnet core dev-certs");
     spawn(
-      'dotnet',
+      "dotnet",
       [
-        'dev-certs',
-        'https',
-        '--export-path',
+        "dev-certs",
+        "https",
+        "--export-path",
         cert,
-        '--format',
-        'Pem',
-        '--no-password',
+        "--format",
+        "Pem",
+        "--no-password",
       ],
-      { stdio: 'inherit' },
-    ).on('exit', (code) => {
+      { stdio: "inherit" },
+    ).on("exit", (code) => {
       resolve(buildConfig(baseConfig, opts, argv));
       if (code) {
         process.exit(code);
@@ -55,18 +55,18 @@ module.exports = (opts, argv) => {
 
 function buildConfig(baseConfig, opts, argv) {
   const projectConfig = {
-    devtool: argv.mode === 'production' ? false : 'inline-source-map',
+    devtool: argv.mode === "production" ? false : "inline-source-map",
     module: {
       rules: [
         {
           // Web Worker bundles inlined as strings (see build/inline-worker-loader.js)
           resourceQuery: /inline-worker/,
-          use: [path.resolve(__dirname, 'build/inline-worker-loader.js')],
+          use: [path.resolve(__dirname, "build/inline-worker-loader.js")],
         },
         {
           test: /\.(js|ts)x?$/,
           exclude: [/node_modules/],
-          loader: 'babel-loader',
+          loader: "babel-loader",
         },
       ],
     },
@@ -85,7 +85,7 @@ function buildConfig(baseConfig, opts, argv) {
     devServer: {
       port: 3020,
       server: {
-        type: 'http',
+        type: "http",
         options: {
           key,
           cert,
@@ -102,7 +102,7 @@ function buildConfig(baseConfig, opts, argv) {
  */
 function getDotnetCertPaths() {
   const baseFolder =
-    process.env.APPDATA !== undefined && process.env.APPDATA !== ''
+    process.env.APPDATA !== undefined && process.env.APPDATA !== ""
       ? `${process.env.APPDATA}/ASP.NET/https`
       : `${process.env.HOME}/.aspnet/https`;
   fs.mkdirSync(baseFolder, { recursive: true });

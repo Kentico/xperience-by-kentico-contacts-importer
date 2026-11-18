@@ -1,8 +1,11 @@
-import type { EncodedChunk, UploadChunkPayload } from '../import-core';
-import type { TruncateChunksResponse, UploadChunkResponse } from '../shared/commands';
+import type { EncodedChunk, UploadChunkPayload } from "../import-core";
+import type {
+  TruncateChunksResponse,
+  UploadChunkResponse,
+} from "../shared/commands";
 
-import { RetryExhaustedError, withRetry } from './retry';
-import type { RetryOptions } from './retry';
+import { RetryExhaustedError, withRetry } from "./retry";
+import type { RetryOptions } from "./retry";
 
 /**
  * Upload transport: sends chunks with bounded parallelism, retries failed requests with backoff,
@@ -13,23 +16,35 @@ import type { RetryOptions } from './retry';
  */
 export interface ChunkUploaderOptions {
   /** Sends one chunk (`UPLOAD_CHUNK`). `undefined` or a thrown error = failed request, retried. */
-  send: (payload: UploadChunkPayload, signal: AbortSignal) => Promise<UploadChunkResponse | undefined>;
+  send: (
+    payload: UploadChunkPayload,
+    signal: AbortSignal,
+  ) => Promise<UploadChunkResponse | undefined>;
   /** Deletes stored chunks from an index up (`TRUNCATE_CHUNKS`). `undefined` = failed request, retried. */
-  truncate: (fromIndex: number, signal: AbortSignal) => Promise<TruncateChunksResponse | undefined>;
+  truncate: (
+    fromIndex: number,
+    signal: AbortSignal,
+  ) => Promise<TruncateChunksResponse | undefined>;
   /** Uploads running at the same time. Default 3. */
   parallel?: number;
   /** Chunks the server already has (index and hash), from `GET_JOB` / `SAVE_CONFIG`. */
   storedChunks?: Iterable<{ index: number; sha256: string }>;
   /** Backoff settings; the uploader supplies the signal. */
-  retry?: Omit<RetryOptions, 'signal' | 'onRetry'>;
+  retry?: Omit<RetryOptions, "signal" | "onRetry">;
   onEvent?: (event: UploadEvent) => void;
 }
 
 export type UploadEvent =
-  | { type: 'uploaded'; index: number; bytes: number; rows: number }
-  | { type: 'skipped'; index: number; bytes: number; rows: number }
-  | { type: 'retry'; index: number; attempt: number; maxAttempts: number; delayMs: number }
-  | { type: 'truncated'; fromIndex: number; deleted: number };
+  | { type: "uploaded"; index: number; bytes: number; rows: number }
+  | { type: "skipped"; index: number; bytes: number; rows: number }
+  | {
+      type: "retry";
+      index: number;
+      attempt: number;
+      maxAttempts: number;
+      delayMs: number;
+    }
+  | { type: "truncated"; fromIndex: number; deleted: number };
 
 export interface UploadStats {
   /** Chunks sent and stored in this run. */
@@ -45,12 +60,12 @@ export interface UploadStats {
 
 export type UploadErrorCode =
   /** The server refused the chunk (validation, state); retrying the same chunk cannot help. */
-  | 'rejected'
+  | "rejected"
   /** Every attempt of a request failed. */
-  | 'network'
+  | "network"
   /** The server refused to delete stale chunks. */
-  | 'truncateFailed'
-  | 'aborted';
+  | "truncateFailed"
+  | "aborted";
 
 export class UploadError extends Error {
   readonly code: UploadErrorCode;
@@ -66,10 +81,15 @@ export class UploadError extends Error {
   constructor(
     code: UploadErrorCode,
     message: string,
-    details: { index?: number; reason?: string; rowNumber?: number; serverMessage?: string } = {},
+    details: {
+      index?: number;
+      reason?: string;
+      rowNumber?: number;
+      serverMessage?: string;
+    } = {},
   ) {
     super(message);
-    this.name = 'UploadError';
+    this.name = "UploadError";
     this.code = code;
     this.index = details.index;
     this.reason = details.reason;
@@ -78,7 +98,7 @@ export class UploadError extends Error {
   }
 }
 
-const ROW_ORDER_REASON = 'rowOrder';
+const ROW_ORDER_REASON = "rowOrder";
 
 export class ChunkUploader {
   private readonly options: ChunkUploaderOptions;
@@ -131,7 +151,12 @@ export class ChunkUploader {
     if (stored === sha256) {
       this.counters.skippedChunks++;
       this.counters.skippedBytes += chunk.compressedBytes;
-      this.emit({ type: 'skipped', index, bytes: chunk.compressedBytes, rows: chunk.payload.rows });
+      this.emit({
+        type: "skipped",
+        index,
+        bytes: chunk.compressedBytes,
+        rows: chunk.payload.rows,
+      });
 
       return Promise.resolve();
     }
@@ -163,7 +188,7 @@ export class ChunkUploader {
 
   /** Stops all uploads. Pending `add` promises reject with code `aborted`. */
   abort(): void {
-    this.fail(new UploadError('aborted', 'The upload was stopped.'));
+    this.fail(new UploadError("aborted", "The upload was stopped."));
   }
 
   private async upload(chunk: EncodedChunk): Promise<void> {
@@ -177,7 +202,11 @@ export class ChunkUploader {
       await this.truncation;
 
       let response = await this.sendWithRetry(payload);
-      if (response.code === 'rejected' && response.reason === ROW_ORDER_REASON && this.hasStoredAbove(index)) {
+      if (
+        response.code === "rejected" &&
+        response.reason === ROW_ORDER_REASON &&
+        this.hasStoredAbove(index)
+      ) {
         // A stale chunk above this one (from other chunk boundaries) overlaps its rows.
         if (!this.truncation) {
           this.startTruncation(index + 1);
@@ -186,25 +215,36 @@ export class ChunkUploader {
         response = await this.sendWithRetry(payload);
       }
 
-      if (response.code === 'rejected') {
-        throw new UploadError('rejected', 'The server rejected the uploaded data.', {
-          index,
-          reason: response.reason ?? undefined,
-          rowNumber: response.rowNumber ?? undefined,
-          serverMessage: response.message ?? undefined,
-        });
+      if (response.code === "rejected") {
+        throw new UploadError(
+          "rejected",
+          "The server rejected the uploaded data.",
+          {
+            index,
+            reason: response.reason ?? undefined,
+            rowNumber: response.rowNumber ?? undefined,
+            serverMessage: response.message ?? undefined,
+          },
+        );
       }
 
       signal.throwIfAborted();
       this.counters.uploadedChunks++;
       this.counters.uploadedBytes += chunk.compressedBytes;
-      this.emit({ type: 'uploaded', index, bytes: chunk.compressedBytes, rows: payload.rows });
+      this.emit({
+        type: "uploaded",
+        index,
+        bytes: chunk.compressedBytes,
+        rows: payload.rows,
+      });
     } finally {
       this.release();
     }
   }
 
-  private sendWithRetry(payload: UploadChunkPayload): Promise<UploadChunkResponse> {
+  private sendWithRetry(
+    payload: UploadChunkPayload,
+  ): Promise<UploadChunkResponse> {
     const { signal } = this.controller;
 
     return withRetry(() => this.options.send(payload, signal), {
@@ -212,7 +252,7 @@ export class ChunkUploader {
       signal,
       onRetry: (info) => {
         this.counters.retries++;
-        this.emit({ type: 'retry', index: payload.index, ...info });
+        this.emit({ type: "retry", index: payload.index, ...info });
       },
     });
   }
@@ -237,15 +277,22 @@ export class ChunkUploader {
     const { signal } = this.controller;
     const previous = this.truncation ?? Promise.resolve();
     const truncation = previous.then(async () => {
-      const response = await withRetry(() => this.options.truncate(fromIndex, signal), {
-        ...this.options.retry,
-        signal,
-      });
-      if (response.code !== 'ok') {
-        throw new UploadError('truncateFailed', 'Stored data could not be replaced.', { serverMessage: response.message ?? undefined });
+      const response = await withRetry(
+        () => this.options.truncate(fromIndex, signal),
+        {
+          ...this.options.retry,
+          signal,
+        },
+      );
+      if (response.code !== "ok") {
+        throw new UploadError(
+          "truncateFailed",
+          "Stored data could not be replaced.",
+          { serverMessage: response.message ?? undefined },
+        );
       }
 
-      this.emit({ type: 'truncated', fromIndex, deleted: response.deleted });
+      this.emit({ type: "truncated", fromIndex, deleted: response.deleted });
     });
     // Awaited by the uploads that depend on it; a failure reaches them there.
     truncation.catch(() => undefined);
@@ -255,6 +302,7 @@ export class ChunkUploader {
   private acquire(): Promise<void> {
     const { signal } = this.controller;
     if (signal.aborted) {
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the abort reason, as fetch rejects
       return Promise.reject(signal.reason);
     }
     if (this.active < this.parallel) {
@@ -269,15 +317,16 @@ export class ChunkUploader {
         if (position !== -1) {
           this.waiting.splice(position, 1);
         }
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the abort reason, as fetch rejects
         reject(signal.reason);
       };
       const enter = () => {
-        signal.removeEventListener('abort', onAbort);
+        signal.removeEventListener("abort", onAbort);
         this.active++;
         resolve();
       };
       this.waiting.push(enter);
-      signal.addEventListener('abort', onAbort, { once: true });
+      signal.addEventListener("abort", onAbort, { once: true });
     });
   }
 
@@ -305,8 +354,12 @@ function toUploadError(error: unknown, index: number): UploadError {
     return error;
   }
   if (error instanceof RetryExhaustedError) {
-    return new UploadError('network', error.message, { index });
+    return new UploadError("network", error.message, { index });
   }
 
-  return new UploadError('network', error instanceof Error ? error.message : String(error), { index });
+  return new UploadError(
+    "network",
+    error instanceof Error ? error.message : String(error),
+    { index },
+  );
 }

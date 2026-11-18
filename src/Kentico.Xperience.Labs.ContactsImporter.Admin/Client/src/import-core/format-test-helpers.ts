@@ -1,4 +1,4 @@
-import { utf8 } from './test-helpers';
+import { utf8 } from "./test-helpers";
 
 /** Builders of zip / XLSX test files in memory, so no binary fixtures are committed. */
 
@@ -17,15 +17,17 @@ const CRC_TABLE = (() => {
 
 export function crc32(bytes: Uint8Array): number {
   let crc = 0xffffffff;
-  for (let i = 0; i < bytes.length; i++) {
-    crc = CRC_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  for (const byte of bytes) {
+    crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
   }
 
   return (crc ^ 0xffffffff) >>> 0;
 }
 
 export async function deflateRawBytes(bytes: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  const stream = new Blob([bytes as BlobPart])
+    .stream()
+    .pipeThrough(new CompressionStream("deflate-raw"));
 
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
@@ -47,7 +49,9 @@ export interface ZipTestOptions {
 }
 
 function concat(parts: Uint8Array[]): Uint8Array {
-  const result = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  const result = new Uint8Array(
+    parts.reduce((sum, part) => sum + part.length, 0),
+  );
   let at = 0;
   for (const part of parts) {
     result.set(part, at);
@@ -58,14 +62,17 @@ function concat(parts: Uint8Array[]): Uint8Array {
 }
 
 /** Builds a zip file in memory. */
-export async function buildZip(entries: ZipTestEntry[], options: ZipTestOptions = {}): Promise<Uint8Array> {
+export async function buildZip(
+  entries: ZipTestEntry[],
+  options: ZipTestOptions = {},
+): Promise<Uint8Array> {
   const zip64 = options.zip64 ?? false;
   const parts: Uint8Array[] = [];
   const central: Uint8Array[] = [];
   let offset = 0;
 
   for (const entry of entries) {
-    const raw = typeof entry.data === 'string' ? utf8(entry.data) : entry.data;
+    const raw = typeof entry.data === "string" ? utf8(entry.data) : entry.data;
     const method = entry.method ?? 0;
     const data = method === 8 ? await deflateRawBytes(raw) : raw;
     const name = utf8(entry.name);
@@ -148,7 +155,7 @@ export async function buildZip(entries: ZipTestEntry[], options: ZipTestOptions 
     parts.push(record, locator);
   }
 
-  const comment = utf8(options.comment ?? '');
+  const comment = utf8(options.comment ?? "");
   const end = new Uint8Array(22 + comment.length);
   const ev = new DataView(end.buffer);
   ev.setUint32(0, 0x06054b50, true);
@@ -164,7 +171,11 @@ export async function buildZip(entries: ZipTestEntry[], options: ZipTestOptions 
 }
 
 export function xmlEscape(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 export interface XlsxTestSheet {
@@ -187,55 +198,65 @@ export interface XlsxTestOptions {
   method?: number;
 }
 
-const NS_MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
-const NS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const NS_PKG_REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const NS_REL =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const NS_PKG_REL =
+  "http://schemas.openxmlformats.org/package/2006/relationships";
 
 /** Builds a minimal but valid XLSX package in memory. */
 export async function buildXlsx(options: XlsxTestOptions): Promise<Uint8Array> {
   const method = options.method ?? 8;
   const entries: ZipTestEntry[] = [];
-  const add = (name: string, data: string) => entries.push({ name, data, method });
+  const add = (name: string, data: string) =>
+    entries.push({ name, data, method });
 
   add(
-    '[Content_Types].xml',
+    "[Content_Types].xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>',
   );
   add(
-    '_rels/.rels',
+    "_rels/.rels",
     `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${NS_PKG_REL}"><Relationship Id="rId1" Type="${NS_REL}/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
   );
 
   const sheetElements = options.sheets
     .map(
       (sheet, i) =>
-        `<sheet name="${xmlEscape(sheet.name)}" sheetId="${i + 1}"${sheet.hidden ? ' state="hidden"' : ''} r:id="rId${i + 1}"/>`,
+        `<sheet name="${xmlEscape(sheet.name)}" sheetId="${i + 1}"${sheet.hidden ? ' state="hidden"' : ""} r:id="rId${i + 1}"/>`,
     )
-    .join('');
+    .join("");
   add(
-    'xl/workbook.xml',
-    `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${NS_MAIN}" xmlns:r="${NS_REL}"><workbookPr${options.date1904 ? ' date1904="1"' : ''}/><sheets>${sheetElements}</sheets></workbook>`,
+    "xl/workbook.xml",
+    `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${NS_MAIN}" xmlns:r="${NS_REL}"><workbookPr${options.date1904 ? ' date1904="1"' : ""}/><sheets>${sheetElements}</sheets></workbook>`,
   );
 
   const n = options.sheets.length;
   const rels = options.sheets
-    .map((_, i) => `<Relationship Id="rId${i + 1}" Type="${NS_REL}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`)
-    .join('');
+    .map(
+      (_, i) =>
+        `<Relationship Id="rId${i + 1}" Type="${NS_REL}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`,
+    )
+    .join("");
   add(
-    'xl/_rels/workbook.xml.rels',
+    "xl/_rels/workbook.xml.rels",
     `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${NS_PKG_REL}">${rels}<Relationship Id="rId${n + 1}" Type="${NS_REL}/styles" Target="styles.xml"/><Relationship Id="rId${n + 2}" Type="${NS_REL}/sharedStrings" Target="sharedStrings.xml"/></Relationships>`,
   );
 
-  const xfs = (options.cellXfs ?? [0, 14]).map((id) => `<xf numFmtId="${id}" fontId="0"/>`).join('');
-  const numFmts = options.numFmts ? `<numFmts>${options.numFmts}</numFmts>` : '';
+  const xfs = (options.cellXfs ?? [0, 14])
+    .map((id) => `<xf numFmtId="${id}" fontId="0"/>`)
+    .join("");
+  const numFmts = options.numFmts
+    ? `<numFmts>${options.numFmts}</numFmts>`
+    : "";
   add(
-    'xl/styles.xml',
+    "xl/styles.xml",
     `<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="${NS_MAIN}">${numFmts}<cellStyleXfs count="1"><xf numFmtId="0"/></cellStyleXfs><cellXfs>${xfs}</cellXfs></styleSheet>`,
   );
   if (options.sharedStrings) {
     add(
-      'xl/sharedStrings.xml',
-      `<?xml version="1.0" encoding="UTF-8"?><sst xmlns="${NS_MAIN}" count="${options.sharedStrings.length}">${options.sharedStrings.join('')}</sst>`,
+      "xl/sharedStrings.xml",
+      `<?xml version="1.0" encoding="UTF-8"?><sst xmlns="${NS_MAIN}" count="${options.sharedStrings.length}">${options.sharedStrings.join("")}</sst>`,
     );
   }
   options.sheets.forEach((sheet, i) =>
@@ -250,7 +271,7 @@ export async function buildXlsx(options: XlsxTestOptions): Promise<Uint8Array> {
 
 /** Column letters of a 0-based index (`0` -> `A`, `26` -> `AA`). */
 export function columnLetters(index: number): string {
-  let letters = '';
+  let letters = "";
   for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) {
     letters = String.fromCharCode(65 + ((n - 1) % 26)) + letters;
   }
@@ -262,15 +283,18 @@ export function columnLetters(index: number): string {
  * XLSX of a table of strings (first row = header), as shared strings (`shared`, Excel's way) or
  * inline strings. Empty values are left out (sparse cells).
  */
-export async function tableXlsx(rows: string[][], shared = true): Promise<Uint8Array> {
+export async function tableXlsx(
+  rows: string[][],
+  shared = true,
+): Promise<Uint8Array> {
   const strings: string[] = [];
   const index = new Map<string, number>();
   const xml = rows
     .map((row, r) => {
       const cells = row
         .map((value, c) => {
-          if (value === '') {
-            return '';
+          if (value === "") {
+            return "";
           }
           const ref = `${columnLetters(c)}${r + 1}`;
           if (!shared) {
@@ -279,17 +303,22 @@ export async function tableXlsx(rows: string[][], shared = true): Promise<Uint8A
           let i = index.get(value);
           if (i === undefined) {
             i = strings.length;
-            strings.push(`<si><t xml:space="preserve">${xmlEscape(value)}</t></si>`);
+            strings.push(
+              `<si><t xml:space="preserve">${xmlEscape(value)}</t></si>`,
+            );
             index.set(value, i);
           }
 
           return `<c r="${ref}" t="s"><v>${i}</v></c>`;
         })
-        .join('');
+        .join("");
 
       return `<row r="${r + 1}">${cells}</row>`;
     })
-    .join('');
+    .join("");
 
-  return buildXlsx({ sheets: [{ name: 'Sheet1', rows: xml }], ...(shared && { sharedStrings: strings }) });
+  return buildXlsx({
+    sheets: [{ name: "Sheet1", rows: xml }],
+    ...(shared && { sharedStrings: strings }),
+  });
 }

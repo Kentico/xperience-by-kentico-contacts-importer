@@ -1,9 +1,9 @@
-import { usePageCommandProvider } from '@kentico/xperience-admin-base';
-import { useCallback, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { usePageCommandProvider } from "@kentico/xperience-admin-base";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useNavigate } from "react-router";
 
-import { callWithLinkedAbort } from './abort';
-import type { CommandName, ExecuteCommand } from './commands';
+import { callWithLinkedAbort } from "./abort";
+import type { CommandName, ExecuteCommand } from "./commands";
 
 /**
  * Page command executor of the current page as an `ExecuteCommand`: resolves with the command
@@ -12,11 +12,20 @@ import type { CommandName, ExecuteCommand } from './commands';
 export function useExecuteCommand(): ExecuteCommand {
   const { executeCommand } = usePageCommandProvider();
   const latest = useRef(executeCommand);
-  latest.current = executeCommand;
+  useLayoutEffect(() => {
+    latest.current = executeCommand;
+  });
 
   return useCallback(
-    <TResult, TData = void>(name: CommandName, data?: TData, signal?: AbortSignal) =>
-      callWithLinkedAbort(signal, (controller) => latest.current<TResult, TData>(name, data, undefined, controller)),
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- TData lets callers state the request type, like executeCommand of the admin
+    <TResult, TData = void>(
+      name: CommandName,
+      data?: TData,
+      signal?: AbortSignal,
+    ) =>
+      callWithLinkedAbort(signal, (controller) =>
+        latest.current<TResult, TData>(name, data, undefined, controller),
+      ),
     [],
   );
 }
@@ -30,7 +39,7 @@ export function useAdminNavigate(): (path: string) => void {
 
   return useCallback(
     (path: string) => {
-      void navigate(path.startsWith('/') ? path : `/${path}`);
+      void navigate(path.startsWith("/") ? path : `/${path}`);
     },
     [navigate],
   );

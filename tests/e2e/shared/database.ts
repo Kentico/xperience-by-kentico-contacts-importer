@@ -12,23 +12,49 @@ const scriptPath = path.resolve(__dirname, "../scripts/Invoke-E2ESql.ps1");
 
 export type SqlValue = string | number;
 
-type SqlResult = { ok: true; rows: Record<string, unknown>[] } | { ok: false; error: string };
+type SqlResult =
+  { ok: true; rows: Record<string, unknown>[] } | { ok: false; error: string };
 
-function invoke(query: string, parameters: Record<string, SqlValue>): SqlResult {
-  const result = spawnSync("pwsh", ["-NoProfile", "-NonInteractive", "-File", scriptPath], {
-    encoding: "utf8",
-    timeout: 120_000,
-    env: { ...process.env, E2E_SQL_QUERY: query, E2E_SQL_PARAMETERS: JSON.stringify(parameters) },
-  });
+function invoke(
+  query: string,
+  parameters: Record<string, SqlValue>,
+): SqlResult {
+  const result = spawnSync(
+    "pwsh",
+    ["-NoProfile", "-NonInteractive", "-File", scriptPath],
+    {
+      encoding: "utf8",
+      timeout: 120_000,
+      env: {
+        ...process.env,
+        E2E_SQL_QUERY: query,
+        E2E_SQL_PARAMETERS: JSON.stringify(parameters),
+      },
+    },
+  );
   if (result.error) {
-    return { ok: false, error: `pwsh could not be started: ${result.error.message}` };
+    return {
+      ok: false,
+      error: `pwsh could not be started: ${result.error.message}`,
+    };
   }
   if (result.status !== 0) {
-    return { ok: false, error: (result.stderr || result.stdout || `exit code ${result.status}`).trim() };
+    return {
+      ok: false,
+      error: (
+        result.stderr ||
+        result.stdout ||
+        `exit code ${result.status}`
+      ).trim(),
+    };
   }
 
   const output = result.stdout.trim();
-  return { ok: true, rows: output === "" ? [] : (JSON.parse(output) as Record<string, unknown>[]) };
+  return {
+    ok: true,
+    rows:
+      output === "" ? [] : (JSON.parse(output) as Record<string, unknown>[]),
+  };
 }
 
 let availability: string | null | undefined;
@@ -42,7 +68,10 @@ export function sqlUnavailableReason(): string | null {
   return availability;
 }
 
-export function runSql(query: string, parameters: Record<string, SqlValue> = {}): Record<string, unknown>[] {
+export function runSql(
+  query: string,
+  parameters: Record<string, SqlValue> = {},
+): Record<string, unknown>[] {
   const result = invoke(query, parameters);
   if (!result.ok) {
     throw new Error(`SQL failed: ${result.error}`);
@@ -53,7 +82,10 @@ export function runSql(query: string, parameters: Record<string, SqlValue> = {})
 // The contact unsubscribes from the recipient list: what Xperience stores when a recipient uses the
 // unsubscribe link, a subscription confirmation that is not approved and newer than all others
 // (the app writes local time and SQL Server may run in UTC, so "newer" is taken from the stored rows).
-export function unsubscribeFromRecipientList(email: string, recipientListId: number): void {
+export function unsubscribeFromRecipientList(
+  email: string,
+  recipientListId: number,
+): void {
   const rows = runSql(
     `DECLARE @contact int = (SELECT MIN(ContactID) FROM OM_Contact WHERE ContactEmail = @email);
      DECLARE @newest datetime2 = (SELECT MAX(EmailSubscriptionConfirmationDate) FROM EmailLibrary_EmailSubscriptionConfirmation
@@ -65,7 +97,10 @@ export function unsubscribeFromRecipientList(email: string, recipientListId: num
      SELECT @@ROWCOUNT AS inserted;`,
     { email, list: recipientListId },
   );
-  expectOne(rows, `unsubscribe ${email} from recipient list ${recipientListId}`);
+  expectOne(
+    rows,
+    `unsubscribe ${email} from recipient list ${recipientListId}`,
+  );
 }
 
 // The contact withdraws the consent: a revoked agreement newer than all others, as IConsentAgreementService.Revoke stores it.

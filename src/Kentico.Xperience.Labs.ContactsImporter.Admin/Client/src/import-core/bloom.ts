@@ -43,15 +43,20 @@ export class BloomFilter {
   private readonly bits: Uint8Array;
 
   constructor(options: BloomFilterOptions = {}) {
-    const items = Math.max(1, options.expectedItems ?? DEFAULT_BLOOM_EXPECTED_ITEMS);
+    const items = Math.max(
+      1,
+      options.expectedItems ?? DEFAULT_BLOOM_EXPECTED_ITEMS,
+    );
     const rate = options.falsePositiveRate ?? DEFAULT_BLOOM_FALSE_POSITIVE_RATE;
     if (!(rate > 0 && rate < 1)) {
-      throw new RangeError('falsePositiveRate must be between 0 and 1.');
+      throw new RangeError("falsePositiveRate must be between 0 and 1.");
     }
 
     const bits = Math.ceil((-items * Math.log(rate)) / (Math.LN2 * Math.LN2));
     if (bits >= 2 ** 32) {
-      throw new RangeError('Bloom filter too large; lower expectedItems or raise falsePositiveRate.');
+      throw new RangeError(
+        "Bloom filter too large; lower expectedItems or raise falsePositiveRate.",
+      );
     }
 
     this.size = Math.max(64, bits);

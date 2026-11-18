@@ -9,12 +9,25 @@ import {
   Spacing,
   Spinner,
   Stack,
-} from '@kentico/xperience-admin-components';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+} from "@kentico/xperience-admin-components";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
-import { createMappingState, isSameMapping, toConsentMapping, toFieldMapping, validateMapping } from '../mapping/mapping-state';
-import type { MappingState, SavedMapping } from '../mapping/mapping-state';
-import { Commands } from '../shared/commands';
+import {
+  createMappingState,
+  isSameMapping,
+  toConsentMapping,
+  toFieldMapping,
+  validateMapping,
+} from "../mapping/mapping-state";
+import type { MappingState, SavedMapping } from "../mapping/mapping-state";
+import { Commands } from "../shared/commands";
 import type {
   ImportConfigResponse,
   ImportJobResponse,
@@ -24,27 +37,37 @@ import type {
   SaveConfigRequest,
   SaveConfigResponse,
   StatusDto,
-} from '../shared/commands';
-import { useAdminNavigate, useExecuteCommand, useIsMounted } from '../shared/hooks';
-import { useLastBreadcrumbText } from '../shared/breadcrumbs';
-import { useText } from '../shared/i18n';
-import { ImporterRoot, TestIds, Text, testId } from '../shared/ui';
-import { ImportWorkerClient } from '../worker/client';
-import { createImportWorker } from '../worker/create-worker';
+} from "../shared/commands";
+import {
+  useAdminNavigate,
+  useExecuteCommand,
+  useIsMounted,
+} from "../shared/hooks";
+import { useLastBreadcrumbText } from "../shared/breadcrumbs";
+import { useText } from "../shared/i18n";
+import { ImporterRoot, TestIds, Text, testId } from "../shared/ui";
+import { ImportWorkerClient } from "../worker/client";
+import { createImportWorker } from "../worker/create-worker";
 
-import { CancelImport } from './CancelImport';
-import { FileStep, isSameFile } from './FileStep';
-import type { SelectedFile } from './FileStep';
-import { MapStep } from './MapStep';
-import { DEFAULT_SOURCE_SETTINGS, stepForState, stepViews, toJobView, toTargetFields } from './model';
-import type { JobView, Step } from './model';
-import { OptionsStep } from './OptionsStep';
-import { ResultsStep } from './ResultsStep';
-import { ReviewStep } from './ReviewStep';
-import { RunStep } from './RunStep';
-import { StepHeader } from './StepHeader';
-import { UploadBar } from './UploadBar';
-import { useUploadSession } from './useUploadSession';
+import { CancelImport } from "./CancelImport";
+import { FileStep, isSameFile } from "./FileStep";
+import type { SelectedFile } from "./FileStep";
+import { MapStep } from "./MapStep";
+import {
+  DEFAULT_SOURCE_SETTINGS,
+  stepForState,
+  stepViews,
+  toJobView,
+  toTargetFields,
+} from "./model";
+import type { JobView, Step } from "./model";
+import { OptionsStep } from "./OptionsStep";
+import { ResultsStep } from "./ResultsStep";
+import { ReviewStep } from "./ReviewStep";
+import { RunStep } from "./RunStep";
+import { StepHeader } from "./StepHeader";
+import { UploadBar } from "./UploadBar";
+import { useUploadSession } from "./useUploadSession";
 
 /** Client properties of `ImportPage` (UIPages/ImportPage.cs). */
 interface ImportProps {
@@ -56,29 +79,42 @@ interface ImportProps {
   readonly canConfirmConsent: boolean;
 }
 
-type LoadState = 'loading' | 'ready' | 'failed';
+type LoadState = "loading" | "ready" | "failed";
 
 /**
  * One import. Loads the configuration and the job (when it exists) and shows the step the job
  * is at (step = job state, PLAN §4), so an import opened again continues where it was.
  */
-export const ImportTemplate = ({ canImport, jobId, importsListPath, contactGroupsPath, canConfirmConsent }: ImportProps) => {
+export const ImportTemplate = ({
+  canImport,
+  jobId,
+  importsListPath,
+  contactGroupsPath,
+  canConfirmConsent,
+}: ImportProps) => {
   const { t } = useText();
   const navigate = useAdminNavigate();
-  const backToList = useCallback(() => navigate(importsListPath), [navigate, importsListPath]);
-  const openContactGroups = useCallback(() => navigate(contactGroupsPath), [navigate, contactGroupsPath]);
+  const backToList = useCallback(() => {
+    navigate(importsListPath);
+  }, [navigate, importsListPath]);
+  const openContactGroups = useCallback(() => {
+    navigate(contactGroupsPath);
+  }, [navigate, contactGroupsPath]);
   // Same as "New import" on the list: the browser picks the ID of the new import.
-  const startNewImport = useCallback(
-    () => navigate(`${importsListPath.replace(/\/+$/, '')}/${crypto.randomUUID()}`),
-    [navigate, importsListPath],
-  );
+  const startNewImport = useCallback(() => {
+    navigate(`${importsListPath.replace(/\/+$/, "")}/${crypto.randomUUID()}`);
+  }, [navigate, importsListPath]);
   // Another import (the one whose unfinished Run keeps this one from running), on the same page.
   const openImport = useCallback(
-    (otherJobId: string) => navigate(`${importsListPath.replace(/\/+$/, '')}/${encodeURIComponent(otherJobId)}`),
+    (otherJobId: string) => {
+      navigate(
+        `${importsListPath.replace(/\/+$/, "")}/${encodeURIComponent(otherJobId)}`,
+      );
+    },
     [navigate, importsListPath],
   );
 
-  if (!canImport || jobId === '') {
+  if (!canImport || jobId === "") {
     return (
       <ImporterRoot>
         <Box spacing={Spacing.XL}>
@@ -87,9 +123,17 @@ export const ImportTemplate = ({ canImport, jobId, importsListPath, contactGroup
               type={CalloutType.FriendlyWarning}
               placement={CalloutPlacementType.OnDesk}
               dataTestId={testId(TestIds.noPermission)}
-              actionButton={<Button label={t('contactsimporter.app.backtolist')} color={ButtonColor.Secondary} onClick={backToList} />}
+              actionButton={
+                <Button
+                  label={t("contactsimporter.app.backtolist")}
+                  color={ButtonColor.Secondary}
+                  onClick={backToList}
+                />
+              }
             >
-              {canImport ? t('contactsimporter.app.invalidjob') : t('contactsimporter.app.nopermission')}
+              {canImport
+                ? t("contactsimporter.app.invalidjob")
+                : t("contactsimporter.app.nopermission")}
             </Callout>
           </Stack>
         </Box>
@@ -122,14 +166,21 @@ interface ImportInnerProps {
   readonly onOpenImport: (jobId: string) => void;
 }
 
-const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, onStartNewImport, onOpenImport }: ImportInnerProps) => {
+const Import = ({
+  jobId,
+  canConfirmConsent,
+  onBackToList,
+  onOpenContactGroups,
+  onStartNewImport,
+  onOpenImport,
+}: ImportInnerProps) => {
   const { t } = useText();
   const execute = useExecuteCommand();
   const isMounted = useIsMounted();
   const workerRef = useRef<ImportWorkerClient | null>(null);
   const [worker, setWorker] = useState<ImportWorkerClient | null>(null);
 
-  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [loadState, setLoadState] = useState<LoadState>("loading");
   const [config, setConfig] = useState<ImportConfigResponse | null>(null);
   const [job, setJob] = useState<JobDto | null>(null);
   const [status, setStatus] = useState<StatusDto | null>(null);
@@ -139,9 +190,11 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
   const [epoch, setEpoch] = useState(0);
   const [reviewNotice, setReviewNotice] = useState<string | null>(null);
 
-  const [step, setStep] = useState<Step>('file');
-  const stepRef = useRef<Step>('file');
-  stepRef.current = step;
+  const [step, setStep] = useState<Step>("file");
+  const stepRef = useRef<Step>("file");
+  useLayoutEffect(() => {
+    stepRef.current = step;
+  });
   const [selected, setSelected] = useState<SelectedFile | null>(null);
   const [mapping, setMapping] = useState<MappingState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -152,6 +205,8 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
   useEffect(() => {
     const client = new ImportWorkerClient(createImportWorker());
     workerRef.current = client;
+    // The worker is an external resource owned by this effect; state hands it to the steps
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWorker(client);
 
     return () => {
@@ -161,7 +216,7 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
   }, []);
 
   const load = useCallback(async () => {
-    setLoadState('loading');
+    setLoadState("loading");
     const [loadedConfig, loadedJob] = await Promise.all([
       execute<ImportConfigResponse>(Commands.LoadConfig),
       execute<ImportJobResponse>(Commands.GetJob),
@@ -169,8 +224,12 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
     if (!isMounted()) {
       return;
     }
-    if (!loadedConfig || !loadedJob || (loadedJob.code !== 'ok' && loadedJob.code !== 'jobNotFound')) {
-      setLoadState('failed');
+    if (
+      !loadedConfig ||
+      !loadedJob ||
+      (loadedJob.code !== "ok" && loadedJob.code !== "jobNotFound")
+    ) {
+      setLoadState("failed");
 
       return;
     }
@@ -180,15 +239,21 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
     setStatus(loadedJob.status);
     setProgress(loadedJob.progress);
     setReports(loadedJob.reports);
-    setStep(loadedJob.status ? stepForState(loadedJob.status.state, loadedJob.progress?.phase) : 'file');
-    if (loadedJob.status?.state === 'Uploading') {
+    setStep(
+      loadedJob.status
+        ? stepForState(loadedJob.status.state, loadedJob.progress?.phase)
+        : "file",
+    );
+    if (loadedJob.status?.state === "Uploading") {
       // The browser cannot keep the file across a reload: it must be selected again first.
-      setStep('file');
+      setStep("file");
     }
-    setLoadState('ready');
+    setLoadState("ready");
   }, [execute, isMounted]);
 
   useEffect(() => {
+    // Fetches on mount; "loading" is already the initial state, the rest is set after the requests
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
@@ -210,20 +275,23 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
       return;
     }
     if (!next) {
-      setLoadState('failed');
+      setLoadState("failed");
 
       return;
     }
 
     applyJob(next);
-    const leftProcessing = stepRef.current === 'review' || stepRef.current === 'run';
-    if (next.status.state === 'Uploaded' && next.status.error) {
+    const leftProcessing =
+      stepRef.current === "review" || stepRef.current === "run";
+    if (next.status.state === "Uploaded" && next.status.error) {
       // The check or the import could not start with this configuration: the Options step says why.
-      setStep('options');
-    } else if (next.status.state === 'Uploaded' && leftProcessing) {
+      setStep("options");
+    } else if (next.status.state === "Uploaded" && leftProcessing) {
       // The job fell back to Uploaded (the check got too old to import from): check again.
-      setReviewNotice(stepRef.current === 'run' ? t('contactsimporter.review.expired') : null);
-      setStep('review');
+      setReviewNotice(
+        stepRef.current === "run" ? t("contactsimporter.review.expired") : null,
+      );
+      setStep("review");
     } else {
       setStep(stepForState(next.status.state, next.progress.phase));
     }
@@ -240,7 +308,11 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
       applyJob(next);
       setReviewNotice(null);
       const state = next.status.state;
-      setStep(state === 'Uploaded' || state === 'Analyzing' || state === 'Analyzed' ? 'review' : stepForState(state, next.progress.phase));
+      setStep(
+        state === "Uploaded" || state === "Analyzing" || state === "Analyzed"
+          ? "review"
+          : stepForState(state, next.progress.phase),
+      );
     },
     [applyJob],
   );
@@ -250,17 +322,31 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
       const next = toJobView(response);
       if (next) {
         applyJob(next);
-        setStep(stepForState(next.status.state, 'execute'));
+        setStep(stepForState(next.status.state, "execute"));
       }
     },
     [applyJob],
   );
 
   // Fields the import cannot write (binary, references, ...) are never offered or suggested.
-  const mappableFields = useMemo(() => (config ? config.fields.filter((field) => field.isSupported) : []), [config]);
-  const targetFields = useMemo(() => (config ? toTargetFields(mappableFields, config.limits) : []), [config, mappableFields]);
+  const mappableFields = useMemo(
+    () => (config ? config.fields.filter((field) => field.isSupported) : []),
+    [config],
+  );
+  const targetFields = useMemo(
+    () => (config ? toTargetFields(mappableFields, config.limits) : []),
+    [config, mappableFields],
+  );
   const saved = useMemo<SavedMapping | undefined>(
-    () => (job ? { keyField: job.keyField, mapping: job.mapping, dateFormat: job.dateFormat, consentMapping: job.consentMapping } : undefined),
+    () =>
+      job
+        ? {
+            keyField: job.keyField,
+            mapping: job.mapping,
+            dateFormat: job.dateFormat,
+            consentMapping: job.consentMapping,
+          }
+        : undefined,
     [job],
   );
 
@@ -281,13 +367,20 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
   /** The stored mapping fits the selected file, so the upload can continue without the Map step. */
   const canResumeUpload = useCallback(
     (file: SelectedFile): boolean => {
-      if (!job || !saved || status?.state !== 'Uploading' || !isSameFile(job, file.file, file.profiled.fingerprint)) {
+      if (
+        !job ||
+        !saved ||
+        status?.state !== "Uploading" ||
+        !isSameFile(job, file.file, file.profiled.fingerprint)
+      ) {
         return false;
       }
 
       const state = mappingFor(file);
 
-      return validateMapping(state, saved).isValid && isSameMapping(state, saved);
+      return (
+        validateMapping(state, saved).isValid && isSameMapping(state, saved)
+      );
     },
     [job, mappingFor, saved, status],
   );
@@ -298,7 +391,7 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
       setMapping(mappingFor(file));
       setSaveError(null);
       setServerErrors([]);
-      setStep('map');
+      setStep("map");
     },
     [mappingFor],
   );
@@ -306,7 +399,7 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
   const onStatus = useCallback(
     (next: StatusDto) => {
       setStatus(next);
-      if (next.state !== 'Uploading' && next.state !== 'Uploaded') {
+      if (next.state !== "Uploading" && next.state !== "Uploaded") {
         // Cancelled, or changed elsewhere: the later steps need the whole job.
         void reload();
       }
@@ -315,7 +408,13 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
   );
 
   // The upload runs above the steps: "Save and upload" goes on to Options while it runs (D50).
-  const upload = useUploadSession({ worker, execute, limits: config?.limits ?? null, targetFields, onStatus });
+  const upload = useUploadSession({
+    worker,
+    execute,
+    limits: config?.limits ?? null,
+    targetFields,
+    onStatus,
+  });
   const { begin: beginUpload, stop: stopUpload } = upload;
 
   /** Same file selected again after a reload: the upload continues in the bar with the stored mapping. */
@@ -327,7 +426,7 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
 
       setSelected(file);
       beginUpload({ job, status, file: file.file, settings: file.settings });
-      setStep('options');
+      setStep("options");
     },
     [beginUpload, job, status],
   );
@@ -340,65 +439,88 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
     setSaving(true);
     setSaveError(null);
     setServerErrors([]);
-    const response = await execute<SaveConfigResponse, SaveConfigRequest>(Commands.SaveConfig, {
-      file: { name: selected.file.name, size: selected.file.size, fingerprint: selected.profiled.fingerprint },
-      keyField: mapping.keyField,
-      mapping: toFieldMapping(mapping),
-      dateFormat: mapping.dateFormat,
-      consentMapping: toConsentMapping(mapping),
-    });
+    const response = await execute<SaveConfigResponse, SaveConfigRequest>(
+      Commands.SaveConfig,
+      {
+        file: {
+          name: selected.file.name,
+          size: selected.file.size,
+          fingerprint: selected.profiled.fingerprint,
+        },
+        keyField: mapping.keyField,
+        mapping: toFieldMapping(mapping),
+        dateFormat: mapping.dateFormat,
+        consentMapping: toConsentMapping(mapping),
+      },
+    );
     if (!isMounted()) {
       return;
     }
 
     setSaving(false);
     if (!response) {
-      setSaveError(t('contactsimporter.map.savefailed'));
+      setSaveError(t("contactsimporter.map.savefailed"));
 
       return;
     }
-    if (response.code !== 'ok' || !response.job || !response.status) {
-      setSaveError(response.message ?? t('contactsimporter.map.savefailed'));
-      setServerErrors(response.errors ?? []);
+    if (response.code !== "ok" || !response.job || !response.status) {
+      setSaveError(response.message ?? t("contactsimporter.map.savefailed"));
+      setServerErrors(response.errors);
 
       return;
     }
 
     setJob(response.job);
     setStatus(response.status);
-    if (response.status.state === 'Uploading') {
-      beginUpload({ job: response.job, status: response.status, file: selected.file, settings: selected.settings });
+    if (response.status.state === "Uploading") {
+      beginUpload({
+        job: response.job,
+        status: response.status,
+        file: selected.file,
+        settings: selected.settings,
+      });
     }
     setStep(stepForState(response.status.state));
   }, [beginUpload, execute, isMounted, mapping, selected, t]);
 
   // Last breadcrumb: "Import (New)" until the first save, then "Import <file name>" (unchanged while loading).
   useLastBreadcrumbText(
-    loadState !== 'ready'
+    loadState !== "ready"
       ? null
-      : job && status && status.state !== 'Configuring' ? t('contactsimporter.breadcrumb.file', { fileName: job.file.name }) : t('contactsimporter.breadcrumb.new'),
+      : job && status && status.state !== "Configuring"
+        ? t("contactsimporter.breadcrumb.file", { fileName: job.file.name })
+        : t("contactsimporter.breadcrumb.new"),
   );
 
   const view = useMemo<JobView | null>(
-    () => (job && status && progress && reports ? { job, status, progress, reports } : null),
+    () =>
+      job && status && progress && reports
+        ? { job, status, progress, reports }
+        : null,
     [job, status, progress, reports],
   );
 
-  if (loadState === 'loading' || !worker) {
+  if (loadState === "loading" || !worker) {
     return (
       <Box spacing={Spacing.XL}>
         <Spinner />
-        <Text>{t('contactsimporter.app.loading')}</Text>
+        <Text>{t("contactsimporter.app.loading")}</Text>
       </Box>
     );
   }
-  if (loadState === 'failed' || !config) {
+  if (loadState === "failed" || !config) {
     return (
       <Box spacing={Spacing.XL}>
         <Stack spacing={Spacing.L}>
-          <NotificationBarAlert>{t('contactsimporter.app.loadfailed')}</NotificationBarAlert>
+          <NotificationBarAlert>
+            {t("contactsimporter.app.loadfailed")}
+          </NotificationBarAlert>
           <div>
-            <Button label={t('contactsimporter.app.retry')} color={ButtonColor.Primary} onClick={() => void load()} />
+            <Button
+              label={t("contactsimporter.app.retry")}
+              color={ButtonColor.Primary}
+              onClick={() => void load()}
+            />
           </div>
         </Stack>
       </Box>
@@ -406,11 +528,15 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
   }
 
   const state = status?.state;
-  const waitsForFile = state === 'Uploading' || state === 'Configuring';
+  const waitsForFile = state === "Uploading" || state === "Configuring";
   // The upload has started: File, Map and Upload are locked; a different file or mapping is a new import (D50).
-  const uploadStarted = state !== undefined && state !== 'Configuring';
-  const uploadComplete = uploadStarted && state !== 'Uploading';
-  const steps = stepViews({ current: step, jobState: state ?? null, phase: progress?.phase });
+  const uploadStarted = state !== undefined && state !== "Configuring";
+  const uploadComplete = uploadStarted && state !== "Uploading";
+  const steps = stepViews({
+    current: step,
+    jobState: state ?? null,
+    phase: progress?.phase,
+  });
   // Every step before Run: "Cancel import" deletes the whole import (D51) and returns to the list. Once the
   // upload is complete, "Start a new import" opens a new one and keeps this one.
   const beforeRunActions = (onBeforeCancel?: () => void) => {
@@ -425,8 +551,12 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
         key="cancel"
         execute={execute}
         deleteJobId={jobId}
-        message={uploadStarted ? t('contactsimporter.upload.cancelmessage') : t('contactsimporter.file.cancelmessage')}
-        keepLabel={t('contactsimporter.upload.cancelkeep')}
+        message={
+          uploadStarted
+            ? t("contactsimporter.upload.cancelmessage")
+            : t("contactsimporter.file.cancelmessage")
+        }
+        keepLabel={t("contactsimporter.upload.cancelkeep")}
         onBeforeCancel={beforeCancel}
         onCancelled={onBackToList}
       />,
@@ -434,7 +564,7 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
         ? [
             <Button
               key="startnew"
-              label={t('contactsimporter.startnew.button')}
+              label={t("contactsimporter.startnew.button")}
               color={ButtonColor.Secondary}
               dataTestId={testId(TestIds.startNewImport)}
               onClick={onStartNewImport}
@@ -450,11 +580,20 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
         <StepHeader steps={steps} onSelect={setStep} />
 
         {/* After Options: no summary of a finished upload (it shows on Options only); problems still show. */}
-        {job && status && step !== 'file' && step !== 'map' && step !== 'options' && (
-          <UploadBar upload={upload} job={job} status={status} showSummary={false} />
-        )}
+        {job &&
+          status &&
+          step !== "file" &&
+          step !== "map" &&
+          step !== "options" && (
+            <UploadBar
+              upload={upload}
+              job={job}
+              status={status}
+              showSummary={false}
+            />
+          )}
 
-        {step === 'file' && (
+        {step === "file" && (
           <FileStep
             worker={worker}
             limits={config.limits}
@@ -471,7 +610,7 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
           />
         )}
 
-        {step === 'map' && selected && mapping && (
+        {step === "map" && selected && mapping && (
           <MapStep
             sample={selected.profiled.profile}
             fields={mappableFields}
@@ -479,34 +618,47 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
             mapping={mapping}
             saved={saved}
             hasUploadedData={(status?.chunks.length ?? 0) > 0}
-            fileChanged={job !== null && !isSameFile(job, selected.file, selected.profiled.fingerprint)}
+            fileChanged={
+              job !== null &&
+              !isSameFile(job, selected.file, selected.profiled.fingerprint)
+            }
             saving={saving}
             error={saveError}
             serverErrors={serverErrors}
             onChange={setMapping}
-            onBack={() => setStep('file')}
+            onBack={() => {
+              setStep("file");
+            }}
             onSave={() => void save()}
             actions={beforeRunActions()}
           />
         )}
 
         {/* Options: the upload bar on the right, in view while the user scrolls (it runs on during Options). */}
-        {step === 'options' && job && status && (
+        {step === "options" && job && status && (
           <OptionsStep
-              key={epoch}
-              execute={execute}
-              job={job}
-              status={status}
-              fields={config.fields}
-              recipientLists={config.recipientLists ?? []}
-              consents={config.consents ?? []}
-              actions={beforeRunActions()}
-              aside={<UploadBar upload={upload} job={job} status={status} showSummary={true} side={true} />}
-              onSaved={onOptionsSaved}
-            />
+            key={epoch}
+            execute={execute}
+            job={job}
+            status={status}
+            fields={config.fields}
+            recipientLists={config.recipientLists}
+            consents={config.consents}
+            actions={beforeRunActions()}
+            aside={
+              <UploadBar
+                upload={upload}
+                job={job}
+                status={status}
+                showSummary={true}
+                side={true}
+              />
+            }
+            onSaved={onOptionsSaved}
+          />
         )}
 
-        {step === 'review' && view && (
+        {step === "review" && view && (
           <ReviewStep
             key={epoch}
             execute={execute}
@@ -514,7 +666,9 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
             fields={config.fields}
             canConfirmConsent={canConfirmConsent}
             notice={reviewNotice}
-            onBackToOptions={() => setStep('options')}
+            onBackToOptions={() => {
+              setStep("options");
+            }}
             renderActions={beforeRunActions}
             onReload={reloadJob}
             onConfirmed={onConfirmed}
@@ -522,9 +676,17 @@ const Import = ({ jobId, canConfirmConsent, onBackToList, onOpenContactGroups, o
           />
         )}
 
-        {step === 'run' && view && <RunStep key={epoch} execute={execute} view={view} onReload={reloadJob} onOpenImport={onOpenImport} />}
+        {step === "run" && view && (
+          <RunStep
+            key={epoch}
+            execute={execute}
+            view={view}
+            onReload={reloadJob}
+            onOpenImport={onOpenImport}
+          />
+        )}
 
-        {step === 'results' && view && (
+        {step === "results" && view && (
           <ResultsStep
             execute={execute}
             view={view}

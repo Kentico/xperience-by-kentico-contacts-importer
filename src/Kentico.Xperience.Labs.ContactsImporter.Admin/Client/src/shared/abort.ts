@@ -16,16 +16,18 @@ export async function callWithLinkedAbort<T>(
   }
 
   const linked = new AbortController();
-  const onAbort = () => linked.abort();
+  const onAbort = () => {
+    linked.abort();
+  };
   if (signal.aborted) {
     linked.abort();
   } else {
-    signal.addEventListener('abort', onAbort, { once: true });
+    signal.addEventListener("abort", onAbort, { once: true });
   }
 
   try {
     return await call(linked);
   } finally {
-    signal.removeEventListener('abort', onAbort);
+    signal.removeEventListener("abort", onAbort);
   }
 }

@@ -1,6 +1,10 @@
-import type { GetReportRequest, GetReportResponse, ProcessPhase } from '../shared/commands';
-import { withRetry } from '../upload/retry';
-import type { RetryOptions } from '../upload/retry';
+import type {
+  GetReportRequest,
+  GetReportResponse,
+  ProcessPhase,
+} from "../shared/commands";
+import { withRetry } from "../upload/retry";
+import type { RetryOptions } from "../upload/retry";
 
 /**
  * Downloads a row report with the paged `GET_REPORT` page command and joins the pages into one
@@ -13,12 +17,18 @@ import type { RetryOptions } from '../upload/retry';
 export interface ReportDownloadOptions {
   phase: ProcessPhase;
   /** Sends one `GET_REPORT`; `undefined` or a rejection is a failed request and is retried. */
-  call: (request: GetReportRequest, signal?: AbortSignal) => Promise<GetReportResponse | undefined>;
+  call: (
+    request: GetReportRequest,
+    signal?: AbortSignal,
+  ) => Promise<GetReportResponse | undefined>;
   signal?: AbortSignal;
   /** Called after every page with the rows received so far. */
   onProgress?: (rows: number, pages: number) => void;
   /** Retry of failed requests (defaults of `withRetry`). */
-  retry?: Pick<RetryOptions, 'maxAttempts' | 'baseDelayMs' | 'maxDelayMs' | 'sleep' | 'random'>;
+  retry?: Pick<
+    RetryOptions,
+    "maxAttempts" | "baseDelayMs" | "maxDelayMs" | "sleep" | "random"
+  >;
 }
 
 export interface ReportFile {
@@ -33,22 +43,24 @@ export interface ReportFile {
 export class ReportDownloadError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'ReportDownloadError';
+    this.name = "ReportDownloadError";
   }
 }
 
 /** Pages a report can have before the download gives up (2 MB of text each: far beyond any import). */
 const MAX_PAGES = 100_000;
 
-export async function downloadReport(options: ReportDownloadOptions): Promise<ReportFile> {
+export async function downloadReport(
+  options: ReportDownloadOptions,
+): Promise<ReportFile> {
   const { phase, call, signal } = options;
   const encoder = new TextEncoder();
-  const output = new CompressionStream('gzip');
+  const output = new CompressionStream("gzip");
   const writer = output.writable.getWriter();
   const collected = collect(output.readable);
 
   let request: GetReportRequest = { phase, part: 0, line: 0 };
-  let fileName = '';
+  let fileName = "";
   let rows = 0;
   let pages = 0;
 
@@ -56,15 +68,18 @@ export async function downloadReport(options: ReportDownloadOptions): Promise<Re
     for (;;) {
       signal?.throwIfAborted();
       const current = request;
-      const page = await withRetry(() => call(current, signal), { ...options.retry, signal });
-      if (page.code !== 'ok' || page.data === null) {
-        throw new ReportDownloadError(page.message ?? '');
+      const page = await withRetry(() => call(current, signal), {
+        ...options.retry,
+        signal,
+      });
+      if (page.code !== "ok" || page.data === null) {
+        throw new ReportDownloadError(page.message ?? "");
       }
 
       if (pages === 0) {
         fileName = page.fileName ?? `contact-import-${phase}-report.csv.gz`;
         // The BOM makes spreadsheets read the unpacked file as UTF-8.
-        await writer.write(encoder.encode(`﻿${page.header ?? ''}\n`));
+        await writer.write(encoder.encode(`\uFEFF${page.header ?? ""}\n`));
       }
 
       await writer.write(await gunzip(fromBase64(page.data)));
@@ -76,9 +91,11 @@ export async function downloadReport(options: ReportDownloadOptions): Promise<Re
         break;
       }
 
-      const advanced = page.nextPart > current.part || (page.nextPart === current.part && page.nextLine > current.line);
+      const advanced =
+        page.nextPart > current.part ||
+        (page.nextPart === current.part && page.nextLine > current.line);
       if (!advanced || pages >= MAX_PAGES) {
-        throw new ReportDownloadError('');
+        throw new ReportDownloadError("");
       }
 
       request = { phase, part: page.nextPart, line: page.nextLine };
@@ -91,23 +108,32 @@ export async function downloadReport(options: ReportDownloadOptions): Promise<Re
     throw error;
   }
 
-  return { fileName, blob: new Blob(await collected, { type: 'application/gzip' }), rows, pages };
+  return {
+    fileName,
+    blob: new Blob(await collected, { type: "application/gzip" }),
+    rows,
+    pages,
+  };
 }
 
 /** Saves a downloaded file from the browser. */
 export function saveBlob(fileName: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
+  const link = document.createElement("a");
   link.href = url;
   link.download = fileName;
-  link.style.display = 'none';
+  link.style.display = "none";
   document.body.appendChild(link);
   link.click();
   link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
 }
 
-async function collect(readable: ReadableStream<Uint8Array>): Promise<Uint8Array<ArrayBuffer>[]> {
+async function collect(
+  readable: ReadableStream<Uint8Array>,
+): Promise<Uint8Array<ArrayBuffer>[]> {
   const parts: Uint8Array<ArrayBuffer>[] = [];
   const reader = readable.getReader();
   for (;;) {
@@ -120,8 +146,12 @@ async function collect(readable: ReadableStream<Uint8Array>): Promise<Uint8Array
   }
 }
 
-async function gunzip(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+async function gunzip(
+  bytes: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const stream = new Blob([bytes])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
 
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }

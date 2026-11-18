@@ -19,7 +19,10 @@ import { toPalettePng } from "./png-palette";
 // only (Analyzed); a paused import. The paused import blocks other runs until it is cancelled or deleted.
 
 const repoRoot = path.resolve(__dirname, "../../..");
-const generatorProject = path.join(repoRoot, "tests/Kentico.Xperience.Labs.ContactsImporter.Admin.DataGenerator");
+const generatorProject = path.join(
+  repoRoot,
+  "tests/Kentico.Xperience.Labs.ContactsImporter.Admin.DataGenerator",
+);
 const screenshotsPath = path.join(repoRoot, "images/screenshots");
 
 interface GeneratedFile {
@@ -29,16 +32,50 @@ interface GeneratedFile {
 
 // Number of the first generated email (DataGenerator --key-offset). Use a range without contacts in the
 // database (SCREENSHOTS_KEY_BASE), so the first import only creates contacts.
-const keyBase = Number.parseInt(process.env.SCREENSHOTS_KEY_BASE ?? "50000000", 10);
+const keyBase = Number.parseInt(
+  process.env.SCREENSHOTS_KEY_BASE ?? "50000000",
+  10,
+);
 const keys = (offset: number) => ["--key-offset", String(keyBase + offset)];
 
 const files = {
-  first: { name: "spring-newsletter-signups.csv", args: ["--rows", "60000", ...keys(0), "--seed", "1"] },
+  first: {
+    name: "spring-newsletter-signups.csv",
+    args: ["--rows", "60000", ...keys(0), "--seed", "1"],
+  },
   // Overlaps the first file by 40,000 emails; 8 % empty cells, cleared on update
-  update: { name: "crm-export-2026-11.csv", args: ["--rows", "150000", ...keys(20_000), "--seed", "2", "--empty-values", "8"] },
-  cancelled: { name: "trade-show-leads.csv", args: ["--rows", "120000", ...keys(300_000), "--seed", "3"] },
-  analyzed: { name: "webinar-attendees.xlsx", args: ["--rows", "8000", ...keys(500_000), "--seed", "4", "--format", "xlsx"] },
-  paused: { name: "partner-referrals.csv", args: ["--rows", "60000", ...keys(600_000), "--seed", "5"] },
+  update: {
+    name: "crm-export-2026-11.csv",
+    args: [
+      "--rows",
+      "150000",
+      ...keys(20_000),
+      "--seed",
+      "2",
+      "--empty-values",
+      "8",
+    ],
+  },
+  cancelled: {
+    name: "trade-show-leads.csv",
+    args: ["--rows", "120000", ...keys(300_000), "--seed", "3"],
+  },
+  analyzed: {
+    name: "webinar-attendees.xlsx",
+    args: [
+      "--rows",
+      "8000",
+      ...keys(500_000),
+      "--seed",
+      "4",
+      "--format",
+      "xlsx",
+    ],
+  },
+  paused: {
+    name: "partner-referrals.csv",
+    args: ["--rows", "60000", ...keys(600_000), "--seed", "5"],
+  },
 } satisfies Record<string, GeneratedFile>;
 
 function rowsOf(file: GeneratedFile): number {
@@ -54,9 +91,14 @@ const bannerHeight = 24;
 async function scrollContentToTop(page: Page): Promise<number> {
   return page.evaluate(() => {
     let extra = 0;
-    for (const element of Array.from(document.querySelectorAll<HTMLElement>("*"))) {
+    for (const element of Array.from(
+      document.querySelectorAll<HTMLElement>("*"),
+    )) {
       const overflowY = getComputedStyle(element).overflowY;
-      if ((overflowY === "auto" || overflowY === "scroll") && element.scrollHeight > element.clientHeight + 1) {
+      if (
+        (overflowY === "auto" || overflowY === "scroll") &&
+        element.scrollHeight > element.clientHeight + 1
+      ) {
         element.scrollTop = 0;
         extra = Math.max(extra, element.scrollHeight - element.clientHeight);
       }
@@ -77,35 +119,66 @@ interface ShotOptions {
 }
 
 // Saves a screenshot as an indexed PNG (images/screenshots/<name>.png)
-async function shot(page: Page, name: string, options: ShotOptions = {}): Promise<void> {
+async function shot(
+  page: Page,
+  name: string,
+  options: ShotOptions = {},
+): Promise<void> {
   const width = options.width ?? viewport.width;
   await page.mouse.move(0, 0);
   const extra = await scrollContentToTop(page);
-  const height = options.fullHeight ? Math.min(viewport.height + extra, options.fullHeight) : viewport.height;
+  const height = options.fullHeight
+    ? Math.min(viewport.height + extra, options.fullHeight)
+    : viewport.height;
   const resized = width !== viewport.width || height !== viewport.height;
   if (resized) {
     await page.setViewportSize({ width, height });
   }
-  // Let counts, icons, layout and transitions settle
+  // Let counts, icons, layout and transitions settle; no single event marks that
+  // eslint-disable-next-line playwright/no-wait-for-timeout
   await page.waitForTimeout(800);
   await scrollContentToTop(page);
 
-  let clip = { x: 0, y: bannerHeight, width, height: Math.min(height, options.cropHeight ?? height) - bannerHeight };
+  let clip = {
+    x: 0,
+    y: bannerHeight,
+    width,
+    height: Math.min(height, options.cropHeight ?? height) - bannerHeight,
+  };
   if (options.element) {
-    const box = (await options.element.boundingBox())!;
+    const box = await options.element.boundingBox();
+    if (!box) {
+      throw new Error("The element to capture is not visible.");
+    }
     const margin = 16;
     const y = Math.max(bannerHeight, box.y - margin);
-    clip = { x: box.x - margin, y, width: box.width + 2 * margin, height: Math.min(box.height + 2 * margin, options.cropHeight ?? height, height - y) };
+    clip = {
+      x: box.x - margin,
+      y,
+      width: box.width + 2 * margin,
+      height: Math.min(
+        box.height + 2 * margin,
+        options.cropHeight ?? height,
+        height - y,
+      ),
+    };
   }
 
   const png = await page.screenshot({ animations: "disabled", clip });
-  await fs.writeFile(path.join(screenshotsPath, `${name}.png`), toPalettePng(png));
+  await fs.writeFile(
+    path.join(screenshotsPath, `${name}.png`),
+    toPalettePng(png),
+  );
   if (resized) {
     await page.setViewportSize(viewport);
   }
 }
 
-async function uploadToOptions(importPage: ImportPage, filePath: string, rows: number): Promise<void> {
+async function uploadToOptions(
+  importPage: ImportPage,
+  filePath: string,
+  rows: number,
+): Promise<void> {
   await importPage.selectFile(filePath);
   await importPage.continueToMapping();
   await importPage.expectKeyField("Email");
@@ -114,8 +187,16 @@ async function uploadToOptions(importPage: ImportPage, filePath: string, rows: n
   await importPage.continueToOptions();
 }
 
-async function waitForRowsProcessed(importPage: ImportPage, minimum: number): Promise<void> {
-  await expect.poll(() => importPage.rowsProcessed(), { timeout: 300_000, intervals: [250] }).toBeGreaterThanOrEqual(minimum);
+async function waitForRowsProcessed(
+  importPage: ImportPage,
+  minimum: number,
+): Promise<void> {
+  await expect
+    .poll(() => importPage.rowsProcessed(), {
+      timeout: 300_000,
+      intervals: [250],
+    })
+    .toBeGreaterThanOrEqual(minimum);
 }
 
 test("capture README screenshots", async ({ page }, testInfo) => {
@@ -127,7 +208,18 @@ test("capture README screenshots", async ({ page }, testInfo) => {
   for (const file of Object.values(files)) {
     execFileSync(
       "dotnet",
-      ["run", "-c", "Release", "--project", generatorProject, "--", ...file.args, "--quiet", "--out", pathOf(file)],
+      [
+        "run",
+        "-c",
+        "Release",
+        "--project",
+        generatorProject,
+        "--",
+        ...file.args,
+        "--quiet",
+        "--out",
+        pathOf(file),
+      ],
       { stdio: "inherit" },
     );
   }
@@ -162,13 +254,25 @@ test("capture README screenshots", async ({ page }, testInfo) => {
 
   await importPage.saveOptions();
   await importPage.expectAnalyzed(600_000);
-  await expect(page.getByTestId("contacts-importer-review-samples").locator('[data-sample-kind="cleared"]').first()).toBeVisible();
+  await expect(
+    page
+      .getByTestId("contacts-importer-review-samples")
+      .locator('[data-sample-kind="cleared"]')
+      .first(),
+  ).toBeVisible();
   await shot(page, "review");
-  await shot(page, "review-examples", { fullHeight: 4000, cropHeight: 1000, element: page.getByTestId("contacts-importer-review-samples") });
+  await shot(page, "review-examples", {
+    fullHeight: 4000,
+    cropHeight: 1000,
+    element: page.getByTestId("contacts-importer-review-samples"),
+  });
 
   await importPage.runImport();
   await importPage.expectStep("run");
-  await waitForRowsProcessed(importPage, Math.round(rowsOf(files.update) * 0.4));
+  await waitForRowsProcessed(
+    importPage,
+    Math.round(rowsOf(files.update) * 0.4),
+  );
   await shot(page, "run", { cropHeight: 660 });
 
   await importPage.expectResults("Completed", 900_000);
@@ -177,18 +281,29 @@ test("capture README screenshots", async ({ page }, testInfo) => {
   // 3. Cancelled import
   await importsList.goto();
   await importsList.startNewImport();
-  await uploadToOptions(importPage, pathOf(files.cancelled), rowsOf(files.cancelled));
+  await uploadToOptions(
+    importPage,
+    pathOf(files.cancelled),
+    rowsOf(files.cancelled),
+  );
   await importPage.saveOptions();
   await importPage.expectAnalyzed(600_000);
   await importPage.runImport();
-  await waitForRowsProcessed(importPage, Math.round(rowsOf(files.cancelled) * 0.3));
+  await waitForRowsProcessed(
+    importPage,
+    Math.round(rowsOf(files.cancelled) * 0.3),
+  );
   await importPage.cancelRunningImport();
   await importPage.expectResults("Cancelled");
 
   // 4. Check only: stays Analyzed
   await importsList.goto();
   await importsList.startNewImport();
-  await uploadToOptions(importPage, pathOf(files.analyzed), rowsOf(files.analyzed));
+  await uploadToOptions(
+    importPage,
+    pathOf(files.analyzed),
+    rowsOf(files.analyzed),
+  );
   await importPage.saveOptions();
   await importPage.expectAnalyzed(600_000);
 
@@ -208,7 +323,10 @@ test("capture README screenshots", async ({ page }, testInfo) => {
   await importsList.goto();
   await expect(async () => {
     await importsList.goto();
-    await expect(importsList.cell(files.paused.name, "state")).toHaveText("Paused", { timeout: 1_000 });
+    await expect(importsList.cell(files.paused.name, "state")).toHaveText(
+      "Paused",
+      { timeout: 1_000 },
+    );
   }).toPass({ timeout: 300_000, intervals: [5_000] });
   // Wider view: at 1440 px the last columns of the table are cut off
   await shot(page, "imports-list", { width: 1680, cropHeight: 640 });

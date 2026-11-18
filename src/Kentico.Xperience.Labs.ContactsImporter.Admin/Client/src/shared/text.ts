@@ -1,4 +1,4 @@
-import type { TextParams } from './format';
+import type { TextParams } from "./format";
 
 /**
  * A text to show, as a resource key and its placeholder values. Code without React (options,
