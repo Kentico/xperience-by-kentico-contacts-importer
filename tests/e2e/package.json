@@ -11,6 +11,7 @@
     "test:ui": "playwright test --ui",
     "install:browsers": "playwright install chromium",
     "report": "playwright show-report",
+    "screenshots": "playwright test -c screenshots.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "engines": {

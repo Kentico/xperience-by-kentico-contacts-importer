@@ -6,6 +6,36 @@
 
 Lets marketers import contacts into Xperience by Kentico from CSV, TSV, NDJSON, JSON and Excel (`.xlsx`) files, also gzipped (`.gz`) or zipped (`.zip`), with deduplication, dry runs, recipient list assignment and consent agreements. The file is read in the browser; only mapped columns are uploaded.
 
+### Screenshots
+
+Recent imports and their state:
+
+![Imports list](./images/screenshots/imports-list.png)
+
+Map: choose the contact field for each file column and the field that matches existing contacts.
+
+![Map step](./images/screenshots/map.png)
+
+Options: choose what the import does while the file uploads (upload details on the right).
+
+![Options step](./images/screenshots/options.png)
+
+Review: the check (dry run) shows what the import will change before anything is written.
+
+![Review step](./images/screenshots/review.png)
+
+Review also shows examples of changes, here values that an empty cell in the file will clear.
+
+![Examples of changes in the Review step](./images/screenshots/review-examples.png)
+
+Run: progress and counts while the import runs. It can be paused, continued or cancelled.
+
+![Run step](./images/screenshots/run.png)
+
+Results: imported counts next to the counts the check expected.
+
+![Results step](./images/screenshots/results.png)
+
 ### Limitations
 
 Some behavior is intentional, for speed on large files. Details: [Limitations and documented choices](./docs/Usage-Guide.md#limitations-and-documented-choices).
@@ -18,6 +48,7 @@ Some behavior is intentional, for speed on large files. Details: [Limitations an
 - Only one import run at a time: a confirmed run that has not ended (also when paused) blocks the runs of other imports. Checks (dry runs) are not blocked.
 - Contacts added to a recipient list get no double opt-in email. Bounce records are never changed.
 - Web farm and SaaS need shared storage for the import files; see [Setup](./docs/Setup.md#storage).
+- The Import contacts permission shows existing contact data (which match values exist, current field values in examples), without the Contacts application's permissions. See [Permissions](./docs/Setup.md#permissions).
 - File size is limited (5 GB by default); request size limits and timeouts of the hosting apply.
 
 ## Requirements
