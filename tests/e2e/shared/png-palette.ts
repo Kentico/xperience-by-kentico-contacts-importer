@@ -2,7 +2,7 @@ import { deflateSync, inflateSync } from "node:zlib";
 
 // Shrinks a Playwright PNG screenshot (8-bit RGB or RGBA, not interlaced) to an indexed PNG with at most
 // 256 colors. The administration's background gradient makes true-color screenshots large; with a
-// palette they are a fraction of the size. Used only by capture-readme-screenshots.ts.
+// palette they are a fraction of the size. Used by shared/screenshot.ts.
 
 const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 

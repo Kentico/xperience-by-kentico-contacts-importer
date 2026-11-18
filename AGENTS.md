@@ -23,6 +23,7 @@ Skills in `.claude/skills/`:
 
 - Before a commit, format with: `dotnet format --no-restore`
 - TypeScript in `tests/e2e` and the admin client (`src/*/Client`): before a commit that touches it, run there `npm run format`, `npm run lint` (`npm run lint:fix` fixes what it can), and `npm run typecheck`; CI fails on any of them. ESLint rules: the folder's `eslint.config.mjs`; Prettier: root `.prettierrc.json`, Markdown excluded. Fix findings; disable a rule inline only with a comment saying why.
+- README screenshots in `images/screenshots` come from `npm run screenshots` in `tests/e2e`, never by hand. When a change alters UI they show, or adds UI worth showing, update or add a capture in `tests/e2e/screenshots`, run it, and look at the images: they double as a visual check. Local only; not run in CI.
 - `global.json` pins the exact .NET SDK (`rollForward: disable`): the lock files record SDK-implicit packages, so a different SDK fails `dotnet restore --locked-mode`. To change the SDK, edit `global.json`, run `dotnet restore --force-evaluate`, and commit both.
 - Releases: `VersionPrefix` / `VersionSuffix` in `Directory.Build.props`, then the publish pipeline; see "Releasing" in `docs/Contributing-Setup.md`.
 - `examples/` is excluded from formatting by `examples/.editorconfig` (`generated_code = true`)

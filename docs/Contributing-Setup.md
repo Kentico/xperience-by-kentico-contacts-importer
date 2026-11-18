@@ -96,7 +96,7 @@ To generate large import files (CSV, TSV, NDJSON, JSON, XLSX; gzipped or zipped)
 
 1. Once ready, create a PR on GitHub. The PR will need to have all comments resolved and all tests passing before it will be merged.
    - The PR should have a helpful description of the scope of changes being contributed.
-   - Include screenshots or video to reflect UX or UI updates
+   - Include screenshots or video to reflect UX or UI updates. When the UI shown in the README changes, update its screenshots with `npm run screenshots` in `tests/e2e` (see [README screenshots](../tests/e2e/README.md#readme-screenshots))
    - Indicate if new settings need to be applied when the changes are merged - locally or in other environments
    - Use the `create-pull-request` agent skill (`.claude/skills/create-pull-request/SKILL.md`, works with
      both Copilot and Claude) to push the branch and create or update the PR, with `.github/PULL_REQUEST_TEMPLATE.md`

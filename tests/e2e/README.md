@@ -45,7 +45,14 @@ npm run report      # open the last HTML report
 
 Before a commit: `npm run format`, `npm run lint`, `npm run typecheck`.
 
-`npm run screenshots` (optional, not part of `npm test`) captures the README screenshots into `images/screenshots` with `scripts/capture-readme-screenshots.ts` (config `screenshots.config.ts`). It needs a running DancingGoat (`DANCING_GOAT_BASE_URL`) and imports about 400,000 generated contacts: use a scratch database and an empty importer `StoragePath`. Details in the script header.
+## README screenshots
+
+`npm run screenshots` saves the README's screenshots to `images/screenshots/<name>.png` (`screenshots.config.ts`). Run it before a PR that changes UI, review the images, and commit them; it is not part of `npm test` or CI.
+
+- Each `screenshots/*.screenshots.ts` drives the UI (with the tests' page objects) to the state to show, waits for it with `expect`, and calls `capture(page, name, options)` from `shared/screenshot.ts`. Admin captures start signed in.
+- `capture` uses a fixed 1440×900 light view with reduced motion. In the administration it cuts off the license banner and handles its inner scroll area. Options: `width` (a wider view, e.g. for a table), `fullHeight` (full page, up to a height), `cropHeight`, `element` (one element). Images are saved as indexed PNGs (`shared/png-palette.ts`) to keep them small.
+- `contacts-importer.screenshots.ts` imports about 400,000 generated contacts (DataGenerator) and takes several minutes: run it against a scratch database with an empty importer `StoragePath`, so the imports list shows only its imports. It starts DancingGoat unless it is already running. Details in its header.
+- Link the images from `README.md` or `docs/` with relative paths: `![Imports list](./images/screenshots/imports-list.png)`.
 
 ## CI
 

@@ -1,13 +1,12 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { expect, test, type Locator, type Page } from "@playwright/test";
-import { signInToAdmin } from "../admin/auth";
+import { expect, test } from "@playwright/test";
 import { ImportPage, ImportsListPage } from "../admin/contactsImporterPage";
-import { toPalettePng } from "./png-palette";
+import { capture } from "../shared/screenshot";
 
-// Captures the README screenshots into images/screenshots. Optional and slow (a few minutes); not part of
-// `npm test`. Run: `npm run screenshots` with DancingGoat already running (DANCING_GOAT_BASE_URL).
+// README screenshots of the Contacts Importer (`npm run screenshots`, see tests/e2e/README.md), starting
+// signed in. Slow (a few minutes).
 //
 // It imports about 400,000 fake contacts (DataGenerator, example.com/.net/.org addresses), so use a scratch
 // copy of the database and an empty importer StoragePath: the imports list should show only these imports.
@@ -23,7 +22,6 @@ const generatorProject = path.join(
   repoRoot,
   "tests/Kentico.Xperience.Labs.ContactsImporter.Admin.DataGenerator",
 );
-const screenshotsPath = path.join(repoRoot, "images/screenshots");
 
 interface GeneratedFile {
   name: string;
@@ -82,98 +80,6 @@ function rowsOf(file: GeneratedFile): number {
   return Number(file.args[file.args.indexOf("--rows") + 1]);
 }
 
-const viewport = { width: 1440, height: 900 };
-// The non-production license banner at the top of the administration is cut off
-const bannerHeight = 24;
-
-// The administration scrolls an inner element, not the page: scrolls it to the top and returns how much
-// taller its content is than the view.
-async function scrollContentToTop(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    let extra = 0;
-    for (const element of Array.from(
-      document.querySelectorAll<HTMLElement>("*"),
-    )) {
-      const overflowY = getComputedStyle(element).overflowY;
-      if (
-        (overflowY === "auto" || overflowY === "scroll") &&
-        element.scrollHeight > element.clientHeight + 1
-      ) {
-        element.scrollTop = 0;
-        extra = Math.max(extra, element.scrollHeight - element.clientHeight);
-      }
-    }
-    return extra;
-  });
-}
-
-interface ShotOptions {
-  // View width (default 1440)
-  width?: number;
-  // The view is made as tall as the content, up to this height
-  fullHeight?: number;
-  // Height of the image from the top of the view (cuts off empty space)
-  cropHeight?: number;
-  // Only this element (up to cropHeight tall), with a small margin
-  element?: Locator;
-}
-
-// Saves a screenshot as an indexed PNG (images/screenshots/<name>.png)
-async function shot(
-  page: Page,
-  name: string,
-  options: ShotOptions = {},
-): Promise<void> {
-  const width = options.width ?? viewport.width;
-  await page.mouse.move(0, 0);
-  const extra = await scrollContentToTop(page);
-  const height = options.fullHeight
-    ? Math.min(viewport.height + extra, options.fullHeight)
-    : viewport.height;
-  const resized = width !== viewport.width || height !== viewport.height;
-  if (resized) {
-    await page.setViewportSize({ width, height });
-  }
-  // Let counts, icons, layout and transitions settle; no single event marks that
-  // eslint-disable-next-line playwright/no-wait-for-timeout
-  await page.waitForTimeout(800);
-  await scrollContentToTop(page);
-
-  let clip = {
-    x: 0,
-    y: bannerHeight,
-    width,
-    height: Math.min(height, options.cropHeight ?? height) - bannerHeight,
-  };
-  if (options.element) {
-    const box = await options.element.boundingBox();
-    if (!box) {
-      throw new Error("The element to capture is not visible.");
-    }
-    const margin = 16;
-    const y = Math.max(bannerHeight, box.y - margin);
-    clip = {
-      x: box.x - margin,
-      y,
-      width: box.width + 2 * margin,
-      height: Math.min(
-        box.height + 2 * margin,
-        options.cropHeight ?? height,
-        height - y,
-      ),
-    };
-  }
-
-  const png = await page.screenshot({ animations: "disabled", clip });
-  await fs.writeFile(
-    path.join(screenshotsPath, `${name}.png`),
-    toPalettePng(png),
-  );
-  if (resized) {
-    await page.setViewportSize(viewport);
-  }
-}
-
 async function uploadToOptions(
   importPage: ImportPage,
   filePath: string,
@@ -202,7 +108,6 @@ async function waitForRowsProcessed(
 test("capture README screenshots", async ({ page }, testInfo) => {
   const dataPath = testInfo.outputPath("data");
   await fs.mkdir(dataPath, { recursive: true });
-  await fs.mkdir(screenshotsPath, { recursive: true });
 
   const pathOf = (file: GeneratedFile) => path.join(dataPath, file.name);
   for (const file of Object.values(files)) {
@@ -224,7 +129,6 @@ test("capture README screenshots", async ({ page }, testInfo) => {
     );
   }
 
-  await signInToAdmin(page);
   const importsList = new ImportsListPage(page);
   const importPage = new ImportPage(page);
 
@@ -243,14 +147,14 @@ test("capture README screenshots", async ({ page }, testInfo) => {
   await importPage.selectFile(pathOf(files.update));
   await importPage.continueToMapping();
   await importPage.expectKeyField("Email");
-  await shot(page, "map", { fullHeight: 1110 });
+  await capture(page, "map", { fullHeight: 1110 });
 
   await importPage.saveAndUpload();
   await importPage.expectUploaded(rowsOf(files.update));
   await importPage.continueToOptions();
   await importPage.chooseOption("emptyValues", "clear");
   await importPage.openUploadDetails();
-  await shot(page, "options");
+  await capture(page, "options");
 
   await importPage.saveOptions();
   await importPage.expectAnalyzed(600_000);
@@ -260,8 +164,8 @@ test("capture README screenshots", async ({ page }, testInfo) => {
       .locator('[data-sample-kind="cleared"]')
       .first(),
   ).toBeVisible();
-  await shot(page, "review");
-  await shot(page, "review-examples", {
+  await capture(page, "review");
+  await capture(page, "review-examples", {
     fullHeight: 4000,
     cropHeight: 1000,
     element: page.getByTestId("contacts-importer-review-samples"),
@@ -273,10 +177,10 @@ test("capture README screenshots", async ({ page }, testInfo) => {
     importPage,
     Math.round(rowsOf(files.update) * 0.4),
   );
-  await shot(page, "run", { cropHeight: 660 });
+  await capture(page, "run", { cropHeight: 660 });
 
   await importPage.expectResults("Completed", 900_000);
-  await shot(page, "results", { fullHeight: 2600 });
+  await capture(page, "results", { fullHeight: 2600 });
 
   // 3. Cancelled import
   await importsList.goto();
@@ -329,5 +233,5 @@ test("capture README screenshots", async ({ page }, testInfo) => {
     );
   }).toPass({ timeout: 300_000, intervals: [5_000] });
   // Wider view: at 1440 px the last columns of the table are cut off
-  await shot(page, "imports-list", { width: 1680, cropHeight: 640 });
+  await capture(page, "imports-list", { width: 1680, cropHeight: 640 });
 });

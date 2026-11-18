@@ -17,6 +17,7 @@
     "screenshots.config.ts",
     "admin/**/*.ts",
     "live-site/**/*.ts",
+    "screenshots/**/*.ts",
     "scripts/**/*.ts",
     "shared/**/*.ts"
   ],
