@@ -112,7 +112,7 @@ export const ResultsStep = ({ execute, view, fields, onOpenContactGroups, onBack
 
       <Headline size={HeadlineSize.S}>{t('contactsimporter.results.reportsheadline')}</Headline>
       {!hasReports && <Text hint={true}>{t('contactsimporter.results.noreports')}</Text>}
-      {hasReports && <Text hint={true}>{reports.includesKey ? t('contactsimporter.review.reporthintkey') : t('contactsimporter.review.reporthint')}</Text>}
+      {hasReports && <Text hint={true}>{reports.includesKey ? t('contactsimporter.results.reporthintkey') : t('contactsimporter.results.reporthint')}</Text>}
       <Inline spacing={Spacing.M}>
         {reports.execute && <ReportButton execute={execute} phase="execute" label={t('contactsimporter.results.downloadimportreport')} />}
         {reports.analyze && <ReportButton execute={execute} phase="analyze" label={t('contactsimporter.results.downloadcheckreport')} />}

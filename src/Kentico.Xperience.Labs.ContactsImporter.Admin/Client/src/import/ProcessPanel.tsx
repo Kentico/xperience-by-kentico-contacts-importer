@@ -11,7 +11,6 @@ import {
   NotificationBarAlert,
   NotificationBarInfo,
   NotificationBarWarning,
-  ProgressBar,
   Row,
   Spacing,
   Stack,
@@ -20,7 +19,7 @@ import React, { useEffect } from 'react';
 
 import type { AggregatesDto } from '../shared/commands';
 import { useText } from '../shared/i18n';
-import { TestIds, Text, testId } from '../shared/ui';
+import { ProgressTrack, TestIds, Text, testId } from '../shared/ui';
 import { percent } from '../upload/progress';
 
 import { Count } from './Aggregates';
@@ -139,7 +138,7 @@ export const ProcessPanel = ({
       )}
 
       <Stack spacing={Spacing.S}>
-        <ProgressBar completed={completed} />
+        <ProgressTrack completed={completed} />
         <Text>{t('contactsimporter.process.progress', { done, total, percent: formatPercent(completed) })}</Text>
       </Stack>
 

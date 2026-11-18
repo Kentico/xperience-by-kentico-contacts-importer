@@ -14,7 +14,6 @@ import {
   NotificationBarInfo,
   NotificationBarWarning,
   Paper,
-  ProgressBar,
   Row,
   Spacing,
   Stack,
@@ -26,7 +25,7 @@ import type { ImportProfile, PipelineResult, RejectReason } from '../import-core
 import type { JobDto, StatusDto } from '../shared/commands';
 import { useText } from '../shared/i18n';
 import { downloadTextFile, rejectReasonKey, rejectedRowsCsv, reportFileName, suspectRowsCsv } from '../shared/reports';
-import { DIALOG_MAX_WIDTH, TestIds, Text, testId } from '../shared/ui';
+import { DIALOG_MAX_WIDTH, ProgressTrack, TestIds, Text, testId } from '../shared/ui';
 import { estimateTotalRows, percent } from '../upload/progress';
 import type { RateEstimator } from '../upload/progress';
 import { uploadBarView } from '../upload/upload-bar';
@@ -105,7 +104,7 @@ export const UploadBar = ({ upload, job, status, showSummary, side = false }: Up
     content = (
       <Stack spacing={Spacing.S}>
         <BarLines lines={lines} />
-        <ProgressBar completed={completed} />
+        <ProgressTrack completed={completed} />
         <div>{toggle}</div>
         {open && <Details upload={upload} job={job} phase={bar.phase} profile={profile} compact={side} />}
       </Stack>

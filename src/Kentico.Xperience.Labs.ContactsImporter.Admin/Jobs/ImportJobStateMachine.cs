@@ -250,6 +250,32 @@ internal static class ImportJobStateMachine
     }
 
     /// <summary>
+    /// The user paused the analysis or the Run in the tab that drives it: the heartbeat is cleared, so the job shows as
+    /// <see cref="ImportJobState.Paused"/> at once instead of after the heartbeat age. Only the current driver
+    /// (<paramref name="driverToken"/>) may do this, and only while the job is Analyzing or Running. The stored state and
+    /// the driver token stay: the same tab continues without a take over; another tab or user takes over as from any
+    /// paused job. A Paused Run still holds the one unfinished Run (<see cref="IsUnfinishedRun"/>).
+    /// </summary>
+    /// <param name="status">Current status.</param>
+    /// <param name="driverToken">Driver token of the caller.</param>
+    /// <param name="utcNow">Current time.</param>
+    /// <param name="updated">Status to store when paused; <paramref name="status"/> otherwise.</param>
+    /// <returns><c>false</c> when the caller does not drive the job or the job is not being analyzed or run.</returns>
+    public static bool TryPauseByDriver(ImportJobStatus status, string? driverToken, DateTime utcNow, out ImportJobStatus updated)
+    {
+        if (!IsDriven(status.State)
+            || status.DriverToken is null
+            || !string.Equals(status.DriverToken, driverToken, StringComparison.Ordinal))
+        {
+            updated = status;
+            return false;
+        }
+
+        updated = status.HeartbeatUtc is null ? status : status with { HeartbeatUtc = null, UpdatedUtc = utcNow };
+        return true;
+    }
+
+    /// <summary>
     /// Token of a new driver: the one the browser made and stored before the call, when it is a GUID ("N" format),
     /// so a tab reloaded while its first call runs still knows its token; otherwise a new one.
     /// </summary>

@@ -51,7 +51,7 @@ builder.Services.AddContactsImporter(options =>
 | `MinBatchSize` | 50 | Smallest import batch. A value above `BatchSize` means a fixed batch size. |
 | `ProcessingTimeBudgetSeconds` | 15 | Seconds one processing request works before it returns progress to the browser. Keep it well below the request timeouts of your hosting (CDN, reverse proxy). |
 | `AnalysisValidHours` | 24 | Hours a finished check (dry run) stays valid. An import run later is checked again. |
-| `HeartbeatStaleSeconds` | 60 | Seconds without progress after which a running check or import counts as paused, and another browser tab or user can continue it. |
+| `HeartbeatStaleSeconds` | 60 | Seconds without progress after which a running check or import counts as paused, and another browser tab or user can continue it. **Pause** in the browser marks it paused at once. |
 | `ReportRetentionDays` | 7 | Days a row report without personal data is kept after the import ends. |
 | `ReportWithKeysRetentionHours` | 24 | Hours a row report that includes the match value (personal data) is kept after the import ends. |
 | `AbandonedJobRetentionDays` | 7 | Days without activity after which an unfinished import is cancelled and its files deleted. |

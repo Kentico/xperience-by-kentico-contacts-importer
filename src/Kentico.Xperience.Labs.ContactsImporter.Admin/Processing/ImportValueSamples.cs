@@ -45,6 +45,7 @@ internal static class ImportValueSamples
 
     private const string DateFormat = "yyyy-MM-dd";
     private const string DateTimeFormat = "yyyy-MM-dd HH:mm:ss";
+    private const string DateTimeMinutesFormat = "yyyy-MM-dd HH:mm";
 
     /// <summary>
     /// The examples to show from <paramref name="samples"/>: per field and kind the lowest rows, one example per row,
@@ -84,7 +85,8 @@ internal static class ImportValueSamples
     }
 
     /// <summary>
-    /// Text of a value for an example: dates as <c>yyyy-MM-dd</c>, date and time as <c>yyyy-MM-dd HH:mm:ss</c>,
+    /// Text of a value for an example: dates as <c>yyyy-MM-dd</c>, date and time as <c>yyyy-MM-dd HH:mm:ss</c> (without
+    /// the seconds when they are 0; a date and time at midnight, such as a birthday stored as date and time, as the date only),
     /// numbers in the invariant culture, yes/no as <c>true</c> / <c>false</c>. <c>null</c> for an empty value.
     /// </summary>
     public static string? Format(ImportField field, object? value)
@@ -100,7 +102,7 @@ internal static class ImportValueSamples
             text = field.Kind switch
             {
                 ImportValueKind.Date => Convert.ToDateTime(value, CultureInfo.InvariantCulture).ToString(DateFormat, CultureInfo.InvariantCulture),
-                ImportValueKind.DateTime => Convert.ToDateTime(value, CultureInfo.InvariantCulture).ToString(DateTimeFormat, CultureInfo.InvariantCulture),
+                ImportValueKind.DateTime => FormatDateTime(Convert.ToDateTime(value, CultureInfo.InvariantCulture)),
                 ImportValueKind.Boolean => Convert.ToBoolean(value, CultureInfo.InvariantCulture) ? "true" : "false",
                 ImportValueKind.Text or ImportValueKind.Integer or ImportValueKind.LongInteger or ImportValueKind.Double
                     or ImportValueKind.Decimal or ImportValueKind.Guid => FieldValueConverter.ToKeyText(value!),
@@ -113,6 +115,18 @@ internal static class ImportValueSamples
         }
 
         return Truncate(text);
+    }
+
+    private static string FormatDateTime(DateTime value)
+    {
+        if (value.TimeOfDay == TimeSpan.Zero)
+        {
+            return value.ToString(DateFormat, CultureInfo.InvariantCulture);
+        }
+
+        string format = value.Second == 0 && value.Millisecond == 0 ? DateTimeMinutesFormat : DateTimeFormat;
+
+        return value.ToString(format, CultureInfo.InvariantCulture);
     }
 
     /// <summary>Cuts a text to <see cref="MaxValueLength"/> characters (without splitting a surrogate pair).</summary>

@@ -5,7 +5,7 @@ import type { LoopSnapshot } from '../process/process-loop';
 import { acquireTabLock } from '../process/tab-lock';
 import type { TabLock } from '../process/tab-lock';
 import { Commands } from '../shared/commands';
-import type { ExecuteCommand, ProcessNextRequest, ProcessPhase, ProgressDto } from '../shared/commands';
+import type { ExecuteCommand, ImportActionResponse, PauseProcessingRequest, ProcessNextRequest, ProcessPhase, ProgressDto } from '../shared/commands';
 import { RateEstimator } from '../upload/progress';
 import type { RateEstimate } from '../upload/progress';
 
@@ -116,6 +116,7 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
       initialProgress: initialRef.current.initialProgress,
       tokens: driverTokenStore(jobId),
       call: (request, signal) => execute<ProgressDto, ProcessNextRequest>(Commands.ProcessNext, request, signal),
+      release: (driverToken) => execute<ImportActionResponse, PauseProcessingRequest>(Commands.PauseProcessing, { driverToken }),
       onChange: (next) => {
         if (next.calls !== calls && next.progress) {
           calls = next.calls;

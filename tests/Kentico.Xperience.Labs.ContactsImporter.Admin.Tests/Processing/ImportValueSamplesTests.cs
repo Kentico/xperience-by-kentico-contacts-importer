@@ -128,6 +128,9 @@ public class ImportValueSamplesTests
             Assert.That(ImportValueSamples.Format(fields[3], 12.5m), Is.EqualTo("12.5"));
             Assert.That(ImportValueSamples.Format(fields[4], Guid.Empty), Is.EqualTo("00000000-0000-0000-0000-000000000000"));
             Assert.That(ImportValueSamples.Format(fields[5], new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Unspecified)), Is.EqualTo("2026-03-04 05:06:07"));
+            Assert.That(ImportValueSamples.Format(fields[5], new DateTime(2026, 3, 4, 5, 6, 0, DateTimeKind.Unspecified)), Is.EqualTo("2026-03-04 05:06"), "no seconds when they are 0");
+            Assert.That(ImportValueSamples.Format(fields[5], new DateTime(1947, 11, 1, 0, 0, 0, DateTimeKind.Unspecified)), Is.EqualTo("1947-11-01"), "a date and time at midnight shows as the date");
+            Assert.That(ImportValueSamples.Format(fields[5], new DateTime(1947, 11, 1, 0, 0, 0, 1, DateTimeKind.Unspecified)), Is.EqualTo("1947-11-01 00:00:00"));
             Assert.That(ImportValueSamples.Format(fields[0], DBNull.Value), Is.Null);
             Assert.That(ImportValueSamples.Format(fields[0], ""), Is.Null);
             Assert.That(ImportValueSamples.Format(fields[0], new string('x', 500)), Has.Length.EqualTo(ImportValueSamples.MaxValueLength).And.EndWith("…"));

@@ -23,8 +23,9 @@ import { Commands } from '../shared/commands';
 import type { DeleteImportRequest, ImportActionResponse, ImportListItemDto, ImportListResponse, JobState } from '../shared/commands';
 import { useAdminNavigate, useExecuteCommand, useIsMounted } from '../shared/hooks';
 import { useText } from '../shared/i18n';
-import { DIALOG_MAX_WIDTH, TestIds, Text, actionColumn, stringCell, testId, textColumn } from '../shared/ui';
+import { DIALOG_MAX_WIDTH, ImporterRoot, TestIds, Text, actionColumn, stringCell, testId, textColumn } from '../shared/ui';
 import { stateCell } from './StateCell';
+import { twoLineCell } from './TwoLineCell';
 
 /** Client properties of `ImportsListPage` (UIPages/ImportsListPage.cs). */
 interface ImportsListProps {
@@ -57,7 +58,9 @@ const STATE_KEYS: Record<JobState, string> = {
  */
 export const ImportsListTemplate = (props: ImportsListProps) => (
   <RoutingContentPlaceholder>
-    <ImportsList {...props} />
+    <ImporterRoot>
+      <ImportsList {...props} />
+    </ImporterRoot>
   </RoutingContentPlaceholder>
 );
 
@@ -121,18 +124,18 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
     }
   }, [execute, isMounted, load, t, toDelete]);
 
+  // Widths in admin grid units (8 px) plus 32 px padding per column: the list fits a 1440 px wide screen (about
+  // 1150 px of columns). File with size and date with user share a column (two lines); short headers with tooltips.
   const columns = useMemo(
     () => [
-      textColumn('file', t('contactsimporter.list.columns.file'), 24, 60),
-      textColumn('size', t('contactsimporter.list.columns.size'), 10, 14),
-      textColumn('created', t('contactsimporter.list.columns.created'), 18, 24),
-      textColumn('createdBy', t('contactsimporter.list.columns.createdby'), 14, 24),
-      { ...textColumn('state', t('contactsimporter.list.columns.state'), 16, 24), contentType: ColumnContentType.Component },
-      textColumn('rows', t('contactsimporter.list.columns.rows'), 12, 16),
-      textColumn('contactsCreated', t('contactsimporter.list.columns.contactscreated'), 12, 16),
-      textColumn('contactsUpdated', t('contactsimporter.list.columns.contactsupdated'), 12, 16),
-      textColumn('recipientList', t('contactsimporter.list.columns.recipientlist'), 12, 24),
-      textColumn('consent', t('contactsimporter.list.columns.consent'), 12, 24),
+      { ...textColumn('file', t('contactsimporter.list.columns.file'), 18, 50), contentType: ColumnContentType.Component },
+      { ...textColumn('created', t('contactsimporter.list.columns.created'), 17, 24), contentType: ColumnContentType.Component },
+      { ...textColumn('state', t('contactsimporter.list.columns.state'), 13, 20), contentType: ColumnContentType.Component },
+      { ...textColumn('rows', t('contactsimporter.list.columns.rows'), 8, 12), tooltip: t('contactsimporter.list.columns.rowstooltip') },
+      { ...textColumn('contactsCreated', t('contactsimporter.list.columns.contactscreated'), 8, 12), tooltip: t('contactsimporter.list.columns.contactscreatedtooltip') },
+      { ...textColumn('contactsUpdated', t('contactsimporter.list.columns.contactsupdated'), 10, 12), tooltip: t('contactsimporter.list.columns.contactsupdatedtooltip') },
+      textColumn('recipientList', t('contactsimporter.list.columns.recipientlist'), 13, 24),
+      textColumn('consent', t('contactsimporter.list.columns.consent'), 11, 24),
       ...(canImport ? [actionColumn('actions', t('contactsimporter.list.columns.actions'), 10, 14)] : []),
     ],
     [canImport, t],
@@ -142,10 +145,8 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
     () =>
       imports?.map((item) => {
         const cells: TableCell[] = [
-          stringCell('file', item.fileName),
-          stringCell('size', bytes(item.fileSize)),
-          stringCell('created', dateTime(item.createdUtc)),
-          stringCell('createdBy', item.createdBy),
+          twoLineCell('file', item.fileName, bytes(item.fileSize), TestIds.listFileSize),
+          twoLineCell('created', dateTime(item.createdUtc), item.createdBy, TestIds.listCreatedBy),
           stateCell('state', item.state, STATE_KEYS[item.state] ? t(STATE_KEYS[item.state]) : item.state),
           stringCell('rows', item.rowsValid > 0 ? number(item.rowsValid) : ''),
           stringCell('contactsCreated', item.importStarted ? number(item.created) : ''),

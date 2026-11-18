@@ -122,6 +122,11 @@ internal sealed class ImportPage(
     public async Task<ICommandResponse<ImportActionResponse>> Cancel() =>
         ResponseFrom(commands.Cancel(JobId, await CurrentUserId()));
 
+    /// <summary>The user paused processing in the tab that drives it; the job shows as Paused at once.</summary>
+    [PageCommand(CommandName = ImportCommands.PAUSE_PROCESSING, Permission = ContactsImporterPermissions.IMPORT)]
+    public Task<ICommandResponse<ImportActionResponse>> PauseProcessing(PauseProcessingRequest request) =>
+        Task.FromResult(ResponseFrom(commands.PauseProcessing(JobId, request)));
+
     /// <summary>Cancel before Run: deletes the whole import. The job comes from the URL, not from the request.</summary>
     [PageCommand(CommandName = ImportCommands.DELETE_IMPORT, Permission = ContactsImporterPermissions.IMPORT)]
     public async Task<ICommandResponse<ImportActionResponse>> DeleteImport(DeleteImportRequest request) =>

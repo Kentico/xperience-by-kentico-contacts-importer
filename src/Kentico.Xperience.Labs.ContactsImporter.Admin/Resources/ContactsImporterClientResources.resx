@@ -51,26 +51,29 @@
   <data name="contactsimporter.list.columns.file" xml:space="preserve">
     <value>File</value>
   </data>
-  <data name="contactsimporter.list.columns.size" xml:space="preserve">
-    <value>Size</value>
-  </data>
   <data name="contactsimporter.list.columns.created" xml:space="preserve">
     <value>Created</value>
-  </data>
-  <data name="contactsimporter.list.columns.createdby" xml:space="preserve">
-    <value>Created by</value>
   </data>
   <data name="contactsimporter.list.columns.state" xml:space="preserve">
     <value>State</value>
   </data>
   <data name="contactsimporter.list.columns.rows" xml:space="preserve">
+    <value>Rows</value>
+  </data>
+  <data name="contactsimporter.list.columns.rowstooltip" xml:space="preserve">
     <value>Rows uploaded</value>
   </data>
   <data name="contactsimporter.list.columns.contactscreated" xml:space="preserve">
-    <value>Contacts created</value>
+    <value>New</value>
+  </data>
+  <data name="contactsimporter.list.columns.contactscreatedtooltip" xml:space="preserve">
+    <value>Contacts the import created</value>
   </data>
   <data name="contactsimporter.list.columns.contactsupdated" xml:space="preserve">
-    <value>Contacts changed</value>
+    <value>Changed</value>
+  </data>
+  <data name="contactsimporter.list.columns.contactsupdatedtooltip" xml:space="preserve">
+    <value>Existing contacts the import changed</value>
   </data>
   <data name="contactsimporter.list.columns.recipientlist" xml:space="preserve">
     <value>Recipient list</value>
@@ -928,7 +931,13 @@
     <value>Download import report</value>
   </data>
   <data name="contactsimporter.results.downloadcheckreport" xml:space="preserve">
-    <value>Download check report</value>
+    <value>Download expected results (check)</value>
+  </data>
+  <data name="contactsimporter.results.reporthint" xml:space="preserve">
+    <value>The import report lists what the import did with each row and why, for example why a row was skipped. The expected results list what the check before the import expected.</value>
+  </data>
+  <data name="contactsimporter.results.reporthintkey" xml:space="preserve">
+    <value>The import report lists what the import did with each row and why, for example why a row was skipped. The expected results list what the check before the import expected. Both include the match value (personal data).</value>
   </data>
   <data name="contactsimporter.results.noreports" xml:space="preserve">
     <value>The row reports of this import are no longer on the server.</value>

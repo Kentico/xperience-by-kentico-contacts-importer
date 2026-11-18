@@ -229,6 +229,76 @@ describe('ProcessLoop', () => {
     expect(h.requests[1]).toEqual({ phase: 'execute', driverToken: 'token-1', takeOver: false });
   });
 
+  it('after a user pause tells the server once, with the driver token, after the call in flight was answered', async () => {
+    const gate = deferred<ProgressDto>();
+    const released: string[] = [];
+    let answeredBeforeRelease = false;
+    const h = harness([answer('processed', 40), () => gate.promise], {
+      release: (token) => {
+        answeredBeforeRelease = h.loop.snapshot.calls === 2;
+        released.push(token);
+
+        return Promise.resolve();
+      },
+    });
+
+    h.loop.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    h.loop.pause();
+    expect(released).toEqual([]);
+    gate.resolve(answer('processed', 80));
+    await h.loop.whenIdle();
+
+    expect(released).toEqual(['token-1']);
+    expect(answeredBeforeRelease).toBe(true);
+    expect(h.loop.snapshot).toMatchObject({ status: 'paused', pauseReason: 'user' });
+  });
+
+  it('does not tell the server about a pause when this tab never drove the job, or for other pause reasons', async () => {
+    const released: string[] = [];
+    const release = (token: string) => {
+      released.push(token);
+
+      return Promise.resolve();
+    };
+    const neverDrove = harness(['fail', answer('processed', 10)], {
+      release,
+      sleep: (_ms, signal) =>
+        new Promise<void>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    });
+    neverDrove.loop.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    neverDrove.loop.pause();
+    await neverDrove.loop.whenIdle();
+
+    const stale = harness([answer('processed', 10), answer('activeElsewhere', 10)], { release });
+    stale.loop.start();
+    await stale.loop.whenIdle();
+
+    expect(neverDrove.loop.snapshot).toMatchObject({ status: 'paused', pauseReason: 'user' });
+    expect(stale.loop.snapshot).toMatchObject({ status: 'paused', pauseReason: 'activeElsewhere' });
+    expect(released).toEqual([]);
+  });
+
+  it('a failed pause notice does not change the paused loop', async () => {
+    const gate = deferred<ProgressDto>();
+    const h = harness([() => gate.promise, answer('processed', 80)], { release: () => Promise.reject(new Error('offline')) });
+
+    h.loop.start();
+    await Promise.resolve();
+    h.loop.pause();
+    gate.resolve(answer('processed', 40));
+    await h.loop.whenIdle();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(h.loop.snapshot).toMatchObject({ status: 'paused', pauseReason: 'user' });
+    expect(h.loop.start()).toBe(true);
+    await h.loop.whenIdle();
+    expect(h.requests[1]).toEqual({ phase: 'execute', driverToken: 'token-1', takeOver: false });
+  });
+
   it('a pause during the last call still reports the finished phase', async () => {
     const gate = deferred<ProgressDto>();
     const h = harness([() => gate.promise]);

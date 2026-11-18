@@ -574,6 +574,76 @@ internal class ImportProcessCommandTests
     }
 
     [Test]
+    public void PauseProcessing_By_The_Driver_Shows_The_Run_Paused_At_Once_And_Keeps_It_Resumable()
+    {
+        temp.Options.Value.ProcessingTimeBudgetSeconds = 0;
+        Upload(rows: 25);
+        Drive("analyze");
+        Confirm();
+        var first = service.ProcessNext(id, Next("execute"), UserId);
+
+        var byStranger = service.PauseProcessing(id, new PauseProcessingRequest { DriverToken = Guid.NewGuid().ToString("N") });
+        string runningAfterStranger = service.GetJob(id).Status!.State;
+        var paused = service.PauseProcessing(id, new PauseProcessingRequest { DriverToken = first.DriverToken });
+        var job = service.GetJob(id);
+        var listed = service.ListImports().Imports.Single();
+        var stored = temp.Store.ReadStatus(jobId)!;
+        var otherTab = service.ProcessNext(id, Next("execute"), UserId);
+        var resumed = service.ProcessNext(id, Next("execute", first.DriverToken), UserId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(byStranger.Code, Is.EqualTo(ImportCommandCodes.INVALID_STATE), "only the current driver may pause");
+            Assert.That(runningAfterStranger, Is.EqualTo("Running"));
+            Assert.That(paused.Code, Is.EqualTo(ImportCommandCodes.OK));
+            Assert.That(paused.Status!.State, Is.EqualTo("Paused"));
+            Assert.That(job.Status!.State, Is.EqualTo("Paused"), "no wait for the heartbeat age");
+            Assert.That(listed.State, Is.EqualTo("Paused"));
+            Assert.That(stored.State, Is.EqualTo(ImportJobState.Running), "Paused is derived, not stored");
+            Assert.That(ImportJobStateMachine.IsUnfinishedRun(stored), Is.True, "a paused Run still blocks other Runs (D60)");
+            Assert.That(otherTab.Outcome, Is.EqualTo("staleRequiresTakeOver"), "another tab continues only with a take over");
+            Assert.That(resumed.Outcome, Is.EqualTo("processed"), "the pausing tab continues as the same driver");
+            Assert.That(resumed.RowsProcessed, Is.EqualTo(20));
+            Assert.That(service.GetJob(id).Status!.State, Is.EqualTo("Running"));
+        });
+    }
+
+    [Test]
+    public void PauseProcessing_Refuses_Invalid_Requests_And_Jobs_That_Are_Not_Processed()
+    {
+        Upload();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(service.PauseProcessing(id, null).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+            Assert.That(service.PauseProcessing(id, new PauseProcessingRequest()).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+            Assert.That(service.PauseProcessing(id, new PauseProcessingRequest { DriverToken = new string('a', 65) }).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+            Assert.That(service.PauseProcessing("../x", new PauseProcessingRequest { DriverToken = "t" }).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+            Assert.That(service.PauseProcessing(Guid.NewGuid().ToString("D"), new PauseProcessingRequest { DriverToken = "t" }).Code, Is.EqualTo(ImportCommandCodes.JOB_NOT_FOUND));
+            Assert.That(service.PauseProcessing(id, new PauseProcessingRequest { DriverToken = "t" }).Code, Is.EqualTo(ImportCommandCodes.INVALID_STATE));
+            Assert.That(State(), Is.EqualTo(ImportJobState.Uploaded));
+        });
+    }
+
+    [Test]
+    public void PauseProcessing_Of_The_Analysis_Shows_Paused_And_The_Driver_Finishes_It()
+    {
+        temp.Options.Value.ProcessingTimeBudgetSeconds = 0;
+        Upload(rows: 25);
+        var first = service.ProcessNext(id, Next("analyze"), UserId);
+
+        var paused = service.PauseProcessing(id, new PauseProcessingRequest { DriverToken = first.DriverToken });
+        var finished = Drive("analyze", first.DriverToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(paused.Status!.State, Is.EqualTo("Paused"));
+            Assert.That(finished.Outcome, Is.EqualTo("phaseFinished"));
+            Assert.That(State(), Is.EqualTo(ImportJobState.Analyzed));
+        });
+    }
+
+    [Test]
     public void Confirm_Is_Refused_Before_The_Analysis_And_When_It_Is_Too_Old()
     {
         Upload();

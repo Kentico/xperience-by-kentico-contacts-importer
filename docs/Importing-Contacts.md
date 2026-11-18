@@ -115,8 +115,8 @@ If another import finished after your check, Review says so: that import may hav
 The browser drives the import: it asks the server to process the next part again and again. You see progress, speed, time left and running counts.
 
 - **Keep the tab open.** If you close it, or the computer sleeps, the import pauses. Open the import again and select **Continue**. Rows already processed are kept.
-- **Pause** stops after the current step. **Continue** goes on.
-- If the import runs in another tab or for another user, you see that. Select **Continue here** to take it over: the page waits until the import has made no progress there for 60 seconds, then continues here. **Pause** stops waiting. Reloading the page does not count as another tab.
+- **Pause** stops after the current step. The import shows as paused at once, also in the list of imports and for other users. **Continue** goes on.
+- If the import runs in another tab or for another user, you see that. Select **Continue here** to take it over: the page waits until the import has made no progress there for 60 seconds (or was paused there with **Pause**), then continues here. **Pause** stops waiting. Reloading the page does not count as another tab.
 - Short network or server problems are retried automatically.
 - If another import was started and has not finished (for example a run confirmed by two users at almost the same time), the import waits before it starts. The page names the other import with a button to open it, and enables **Continue** when that import is finished or cancelled. An import that has started always continues, also after a pause.
 - **Cancel import** stops after the rows being processed. Contacts created or changed so far stay as they are. The uploaded data is deleted. The import stays in the list with its results; **Delete** on Results or in the list removes it.
@@ -124,7 +124,7 @@ The browser drives the import: it asks the server to process the next part again
 ### 7. Results
 
 - **Expected and imported**: the counts of the check next to the counts of the import.
-- **Row reports**: **Download check report** and **Download import report**.
+- **Row reports**: **Download import report** (what the import did with each row) and **Download expected results (check)** (what the check expected).
 - **Contact groups are not recalculated**: imported contacts are not added to contact groups with conditions automatically. Open the groups that should include them and recalculate them, or let their scheduled recalculation run. See [Recalculate contact groups](https://docs.kentico.com/documentation/business-users/digital-marketing/contact-groups#recalculate-contact-groups). Recipient lists are not affected.
 - **Delete** removes the import, as in the list of imports (see [Recent imports](#recent-imports)).
 - If the import was cancelled or failed, cached contact data was not refreshed. An administrator can clear the cache in the **System** application (**Overview** → **Clear cache**). See [Clear the cache](https://docs.kentico.com/documentation/developers-and-admins/development/caching#clear-the-cache).
@@ -190,8 +190,8 @@ Rows skipped in the browser during upload are not in these reports; they are in 
 
 ## Recent imports
 
-The **Imports** page lists the most recent imports (up to 200): file, size, who created it, state, rows, contacts created and changed, recipient list and consent.
+The **Imports** page lists the most recent imports (up to 200): file and size, when and by whom it was created, state, rows, new and changed contacts, recipient list and consent.
 
 - **Continue** opens an unfinished import. **Results** opens an ended one.
-- **Delete** removes an import from the list together with its uploaded data, check results and reports, after a confirmation. An unfinished import is cancelled first. An import that is being checked or run in another tab or by another user right now cannot be deleted: delete it after it ends, or once it has paused (no progress for 60 seconds). Contacts already imported stay as they are. A deleted import leaves only its event log entries and the [audit event](./Usage-Guide.md#audit-contact-imports).
+- **Delete** removes an import from the list together with its uploaded data, check results and reports, after a confirmation. An unfinished import is cancelled first. An import that is being checked or run in another tab or by another user right now cannot be deleted: delete it after it ends, or once it is paused (**Pause** selected there, or no progress for 60 seconds). Contacts already imported stay as they are. A deleted import leaves only its event log entries and the [audit event](./Usage-Guide.md#audit-contact-imports).
 - Reports are kept 7 days, or 24 hours when they include match values. Unfinished imports without activity for 7 days are cancelled and their files deleted. Ended imports leave the list after 90 days. The administrator can change these times.

@@ -55,7 +55,7 @@ test.describe("contacts importer", () => {
     await importsList.goto();
     await expect(importsList.cell(file.name, "state")).toHaveText("Uploaded");
     await expect(importsList.cell(file.name, "rows")).toHaveText(String(small.rowsUploaded));
-    await expect(importsList.cell(file.name, "createdBy")).not.toBeEmpty();
+    await expect(importsList.createdBy(file.name)).not.toBeEmpty();
   });
 
   test("shows skipped rows and likely duplicates with client-side downloads", async ({ page, importsList, importPage, uniqueFixture }) => {

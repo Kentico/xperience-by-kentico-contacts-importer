@@ -20,6 +20,7 @@ internal static class ImportCommands
     public const string GET_REPORT = "GET_REPORT";
     public const string GET_RUNNING_IMPORT = "GET_RUNNING_IMPORT";
     public const string GET_SAMPLES = "GET_SAMPLES";
+    public const string PAUSE_PROCESSING = "PAUSE_PROCESSING";
 }
 
 /// <summary>
@@ -577,6 +578,13 @@ internal sealed record ImportActionResponse
     public string? Message { get; init; }
 
     public ImportStatusDto? Status { get; init; }
+}
+
+/// <summary><c>PAUSE_PROCESSING</c> data.</summary>
+internal sealed record PauseProcessingRequest
+{
+    /// <summary>Driver token of the browser tab that analyzes or runs the import; only that tab may pause it.</summary>
+    public string? DriverToken { get; init; }
 }
 
 /// <summary><c>DELETE_IMPORT</c> data.</summary>

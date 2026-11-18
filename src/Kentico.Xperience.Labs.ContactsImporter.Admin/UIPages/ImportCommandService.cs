@@ -85,6 +85,15 @@ internal interface IImportCommandService
     public ImportActionResponse Cancel(string? jobId, int userId);
 
     /// <summary>
+    /// The user paused the analysis or the Run in the tab that drives it (<see cref="PauseProcessingRequest.DriverToken"/>):
+    /// the job shows as Paused at once instead of after the heartbeat age
+    /// (<see cref="ImportJobStateMachine.TryPauseByDriver"/>). The browser sends it after its last processing call was
+    /// answered. <c>invalidState</c> when the caller does not drive the job or it is not being analyzed or run; nothing
+    /// changes then.
+    /// </summary>
+    public ImportActionResponse PauseProcessing(string? jobId, PauseProcessingRequest? request);
+
+    /// <summary>
     /// Deletes the whole import (job folder: configuration, status, uploaded chunks, reports). An unfinished import is
     /// cancelled first (event log entry and <see cref="AfterContactImportEvent"/>). Refused with <c>importActive</c>
     /// while another browser tab or user analyzes or runs the import (fresh heartbeat); the tab that drives the
@@ -900,6 +909,42 @@ internal sealed class ImportCommandService(
             ImportCancelOutcome.ActiveElsewhere => ActionFailed(ImportCommandCodes.IMPORT_ACTIVE, ImportTextKeys.IMPORT_ACTIVE),
             ImportCancelOutcome.Cancelled or ImportCancelOutcome.JobNotFound or _ => ActionFailed(ImportCommandCodes.JOB_NOT_FOUND, ImportTextKeys.JOB_NOT_FOUND),
         };
+    }
+
+    public ImportActionResponse PauseProcessing(string? jobId, PauseProcessingRequest? request)
+    {
+        string? token = string.IsNullOrEmpty(request?.DriverToken) ? null : request.DriverToken;
+        if (!ImportJobId.TryParse(jobId, out var id) || token is null or { Length: > MaxDriverTokenLength })
+        {
+            return ActionFailed(ImportCommandCodes.INVALID_REQUEST, ImportTextKeys.INVALID_REQUEST);
+        }
+
+        var utcNow = UtcNow();
+        bool paused = false;
+        ImportJobStatus? status;
+        try
+        {
+            // One status update: a take over or a cancel in between is not undone.
+            status = store.UpdateStatus(id, current =>
+            {
+                paused = ImportJobStateMachine.TryPauseByDriver(current, token, utcNow, out var updated);
+
+                return updated;
+            });
+        }
+        catch (InvalidDataException)
+        {
+            status = null;
+        }
+
+        if (status is null)
+        {
+            return ActionFailed(ImportCommandCodes.JOB_NOT_FOUND, ImportTextKeys.JOB_NOT_FOUND);
+        }
+
+        return paused
+            ? new ImportActionResponse { Code = ImportCommandCodes.OK, Status = ToDto(id, status) }
+            : ActionFailed(ImportCommandCodes.INVALID_STATE, ImportMessages.InvalidState(EffectiveState(status, utcNow))) with { Status = ToDto(id, status) };
     }
 
     public ImportActionResponse DeleteImport(string? jobId, string? driverToken, int userId)

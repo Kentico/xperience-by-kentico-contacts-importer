@@ -6,6 +6,9 @@ import React, { useEffect, useState } from 'react';
 export const TestIds = {
   newImport: 'contacts-importer-new-import',
   importsTable: 'contacts-importer-imports',
+  /** Imports list: second line of the File cell (size) and of the Created cell (user). */
+  listFileSize: 'contacts-importer-list-file-size',
+  listCreatedBy: 'contacts-importer-list-created-by',
   steps: 'contacts-importer-steps',
   fileInput: 'contacts-importer-file-input',
   fileDropzone: 'contacts-importer-file-dropzone',
@@ -146,8 +149,39 @@ export interface TextProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
+ * Longest line of prose (intros, help texts, callout texts): longer lines across the full content width are hard to
+ * read. Applies to `Text` (and so to `Section` intros and step intros) and, through `ImporterRoot`, to the explanation
+ * texts of admin form fields, radio button captions and callout texts. Never to tables, card rows or form controls.
+ */
+export const PROSE_MAX_WIDTH = '80ch';
+
+/**
+ * The admin components take no width for their help texts, so `ImporterRoot` caps them by their CSS module class
+ * names (`explanation-text___…`, `caption___…`, callout `content___…`). Matched as the start of a class name, so
+ * `with-explanation-text___…` (the whole form field) is not narrowed. A rename in a later admin version only means the
+ * texts are full width again.
+ */
+const PROSE_CSS = [
+  '.contacts-importer [class^="explanation-text"]',
+  '.contacts-importer [class*=" explanation-text"]',
+  '.contacts-importer [class^="caption___"]',
+  '.contacts-importer [class*=" caption___"]',
+  '.contacts-importer [class*="callout___"] [class^="content___"]',
+  '.contacts-importer [class*="callout___"] [class*=" content___"]',
+].join(',\n') + ` { max-width: ${PROSE_MAX_WIDTH}; }`;
+
+/** Root of each importer page: applies the prose width to the help texts of the admin components. */
+export const ImporterRoot = ({ children }: { readonly children: React.ReactNode }) => (
+  <div className="contacts-importer">
+    <style>{PROSE_CSS}</style>
+    {children}
+  </div>
+);
+
+/**
  * Plain body text. The admin components have no text component and the admin colors unstyled
- * text red on purpose, so body text sets the admin text color tokens itself.
+ * text red on purpose, so body text sets the admin text color tokens itself. Lines are at most
+ * `PROSE_MAX_WIDTH` long (a `style` can override it).
  */
 export const Text = ({ hint, strong, style, children, ...rest }: TextProps) => (
   <div
@@ -157,6 +191,7 @@ export const Text = ({ hint, strong, style, children, ...rest }: TextProps) => (
       fontWeight: strong ? 700 : undefined,
       lineHeight: '20px',
       overflowWrap: 'anywhere',
+      maxWidth: PROSE_MAX_WIDTH,
       ...style,
     }}
   >
@@ -187,6 +222,38 @@ export const Section = ({ title, intro, children }: SectionProps) => (
     </div>
   </Paper>
 );
+
+export interface ProgressTrackProps {
+  /** Done, in percent (clamped to 0–100). */
+  readonly completed: number;
+  readonly label?: string;
+}
+
+/**
+ * Progress bar with a visible track. The admin `ProgressBar` is a 2 px line without a track (made for the edge of a
+ * tile), so on a card it is hard to see how much is left. Same fill (the admin product gradient), 8 px high.
+ */
+export const ProgressTrack = ({ completed, label }: ProgressTrackProps) => {
+  const percent = Math.min(100, Math.max(0, Number.isFinite(completed) ? completed : 0));
+
+  return (
+    <div
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(percent)}
+      style={{
+        height: 8,
+        borderRadius: 4,
+        overflow: 'hidden',
+        background: 'var(--color-switch-off-background, var(--color-background-disabled))',
+      }}
+    >
+      <div style={{ width: `${percent}%`, height: '100%', borderRadius: 4, background: 'var(--gradient-product)', transition: 'width 1s ease-in-out' }} />
+    </div>
+  );
+};
 
 /** Max width of the importer dialogs: wider lines are hard to read (the admin Dialog fills the viewport by default). */
 export const DIALOG_MAX_WIDTH = 640;

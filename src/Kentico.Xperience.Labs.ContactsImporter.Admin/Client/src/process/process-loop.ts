@@ -10,7 +10,8 @@ import { RetryExhaustedError, backoffDelay, sleep as defaultSleep, withRetry } f
  * - One call at a time. The next call is sent only after the previous one was answered or failed.
  * - A failed request (network, server error) is retried with backoff; an answered call is never repeated.
  * - `pause()` lets the call in flight finish (the server stops at its next batch boundary anyway)
- *   and sends no further call. Only `dispose()` aborts a request.
+ *   and sends no further call. Only `dispose()` aborts a request. Then `release` tells the server
+ *   (`PAUSE_PROCESSING`), so the import shows as paused at once for everyone.
  * - The driver token is kept in a `TokenStore`, so a reloaded tab continues as the same driver. The
  *   loop makes the token and stores it before its first call (and before a take over); the server
  *   adopts it, so a reload while that call runs does not lose it.
@@ -107,6 +108,11 @@ export interface ProcessLoopOptions {
    */
   call: (request: ProcessNextRequest, signal: AbortSignal) => Promise<ProgressDto | undefined>;
   tokens: TokenStore;
+  /**
+   * Sends `PAUSE_PROCESSING` after the user paused (the call in flight was answered), so the server shows the import
+   * as paused at once instead of after the heartbeat age. Optional; failures are ignored.
+   */
+  release?: (driverToken: string) => Promise<unknown>;
   onChange: (snapshot: LoopSnapshot) => void;
   /** Progress known before the first call (from `GET_JOB`). */
   initialProgress?: ProgressDto | null;
@@ -438,6 +444,10 @@ export class ProcessLoop {
   }
 
   private pauseFor(reason: PauseReason, result?: ProgressDto): void {
+    if (reason === 'user') {
+      this.releaseDriver();
+    }
+
     this.update({
       status: 'paused',
       pauseReason: reason,
@@ -445,6 +455,24 @@ export class ProcessLoop {
       waitingForOther: false,
       ...(result && { progress: result, error: result.error }),
     });
+  }
+
+  /**
+   * After a user pause: tells the server, so the import shows as paused at once (not after the heartbeat age).
+   * Only when this tab drove the job (an answer with progress); fire and forget, a failure only means the server
+   * finds out from the old heartbeat. Sent after the call in flight was answered, never beside it.
+   */
+  private releaseDriver(): void {
+    const token = this.options.tokens.get();
+    if (!this.options.release || this.disposed || token === null || this.current.processedCalls === 0) {
+      return;
+    }
+
+    try {
+      void this.options.release(token).catch(() => undefined);
+    } catch {
+      // Best effort.
+    }
   }
 
   private finish(reason: FinishReason, result: ProgressDto | null): void {

@@ -12,7 +12,9 @@ export const applicationName = "Contacts Importer (Labs)";
 export const categoryName = "Digital marketing";
 
 const importsPath = `${applicationSlug}/imports`;
-const jobIdPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+// Word to type before an import that changes many contacts (contactsimporter.review.confirmword, en-US)
+const confirmWord = "IMPORT";
+const jobIdPattern =/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
 
 // Recent imports with "New import" (Client/src/imports-list/ImportsListTemplate.tsx).
 export class ImportsListPage {
@@ -62,8 +64,17 @@ export class ImportsListPage {
     return this.page.getByTestId("contacts-importer-imports").getByTestId("table-row").filter({ hasText: fileName });
   }
 
-  cell(fileName: string, column: "state" | "rows" | "size" | "createdBy" | "contactsCreated" | "contactsUpdated"): Locator {
+  cell(fileName: string, column: "file" | "created" | "state" | "rows" | "contactsCreated" | "contactsUpdated"): Locator {
     return this.row(fileName).getByTestId(`table-cell-${column}`);
+  }
+
+  // Second lines of the File cell (size) and the Created cell (user who created the import)
+  fileSize(fileName: string): Locator {
+    return this.cell(fileName, "file").getByTestId("contacts-importer-list-file-size");
+  }
+
+  createdBy(fileName: string): Locator {
+    return this.cell(fileName, "created").getByTestId("contacts-importer-list-created-by");
   }
 
   async openImport(fileName: string): Promise<void> {
@@ -367,10 +378,22 @@ export class ImportPage {
     await this.expectStep("options");
   }
 
-  // "Run import" and its confirmation
+  // "Run import" and its confirmation; an import that changes more than 1,000 contacts asks to type the
+  // confirmation word first (CONFIRM_TYPING_THRESHOLD in Client/src/import/model.ts)
   async runImport(): Promise<void> {
     await this.openRunDialog();
+    await expect(this.runDialogConfirmButton).toBeVisible();
+    // The field is shown with the dialog, so it is there now or not at all
+    if ((await this.confirmWordInput.count()) > 0) {
+      await this.confirmWordInput.fill(confirmWord);
+    }
     await this.confirmRun();
+  }
+
+  // Run dialog: field for the confirmation word (the test ID is on the input or on its wrapper)
+  get confirmWordInput(): Locator {
+    const field = this.page.getByTestId("contacts-importer-confirm-input");
+    return field.locator("input").or(this.page.locator('input[data-testid="contacts-importer-confirm-input"]')).first();
   }
 
   async openRunDialog(): Promise<void> {

@@ -20,6 +20,7 @@ export const Commands = {
   GetReport: 'GET_REPORT',
   GetRunningImport: 'GET_RUNNING_IMPORT',
   GetSamples: 'GET_SAMPLES',
+  PauseProcessing: 'PAUSE_PROCESSING',
 } as const;
 
 export type CommandName = (typeof Commands)[keyof typeof Commands];
@@ -359,6 +360,11 @@ export interface ImportActionResponse {
   code: CommandCode;
   message: string | null;
   status: StatusDto | null;
+}
+
+/** `PAUSE_PROCESSING` data: the driver token of this tab (only the driver may pause the import). */
+export interface PauseProcessingRequest {
+  driverToken: string;
 }
 
 /** `DELETE_IMPORT` data. */

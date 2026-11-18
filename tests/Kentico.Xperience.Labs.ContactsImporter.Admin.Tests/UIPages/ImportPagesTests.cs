@@ -63,8 +63,8 @@ internal class ImportPagesTests
             Assert.That(Names(typeof(ImportsListPage)), Is.EqualTo(new[] { "DELETE_IMPORT", "LIST_IMPORTS" }));
             Assert.That(Names(typeof(ImportPage)), Is.EqualTo(new[]
             {
-                "CANCEL_IMPORT", "COMPLETE_UPLOAD", "CONFIRM_IMPORT", "DELETE_IMPORT", "GET_JOB", "GET_REPORT", "GET_RUNNING_IMPORT", "GET_SAMPLES", "LOAD_CONFIG", "PROCESS_NEXT",
-                "SAVE_CONFIG", "SAVE_OPTIONS", "TRUNCATE_CHUNKS", "UPLOAD_CHUNK",
+                "CANCEL_IMPORT", "COMPLETE_UPLOAD", "CONFIRM_IMPORT", "DELETE_IMPORT", "GET_JOB", "GET_REPORT", "GET_RUNNING_IMPORT", "GET_SAMPLES", "LOAD_CONFIG", "PAUSE_PROCESSING",
+                "PROCESS_NEXT", "SAVE_CONFIG", "SAVE_OPTIONS", "TRUNCATE_CHUNKS", "UPLOAD_CHUNK",
             }));
         });
     }
@@ -150,6 +150,7 @@ internal class ImportPagesTests
         await page.GetReport(new GetReportRequest { Phase = "analyze" }, cancellation.Token);
         await page.GetSamples();
         await page.Cancel();
+        await page.PauseProcessing(new PauseProcessingRequest { DriverToken = "token-2" });
         await page.DeleteImport(new DeleteImportRequest { JobId = "job-from-request", DriverToken = "token-1" });
         await page.DeleteImport(null!);
 
@@ -157,7 +158,7 @@ internal class ImportPagesTests
         {
             "GetJob job-from-url", "GetRunningImport job-from-url", "UploadChunk job-from-url", "TruncateChunks job-from-url", "CompleteUpload job-from-url",
             "SaveOptions job-from-url", "ProcessNext job-from-url True", "Confirm job-from-url 7 0 False", "GetReport job-from-url True", "GetSamples job-from-url",
-            "Cancel job-from-url", "DeleteImport job-from-url token-1", "DeleteImport job-from-url ",
+            "Cancel job-from-url", "PauseProcessing job-from-url token-2", "DeleteImport job-from-url token-1", "DeleteImport job-from-url ",
         }));
     }
 
@@ -343,6 +344,13 @@ internal class ImportPagesTests
         public ImportActionResponse Cancel(string? jobId, int userId)
         {
             Calls.Add($"Cancel {jobId}");
+
+            return new ImportActionResponse { Code = ImportCommandCodes.OK };
+        }
+
+        public ImportActionResponse PauseProcessing(string? jobId, PauseProcessingRequest? request)
+        {
+            Calls.Add($"PauseProcessing {jobId} {request?.DriverToken}");
 
             return new ImportActionResponse { Code = ImportCommandCodes.OK };
         }

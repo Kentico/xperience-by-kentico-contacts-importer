@@ -327,6 +327,63 @@ internal class ImportJobStateMachineTests
         });
     }
 
+    [TestCase(ImportJobState.Analyzing, ImportPhase.Analyze)]
+    [TestCase(ImportJobState.Running, ImportPhase.Execute)]
+    public void Pause_By_The_Driver_Shows_Paused_At_Once_And_Keeps_The_Driver(ImportJobState state, ImportPhase phase)
+    {
+        var status = Status(state) with { DriverToken = "mine", HeartbeatUtc = now.AddSeconds(-1), Checkpoint = new ImportCheckpoint { Phase = phase } };
+
+        bool paused = ImportJobStateMachine.TryPauseByDriver(status, "mine", now, out var updated);
+        var resumed = ImportJobStateMachine.AcquireDriver(updated, "mine", false, null, now, stale);
+        var other = ImportJobStateMachine.AcquireDriver(updated, null, false, null, now, stale);
+        var takenOver = ImportJobStateMachine.AcquireDriver(updated, null, true, null, now, stale);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(paused, Is.True);
+            Assert.That(updated.State, Is.EqualTo(state), "Paused is never stored");
+            Assert.That(updated.HeartbeatUtc, Is.Null);
+            Assert.That(updated.DriverToken, Is.EqualTo("mine"));
+            Assert.That(updated.UpdatedUtc, Is.EqualTo(now));
+            Assert.That(ImportJobStateMachine.GetEffectiveState(updated, now, stale), Is.EqualTo(ImportJobState.Paused));
+            Assert.That(ImportJobStateMachine.IsActivelyDriven(updated, now, stale), Is.False);
+            Assert.That(ImportJobStateMachine.IsUnfinishedRun(updated), Is.EqualTo(state == ImportJobState.Running), "a paused Run still holds the one unfinished Run");
+            Assert.That(resumed.Outcome, Is.EqualTo(ImportDriverOutcome.Acquired), "the same tab continues without a take over");
+            Assert.That(resumed.DriverToken, Is.EqualTo("mine"));
+            Assert.That(resumed.Status.HeartbeatUtc, Is.EqualTo(now));
+            Assert.That(other.Outcome, Is.EqualTo(ImportDriverOutcome.StaleRequiresTakeOver));
+            Assert.That(takenOver.Outcome, Is.EqualTo(ImportDriverOutcome.Acquired));
+        });
+    }
+
+    [TestCase(ImportJobState.Running, "other")]
+    [TestCase(ImportJobState.Running, null)]
+    [TestCase(ImportJobState.Uploaded, "mine")]
+    [TestCase(ImportJobState.Analyzed, "mine")]
+    [TestCase(ImportJobState.Confirmed, "mine")]
+    [TestCase(ImportJobState.Completed, "mine")]
+    [TestCase(ImportJobState.Cancelled, "mine")]
+    public void Pause_Is_Refused_For_Another_Driver_And_Outside_Analyzing_And_Running(ImportJobState state, string? token)
+    {
+        var status = Status(state) with { DriverToken = "mine", HeartbeatUtc = now.AddSeconds(-1) };
+
+        bool paused = ImportJobStateMachine.TryPauseByDriver(status, token, now, out var updated);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(paused, Is.False);
+            Assert.That(updated, Is.SameAs(status));
+        });
+    }
+
+    [Test]
+    public void Pause_Without_A_Driver_Is_Refused()
+    {
+        var status = Status(ImportJobState.Running) with { DriverToken = null, HeartbeatUtc = now };
+
+        Assert.That(ImportJobStateMachine.TryPauseByDriver(status, null, now, out _), Is.False);
+    }
+
     [TestCase(null)]
     [TestCase("other")]
     public void Second_Driver_Is_Refused_While_Heartbeat_Is_Fresh(string? token)

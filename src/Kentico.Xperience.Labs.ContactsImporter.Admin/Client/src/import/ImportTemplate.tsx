@@ -27,7 +27,7 @@ import type {
 } from '../shared/commands';
 import { useAdminNavigate, useExecuteCommand, useIsMounted } from '../shared/hooks';
 import { useText } from '../shared/i18n';
-import { TestIds, Text, testId } from '../shared/ui';
+import { ImporterRoot, TestIds, Text, testId } from '../shared/ui';
 import { ImportWorkerClient } from '../worker/client';
 import { createImportWorker } from '../worker/create-worker';
 
@@ -79,32 +79,36 @@ export const ImportTemplate = ({ canImport, jobId, importsListPath, contactGroup
 
   if (!canImport || jobId === '') {
     return (
-      <Box spacing={Spacing.XL}>
-        <Stack spacing={Spacing.L}>
-          <Callout
-            type={CalloutType.FriendlyWarning}
-            placement={CalloutPlacementType.OnDesk}
-            dataTestId={testId(TestIds.noPermission)}
-            actionButton={<Button label={t('contactsimporter.app.backtolist')} color={ButtonColor.Secondary} onClick={backToList} />}
-          >
-            {canImport ? t('contactsimporter.app.invalidjob') : t('contactsimporter.app.nopermission')}
-          </Callout>
-        </Stack>
-      </Box>
+      <ImporterRoot>
+        <Box spacing={Spacing.XL}>
+          <Stack spacing={Spacing.L}>
+            <Callout
+              type={CalloutType.FriendlyWarning}
+              placement={CalloutPlacementType.OnDesk}
+              dataTestId={testId(TestIds.noPermission)}
+              actionButton={<Button label={t('contactsimporter.app.backtolist')} color={ButtonColor.Secondary} onClick={backToList} />}
+            >
+              {canImport ? t('contactsimporter.app.invalidjob') : t('contactsimporter.app.nopermission')}
+            </Callout>
+          </Stack>
+        </Box>
+      </ImporterRoot>
     );
   }
 
   // A new import opened from this one (same page, other ID) starts with fresh state.
   return (
-    <Import
-      key={jobId}
-      jobId={jobId}
-      canConfirmConsent={canConfirmConsent}
-      onBackToList={backToList}
-      onOpenContactGroups={openContactGroups}
-      onStartNewImport={startNewImport}
-      onOpenImport={openImport}
-    />
+    <ImporterRoot>
+      <Import
+        key={jobId}
+        jobId={jobId}
+        canConfirmConsent={canConfirmConsent}
+        onBackToList={backToList}
+        onOpenContactGroups={openContactGroups}
+        onStartNewImport={startNewImport}
+        onOpenImport={openImport}
+      />
+    </ImporterRoot>
   );
 };
 

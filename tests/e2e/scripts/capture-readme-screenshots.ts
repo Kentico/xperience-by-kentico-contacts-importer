@@ -105,17 +105,6 @@ async function shot(page: Page, name: string, options: ShotOptions = {}): Promis
   }
 }
 
-// "Run import"; an import that changes many contacts asks to type the confirmation word first
-async function runImport(page: Page, importPage: ImportPage): Promise<void> {
-  await importPage.openRunDialog();
-  const confirm = page.getByTestId("contacts-importer-confirm-input");
-  if (await confirm.first().isVisible({ timeout: 2_000 }).catch(() => false)) {
-    const input = (await confirm.first().evaluate((element) => element.tagName)) === "INPUT" ? confirm.first() : confirm.locator("input").first();
-    await input.fill("IMPORT");
-  }
-  await importPage.confirmRun();
-}
-
 async function uploadToOptions(importPage: ImportPage, filePath: string, rows: number): Promise<void> {
   await importPage.selectFile(filePath);
   await importPage.continueToMapping();
@@ -153,7 +142,7 @@ test("capture README screenshots", async ({ page }, testInfo) => {
   await uploadToOptions(importPage, pathOf(files.first), rowsOf(files.first));
   await importPage.saveOptions();
   await importPage.expectAnalyzed(600_000);
-  await runImport(page, importPage);
+  await importPage.runImport();
   await importPage.expectResults("Completed", 900_000);
 
   // 2. Update import: Map, Options, Review, Run, Results
@@ -177,7 +166,7 @@ test("capture README screenshots", async ({ page }, testInfo) => {
   await shot(page, "review");
   await shot(page, "review-examples", { fullHeight: 4000, cropHeight: 1000, element: page.getByTestId("contacts-importer-review-samples") });
 
-  await runImport(page, importPage);
+  await importPage.runImport();
   await importPage.expectStep("run");
   await waitForRowsProcessed(importPage, Math.round(rowsOf(files.update) * 0.4));
   await shot(page, "run", { cropHeight: 660 });
@@ -191,7 +180,7 @@ test("capture README screenshots", async ({ page }, testInfo) => {
   await uploadToOptions(importPage, pathOf(files.cancelled), rowsOf(files.cancelled));
   await importPage.saveOptions();
   await importPage.expectAnalyzed(600_000);
-  await runImport(page, importPage);
+  await importPage.runImport();
   await waitForRowsProcessed(importPage, Math.round(rowsOf(files.cancelled) * 0.3));
   await importPage.cancelRunningImport();
   await importPage.expectResults("Cancelled");
@@ -209,7 +198,7 @@ test("capture README screenshots", async ({ page }, testInfo) => {
   await uploadToOptions(importPage, pathOf(files.paused), rowsOf(files.paused));
   await importPage.saveOptions();
   await importPage.expectAnalyzed(600_000);
-  await runImport(page, importPage);
+  await importPage.runImport();
   await waitForRowsProcessed(importPage, 1);
   await page.getByTestId("contacts-importer-process-pause").click();
   await importPage.expectProcessStatus("paused");
