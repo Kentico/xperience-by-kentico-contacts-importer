@@ -54,6 +54,12 @@
   <data name="contactsimporter.error.busy" xml:space="preserve">
     <value>The import is being processed right now. Try again in a moment.</value>
   </data>
+  <data name="contactsimporter.error.importactive" xml:space="preserve">
+    <value>This import is being checked or run right now in another browser tab or by another user, so it cannot be deleted. Delete it after it ends, or once it has been paused for a short time.</value>
+  </data>
+  <data name="contactsimporter.error.deletefailed" xml:space="preserve">
+    <value>The import could not be deleted from the server. Try again in a moment.</value>
+  </data>
   <data name="contactsimporter.error.sourcefieldmapped" xml:space="preserve">
     <value>The import source field must not be one of the mapped contact fields.</value>
   </data>
@@ -71,6 +77,9 @@
   </data>
   <data name="contactsimporter.error.attestationrequired" xml:space="preserve">
     <value>This import changes recipient list subscriptions or records consent and must be confirmed with the current consent statement. Read the statement and confirm again.</value>
+  </data>
+  <data name="contactsimporter.error.otherimportrunning" xml:space="preserve">
+    <value>Another import ('{0}') was started and has not finished. Only one import can run at a time. Run this import after that one is finished or cancelled.</value>
   </data>
   <data name="contactsimporter.error.failed" xml:space="preserve">
     <value>The import failed.</value>

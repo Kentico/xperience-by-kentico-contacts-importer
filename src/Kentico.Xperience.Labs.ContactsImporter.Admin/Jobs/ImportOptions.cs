@@ -26,7 +26,7 @@ internal sealed record ImportOptions
 
     public UnsubscribedBehavior Unsubscribed { get; init; } = UnsubscribedBehavior.Keep;
 
-    public BouncedAddressBehavior BouncedAddress { get; init; } = BouncedAddressBehavior.AddAndReport;
+    public BouncedAddressBehavior BouncedAddress { get; init; } = BouncedAddressBehavior.SkipAndReport;
 
     public ConsentMode Consent { get; init; } = ConsentMode.None;
 

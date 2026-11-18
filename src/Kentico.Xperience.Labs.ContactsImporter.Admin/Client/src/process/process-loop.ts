@@ -11,8 +11,11 @@ import { RetryExhaustedError, backoffDelay, sleep as defaultSleep, withRetry } f
  * - A failed request (network, server error) is retried with backoff; an answered call is never repeated.
  * - `pause()` lets the call in flight finish (the server stops at its next batch boundary anyway)
  *   and sends no further call. Only `dispose()` aborts a request.
- * - The driver token of the server is kept in a `TokenStore`, so a reloaded tab continues as the
- *   same driver.
+ * - The driver token is kept in a `TokenStore`, so a reloaded tab continues as the same driver. The
+ *   loop makes the token and stores it before its first call (and before a take over); the server
+ *   adopts it, so a reload while that call runs does not lose it.
+ * - "Continue here" (take over) while another driver is still active waits and asks again until the
+ *   other driver stopped long enough, instead of failing at once.
  */
 
 export type LoopStatus = 'idle' | 'running' | 'pausing' | 'paused' | 'finished';
@@ -30,7 +33,12 @@ export type PauseReason =
   /** Another tab or user started processing and went away; "Continue import" takes over. */
   | 'stale'
   /** Another tab or user took the import over while this tab was processing it. */
-  | 'takenOver';
+  | 'takenOver'
+  /**
+   * The Run could not start: another import's Run was confirmed and has not ended (PLAN D60).
+   * Nothing changed; "Continue" starts it once the other import is finished or cancelled.
+   */
+  | 'otherImportRunning';
 
 /** Why the loop ended; nothing more is sent. */
 export type FinishReason =
@@ -75,6 +83,8 @@ export interface LoopSnapshot {
   processedCalls: number;
   /** Time of the last answer (`now()`), `null` before the first one. */
   lastAnswerAtMs: number | null;
+  /** The user chose "Continue here"; the loop waits until the other tab or user stops. */
+  waitingForOther: boolean;
 }
 
 /** Keeps the driver token across page reloads (session storage in the browser). */
@@ -106,7 +116,10 @@ export interface ProcessLoopOptions {
   server?: Partial<BackoffOptions>;
   /** Pause between two successful calls, to throttle the load on the server. Default 0. */
   delayBetweenCallsMs?: number;
+  /** Wait between two take over attempts while another driver is active. Default 5 s. */
+  takeOverPollMs?: number;
   /** Test seams. */
+  newToken?: () => string;
   now?: () => number;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   random?: () => number;
@@ -114,6 +127,22 @@ export interface ProcessLoopOptions {
 
 export const DEFAULT_NETWORK_RETRY: BackoffOptions = { maxAttempts: 6, baseDelayMs: 1000, maxDelayMs: 30_000 };
 export const DEFAULT_SERVER_RETRY: BackoffOptions = { maxAttempts: 8, baseDelayMs: 2000, maxDelayMs: 30_000 };
+export const DEFAULT_TAKE_OVER_POLL_MS = 5000;
+
+/** New driver token: a GUID without dashes (the server accepts only that form). */
+export function newDriverToken(): string {
+  const cryptoApi = globalThis.crypto;
+  if (typeof cryptoApi?.randomUUID === 'function') {
+    return cryptoApi.randomUUID().replace(/-/g, '');
+  }
+
+  const bytes = new Uint8Array(16);
+  cryptoApi.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 export class ProcessLoop {
   private readonly options: ProcessLoopOptions;
@@ -147,6 +176,7 @@ export class ProcessLoop {
       calls: 0,
       processedCalls: 0,
       lastAnswerAtMs: null,
+      waitingForOther: false,
     };
   }
 
@@ -171,7 +201,7 @@ export class ProcessLoop {
 
     this.pauseRequested = false;
     this.waits = new AbortController();
-    this.update({ status: 'running', pauseReason: null, retry: null, error: null });
+    this.update({ status: 'running', pauseReason: null, retry: null, error: null, waitingForOther: false });
     const run = this.run(start.takeOver ?? false).finally(() => {
       if (this.active === run) {
         this.active = null;
@@ -216,6 +246,11 @@ export class ProcessLoop {
     const { phase, call, tokens } = this.options;
     let takeOver = initialTakeOver;
     let serverRetries = 0;
+    // Stored before the call: a tab reloaded while the call runs continues with it. A take over always
+    // gets a new token (the stored one is no longer the driver's).
+    if (takeOver || tokens.get() === null) {
+      tokens.set((this.options.newToken ?? newDriverToken)());
+    }
 
     for (;;) {
       if (this.disposed) {
@@ -269,7 +304,7 @@ export class ProcessLoop {
           tokens.set(result.driverToken);
           takeOver = false;
           serverRetries = 0;
-          this.update({ progress: result, retry: null, error: null, processedCalls: this.current.processedCalls + 1 });
+          this.update({ progress: result, retry: null, error: null, waitingForOther: false, processedCalls: this.current.processedCalls + 1 });
           if ((this.options.delayBetweenCallsMs ?? 0) > 0 && !(await this.wait(this.options.delayBetweenCallsMs ?? 0))) {
             return;
           }
@@ -307,12 +342,26 @@ export class ProcessLoop {
           return;
 
         case 'activeElsewhere':
+          // The user chose to continue here: ask again until the other driver has stopped long enough.
+          if (takeOver) {
+            this.update({ progress: result, retry: null, error: null, waitingForOther: true });
+            if (!(await this.wait(this.options.takeOverPollMs ?? DEFAULT_TAKE_OVER_POLL_MS))) {
+              return;
+            }
+            break;
+          }
+
           this.pauseFor('activeElsewhere', result);
 
           return;
 
         case 'staleRequiresTakeOver':
           this.pauseFor('stale', result);
+
+          return;
+
+        case 'otherImportRunning':
+          this.pauseFor('otherImportRunning', result);
 
           return;
 
@@ -393,6 +442,7 @@ export class ProcessLoop {
       status: 'paused',
       pauseReason: reason,
       retry: null,
+      waitingForOther: false,
       ...(result && { progress: result, error: result.error }),
     });
   }
@@ -403,6 +453,7 @@ export class ProcessLoop {
       finishReason: reason,
       pauseReason: null,
       retry: null,
+      waitingForOther: false,
       ...(result && { progress: result, error: result.error }),
     });
   }

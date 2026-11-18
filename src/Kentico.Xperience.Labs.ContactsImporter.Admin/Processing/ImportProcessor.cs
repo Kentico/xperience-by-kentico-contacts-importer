@@ -137,7 +137,7 @@ internal sealed class ImportProcessor(
         // The function can run more than once (see IImportJobStore.UpdateStatus), so it only decides from "current".
         var status = store.UpdateStatus(jobId, current =>
         {
-            decision = DecideStart(current, phase, driverToken, takeOver, utcNow, settings);
+            decision = DecideStart(current, phase, driverToken, takeOver, utcNow, settings, call.UserId);
             if (decision.Stop is not null)
             {
                 return decision.Status;
@@ -353,15 +353,27 @@ internal sealed class ImportProcessor(
         return new ImportConfirmResult(outcome, status);
     }
 
-    public ImportCancelResult Cancel(Guid jobId, int? userId = null)
+    public ImportCancelResult Cancel(Guid jobId, int? userId = null) => Cancel(jobId, userId, refuseActive: false, driverToken: null);
+
+    public ImportCancelResult CancelIfIdle(Guid jobId, string? driverToken, int? userId = null) => Cancel(jobId, userId, refuseActive: true, driverToken);
+
+    private ImportCancelResult Cancel(Guid jobId, int? userId, bool refuseActive, string? driverToken)
     {
         var utcNow = UtcNow();
+        var heartbeatStale = options.Value.HeartbeatStale;
         var outcome = ImportCancelOutcome.AlreadyFinished;
         var status = store.UpdateStatus(jobId, current =>
         {
             if (ImportJobStateMachine.IsTerminal(current.State))
             {
                 outcome = ImportCancelOutcome.AlreadyFinished;
+                return current;
+            }
+
+            bool ownDriver = driverToken is not null && string.Equals(current.DriverToken, driverToken, StringComparison.Ordinal);
+            if (refuseActive && !ownDriver && ImportJobStateMachine.IsActivelyDriven(current, utcNow, heartbeatStale))
+            {
+                outcome = ImportCancelOutcome.ActiveElsewhere;
                 return current;
             }
 
@@ -435,8 +447,9 @@ internal sealed class ImportProcessor(
     /// <summary>
     /// Decides, inside the status update, whether this call may work on the job: checks the state for the phase,
     /// the drift guard, claims the driver role and starts the phase when it has not started.
+    /// <paramref name="userId"/> is stored as the user who started the phase.
     /// </summary>
-    internal static StartDecision DecideStart(ImportJobStatus current, ImportPhase phase, string? driverToken, bool takeOver, DateTime utcNow, ContactsImporterOptions settings)
+    internal static StartDecision DecideStart(ImportJobStatus current, ImportPhase phase, string? driverToken, bool takeOver, DateTime utcNow, ContactsImporterOptions settings, int? userId = null)
     {
         var startState = phase == ImportPhase.Analyze ? ImportJobState.Uploaded : ImportJobState.Confirmed;
         var finishedState = phase == ImportPhase.Analyze ? ImportJobState.Analyzed : ImportJobState.Completed;
@@ -472,7 +485,9 @@ internal sealed class ImportProcessor(
                 return new StartDecision(current, ImportProcessOutcome.InvalidState);
         }
 
-        var status = starts ? ImportJobStateMachine.Transition(driver.Status, DrivenState(phase), utcNow) : driver.Status;
+        var status = starts
+            ? ImportJobStateMachine.Transition(driver.Status, DrivenState(phase), utcNow) with { PhaseStartedByUserId = userId }
+            : driver.Status;
 
         return new StartDecision(status, null, driver.DriverToken, starts, driver.CallId);
     }
@@ -533,8 +548,9 @@ internal sealed class ImportProcessor(
         {
             // Parts beyond the checkpoint are left from an earlier attempt of this phase.
             DeleteReportParts(jobId, phase, status.Checkpoint.LastRow);
+            var samples = phase == ImportPhase.Analyze ? LoadSamples(jobId, status.Checkpoint.LastRow) : null;
 
-            var planner = new BatchPlanner(context);
+            var planner = new BatchPlanner(context, collectSamples: samples is not null);
             var report = new ImportReportPartWriter(store, jobId, phase, ImportReportColumns.From(job.Options));
             var startedUtc = UtcNow();
 
@@ -549,13 +565,17 @@ internal sealed class ImportProcessor(
                 var batchStartedUtc = UtcNow();
                 var chunk = status.Chunks[checkpoint.ChunkIndex];
                 reader ??= OpenChunk(jobId, context, checkpoint);
-                var records = reader.ReadBatch(settings.BatchSize);
+                int batchSize = AdaptiveBatchSize.Current(phase, checkpoint, settings);
+                var records = reader.ReadBatch(batchSize);
                 if (records.Count == 0)
                 {
                     throw new ImportDataException(ImportMessages.ChunkIncomplete(checkpoint.ChunkIndex));
                 }
 
+                // Database time of the batch (lookups and writes, not file storage): what the adaptive batch size follows.
+                var planStartedUtc = UtcNow();
                 var plan = PlanBatch(planner, context, records);
+                double databaseSeconds = (UtcNow() - planStartedUtc).TotalSeconds;
 
                 // Dry run = same code path with the writes off (PLAN D2).
                 AudienceResult? audience = null;
@@ -572,6 +592,7 @@ internal sealed class ImportProcessor(
                         return Interrupted(jobId, phase, status);
                     }
 
+                    var writeStartedUtc = UtcNow();
                     try
                     {
                         audience = WriteBatch(context, plan);
@@ -589,6 +610,8 @@ internal sealed class ImportProcessor(
                             audience = WriteBatch(context, plan);
                         }
                     }
+
+                    databaseSeconds += (UtcNow() - writeStartedUtc).TotalSeconds;
                 }
                 else if (plan.Targets.Count > 0)
                 {
@@ -602,6 +625,10 @@ internal sealed class ImportProcessor(
                 }
 
                 report.Append(audience?.Annotate(plan.Rows) ?? plan.Rows);
+                if (samples is not null)
+                {
+                    SaveSamples(jobId, samples, records[0].Row, plan.Samples);
+                }
 
                 long offset = checkpoint.RowOffset + records.Count;
                 bool chunkDone = offset >= chunk.Rows;
@@ -617,6 +644,7 @@ internal sealed class ImportProcessor(
                     ChunkIndex = chunkDone ? checkpoint.ChunkIndex + 1 : checkpoint.ChunkIndex,
                     RowOffset = chunkDone ? 0 : offset,
                     LastRow = records[^1].Row,
+                    BatchSize = NextBatchSize(jobId, phase, settings, batchSize, records.Count, databaseSeconds),
                 };
                 if (!TrySaveCheckpoint(jobId, phase, driver, next, plan.Counts, (UtcNow() - batchStartedUtc).TotalSeconds, ref status))
                 {
@@ -642,6 +670,11 @@ internal sealed class ImportProcessor(
         }
         catch (Exception ex) when (IsTransient(ex))
         {
+            if (AdaptiveBatchSize.IsLoadError(ex))
+            {
+                TryShrinkBatchSize(jobId, phase, driver, settings);
+            }
+
             return Transient(jobId, phase, status, driver.Token, ex);
         }
         catch (Exception ex)
@@ -654,6 +687,65 @@ internal sealed class ImportProcessor(
         finally
         {
             reader?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Adapted size of the import batch after one of <paramref name="batchSize"/> rows (PLAN D58); <c>null</c> for the
+    /// analysis or when <see cref="ContactsImporterOptions.AdaptiveBatchSize"/> is off.
+    /// </summary>
+    private int? NextBatchSize(Guid jobId, ImportPhase phase, ContactsImporterOptions settings, int batchSize, int rows, double databaseSeconds)
+    {
+        if (phase != ImportPhase.Execute || !settings.AdaptiveBatchSize)
+        {
+            return null;
+        }
+
+        int next = AdaptiveBatchSize.Next(batchSize, rows, databaseSeconds, settings.TargetBatchSeconds, settings.EffectiveMinBatchSize, settings.BatchSize, loadError: false);
+        if (next != batchSize)
+        {
+            logger.LogDebug("Contact import {JobId}: batch of {Rows} rows took {Seconds:0.###} s of database time; next batch {BatchSize} rows.", jobId, rows, databaseSeconds, next);
+        }
+
+        // The configured size is stored as null, like before the first batch.
+        return next == settings.BatchSize ? null : next;
+    }
+
+    /// <summary>
+    /// Halves the stored import batch size after a database timeout, deadlock or resource limit, so the call that
+    /// repeats the batch asks less of the database. Only while this call drives the job; the checkpoint position is kept.
+    /// </summary>
+    private void TryShrinkBatchSize(Guid jobId, ImportPhase phase, DriverIdentity driver, ContactsImporterOptions settings)
+    {
+        if (phase != ImportPhase.Execute || !settings.AdaptiveBatchSize)
+        {
+            return;
+        }
+
+        int before = 0;
+        int after = 0;
+        bool shrunk = false;
+        try
+        {
+            store.UpdateStatus(jobId, current =>
+            {
+                before = AdaptiveBatchSize.Current(phase, current.Checkpoint, settings);
+                after = AdaptiveBatchSize.Next(before, 0, 0, settings.TargetBatchSeconds, settings.EffectiveMinBatchSize, settings.BatchSize, loadError: true);
+
+                shrunk = IsDrivenBy(current, phase, driver) && after != before;
+
+                return shrunk ? current with { Checkpoint = current.Checkpoint with { BatchSize = after } } : current;
+            });
+        }
+        catch (Exception ex) when (IsTransient(ex))
+        {
+            // The next call starts with the stored size; the batch still adapts after it.
+            return;
+        }
+
+        if (shrunk)
+        {
+            logger.LogInformation(transientEvent, "Contact import {JobId}: the database was overloaded; the next batch has {BatchSize} rows instead of {PreviousBatchSize}.", jobId, after, before);
         }
     }
 
@@ -924,6 +1016,56 @@ internal sealed class ImportProcessor(
             {
                 store.DeleteReport(jobId, fileName);
             }
+        }
+    }
+
+    /// <summary>
+    /// Value examples the analysis kept so far (PLAN D57). Parts beyond the checkpoint are left from an earlier attempt
+    /// (their batches are processed again) and are deleted, like report parts; a new analysis starts at row 0 and so
+    /// deletes all examples of the previous one. An unreadable part is deleted: examples are not worth failing the job.
+    /// </summary>
+    private ImportValueSampleSet LoadSamples(Guid jobId, long afterRow)
+    {
+        var samples = new ImportValueSampleSet();
+        foreach (long firstRow in store.ListSampleParts(jobId))
+        {
+            if (firstRow > afterRow)
+            {
+                store.DeleteSamplePart(jobId, firstRow);
+                continue;
+            }
+
+            IReadOnlyList<ImportValueSample>? part;
+            try
+            {
+                part = store.ReadSamplePart(jobId, firstRow);
+            }
+            catch (InvalidDataException ex)
+            {
+                LogSafely(LogLevel.Warning, transientEvent, jobId, ImportPhase.Analyze, "a part of the value examples could not be read and was deleted", ex);
+                store.DeleteSamplePart(jobId, firstRow);
+                continue;
+            }
+
+            foreach (var sample in part ?? [])
+            {
+                samples.Add(sample);
+            }
+        }
+
+        return samples;
+    }
+
+    /// <summary>
+    /// Adds the examples of a batch to the examples of the analysis and stores those that were kept as the part of the
+    /// batch. Stored before the checkpoint: a batch processed again writes the same part again.
+    /// </summary>
+    private void SaveSamples(Guid jobId, ImportValueSampleSet samples, long firstRow, IReadOnlyList<ImportValueSample> batchSamples)
+    {
+        var kept = batchSamples.Where(samples.Add).ToList();
+        if (kept.Count > 0)
+        {
+            store.WriteSamplePart(jobId, firstRow, kept);
         }
     }
 

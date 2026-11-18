@@ -21,6 +21,12 @@ internal sealed class ImportJobStore(IImportFileSystem fileSystem, IOptions<Cont
     internal const string ChunkInfoExtension = ".json";
     internal const string ReportFilePrefix = "report-";
 
+    /// <summary>
+    /// Parts of the value examples of the analysis, in the chunks folder: personal data like the chunks, deleted with them.
+    /// </summary>
+    internal const string SamplePartPrefix = "samples-";
+    internal const string SamplePartExtension = ".json";
+
     private const string TempExtension = ".tmp";
     private const int ReadAttempts = 3;
     private const int WriteAttempts = 5;
@@ -226,6 +232,37 @@ internal sealed class ImportJobStore(IImportFileSystem fileSystem, IOptions<Cont
 
     public void DeleteChunks(Guid jobId) => fileSystem.DeleteDirectory(GetChunksDirectory(GetJobDirectory(jobId)));
 
+    public IReadOnlyList<long> ListSampleParts(Guid jobId)
+    {
+        var parts = new List<long>();
+        foreach (string fileName in fileSystem.GetFileNames(GetChunksDirectory(GetJobDirectory(jobId))))
+        {
+            if (TryParseSamplePartFileName(fileName, out long firstRow))
+            {
+                parts.Add(firstRow);
+            }
+        }
+
+        parts.Sort();
+
+        return parts;
+    }
+
+    public void WriteSamplePart(Guid jobId, long firstRow, IReadOnlyList<ImportValueSample> samples)
+    {
+        string chunksDirectory = GetChunksDirectory(GetJobDirectory(jobId));
+        if (fileSystem.DirectoryExists(chunksDirectory))
+        {
+            WriteAtomic(chunksDirectory, SamplePartFileName(firstRow), ImportJson.Serialize(samples));
+        }
+    }
+
+    public IReadOnlyList<ImportValueSample>? ReadSamplePart(Guid jobId, long firstRow) =>
+        ReadJson<List<ImportValueSample>>(GetChunksDirectory(GetJobDirectory(jobId)), SamplePartFileName(firstRow));
+
+    public void DeleteSamplePart(Guid jobId, long firstRow) =>
+        fileSystem.DeleteFile(fileSystem.Combine(GetChunksDirectory(GetJobDirectory(jobId)), SamplePartFileName(firstRow)));
+
     public IReadOnlyList<string> ListReports(Guid jobId) =>
         [.. fileSystem.GetFileNames(GetJobDirectory(jobId)).Where(IsReportFileName).Order(StringComparer.Ordinal)];
 
@@ -291,6 +328,22 @@ internal sealed class ImportJobStore(IImportFileSystem fileSystem, IOptions<Cont
 
         return fileName.EndsWith(ChunkInfoExtension, StringComparison.Ordinal)
             && int.TryParse(fileName.AsSpan(0, fileName.Length - ChunkInfoExtension.Length), NumberStyles.None, CultureInfo.InvariantCulture, out index);
+    }
+
+    private static string SamplePartFileName(long firstRow)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(firstRow);
+
+        return SamplePartPrefix + firstRow.ToString("D12", CultureInfo.InvariantCulture) + SamplePartExtension;
+    }
+
+    private static bool TryParseSamplePartFileName(string fileName, out long firstRow)
+    {
+        firstRow = 0;
+
+        return fileName.StartsWith(SamplePartPrefix, StringComparison.Ordinal)
+            && fileName.EndsWith(SamplePartExtension, StringComparison.Ordinal)
+            && long.TryParse(fileName.AsSpan(SamplePartPrefix.Length, fileName.Length - SamplePartPrefix.Length - SamplePartExtension.Length), NumberStyles.None, CultureInfo.InvariantCulture, out firstRow);
     }
 
     private static bool IsReportFileName(string fileName) =>

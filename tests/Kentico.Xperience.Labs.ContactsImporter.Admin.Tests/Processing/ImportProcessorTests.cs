@@ -628,4 +628,110 @@ public class ImportProcessorTests
                 Is.EqualTo(new[] { "om.contact|all", "om.contactgroupmembercontact|all", "emaillibrary.emailsubscriptionconfirmation|all", "om.recipientlist|byid|12", "cms.consentagreement|all" }));
         });
     }
+
+    [Test]
+    public void Import_Batch_Size_Follows_The_Database_Time_And_Carries_Over_To_The_Next_Call()
+    {
+        using var fixture = new Fixture(options =>
+        {
+            options.BatchSize = 100;
+            options.MinBatchSize = 10;
+            options.TargetBatchSeconds = 2;
+            options.ProcessingTimeBudgetSeconds = 15;
+        });
+        var jobId = fixture.UploadAnalyzedAndConfirmed(300, rowsPerChunk: 1000);
+        var batchStarts = new List<int>();
+        double writeSeconds = 8;
+        fixture.Repository.OnWrite = _ =>
+        {
+            batchStarts.Add(fixture.Repository.Contacts.Count);
+            fixture.Time.Advance(TimeSpan.FromSeconds(writeSeconds));
+        };
+
+        var slow = fixture.Processor.ProcessNext(jobId, ImportPhase.Execute, null, false);
+        var afterSlow = fixture.Status(jobId);
+        writeSeconds = 1;
+        var finished = fixture.Run(jobId, ImportPhase.Execute, slow.DriverToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(slow.Outcome, Is.EqualTo(ImportProcessOutcome.Processed));
+            Assert.That(afterSlow.Checkpoint, Is.EqualTo(new ImportCheckpoint { Phase = ImportPhase.Execute, RowOffset = 125, LastRow = 125, BatchSize = 10 }), "100 rows in 8 s → 25 rows → 6 rows, at least 10.");
+            Assert.That(afterSlow.LongestBatchSeconds, Is.EqualTo(8));
+            Assert.That(finished.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished));
+            Assert.That(batchStarts, Is.EqualTo(new[] { 0, 100, 125, 135, 150, 172, 205, 254 }), "The next call starts with 10 rows and grows by x1.5 while batches are fast.");
+            Assert.That(fixture.Repository.Contacts.Select(c => c.Values[0]).Distinct().Count(), Is.EqualTo(300), "Every row once.");
+            Assert.That(fixture.Repository.Contacts, Has.Count.EqualTo(300));
+        });
+    }
+
+    [Test]
+    public void Database_Timeout_Halves_The_Import_Batch_Before_The_Next_Call_Repeats_It()
+    {
+        using var fixture = new Fixture(options =>
+        {
+            options.BatchSize = 100;
+            options.MinBatchSize = 10;
+        });
+        var jobId = fixture.UploadAnalyzedAndConfirmed(250, rowsPerChunk: 1000);
+        var batchStarts = new List<int>();
+        fixture.Repository.OnWrite = write =>
+        {
+            if (write == 1)
+            {
+                throw new TimeoutException("Timeout");
+            }
+
+            batchStarts.Add(fixture.Repository.Contacts.Count);
+        };
+
+        var interrupted = fixture.Processor.ProcessNext(jobId, ImportPhase.Execute, null, false);
+        var afterTimeout = fixture.Status(jobId);
+        var finished = fixture.Run(jobId, ImportPhase.Execute, interrupted.DriverToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(interrupted.Outcome, Is.EqualTo(ImportProcessOutcome.TransientError));
+            Assert.That(afterTimeout.Checkpoint, Is.EqualTo(new ImportCheckpoint { Phase = ImportPhase.Execute, BatchSize = 50 }), "Position kept, size halved.");
+            Assert.That(finished.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished));
+            Assert.That(batchStarts, Is.EqualTo(new[] { 0, 50, 100, 150, 200 }));
+            Assert.That(fixture.Repository.Contacts, Has.Count.EqualTo(250));
+            Assert.That(string.Join('\n', fixture.Log), Does.Contain("next batch has 50 rows instead of 100"));
+        });
+    }
+
+    [Test]
+    public void Fixed_Batch_Size_When_Adaptive_Batch_Size_Is_Off()
+    {
+        using var fixture = new Fixture(options =>
+        {
+            options.BatchSize = 100;
+            options.MinBatchSize = 10;
+            options.AdaptiveBatchSize = false;
+        });
+        var jobId = fixture.UploadAnalyzedAndConfirmed(250, rowsPerChunk: 1000);
+        var batchStarts = new List<int>();
+        fixture.Repository.OnWrite = write =>
+        {
+            if (write == 1)
+            {
+                throw new TimeoutException("Timeout");
+            }
+
+            batchStarts.Add(fixture.Repository.Contacts.Count);
+            fixture.Time.Advance(TimeSpan.FromSeconds(8));
+        };
+
+        var interrupted = fixture.Processor.ProcessNext(jobId, ImportPhase.Execute, null, false);
+        var afterTimeout = fixture.Status(jobId);
+        var finished = fixture.Run(jobId, ImportPhase.Execute, interrupted.DriverToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(afterTimeout.Checkpoint.BatchSize, Is.Null);
+            Assert.That(finished.Outcome, Is.EqualTo(ImportProcessOutcome.PhaseFinished));
+            Assert.That(batchStarts, Is.EqualTo(new[] { 0, 100, 200 }));
+            Assert.That(fixture.Status(jobId).Checkpoint.BatchSize, Is.Null);
+        });
+    }
 }

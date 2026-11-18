@@ -22,7 +22,7 @@ import {
 import type { TableRow } from '@kentico/xperience-admin-components';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { SampleProfile, TargetField } from '../import-core';
+import type { SampleProfile, SourceFormat, TargetField } from '../import-core';
 import type { JobDto, LimitsDto } from '../shared/commands';
 import { useText } from '../shared/i18n';
 import { OptionSelect, TestIds, Text, stringCell, testId, textColumn } from '../shared/ui';
@@ -59,6 +59,10 @@ export interface FileStepProps {
   readonly onSelected: (selected: SelectedFile | null) => void;
   readonly onNext: (selected: SelectedFile) => void;
   readonly onResumeUpload: (selected: SelectedFile) => void;
+  /** `false` once the upload has started: the mapping is fixed, so "Continue to mapping" is not offered (D50). */
+  readonly allowMapping?: boolean;
+  /** Further buttons ("Start a new import"). */
+  readonly actions?: React.ReactNode;
 }
 
 /**
@@ -76,6 +80,8 @@ export const FileStep = ({
   onSelected,
   onNext,
   onResumeUpload,
+  allowMapping = true,
+  actions,
 }: FileStepProps) => {
   const { t, m, bytes, number } = useText();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -141,7 +147,10 @@ export const FileStep = ({
         return;
       }
 
-      void profile(chosen, settings);
+      // A sheet name belongs to the previous workbook.
+      const next = settings.sheet === '' ? settings : { ...settings, sheet: '' };
+      setSettings(next);
+      void profile(chosen, next);
     },
     [bytes, limits.maxFileSizeBytes, onSelected, profile, settings, t],
   );
@@ -175,27 +184,40 @@ export const FileStep = ({
       )}
       {resumeJob && selected && !fingerprintMatches && (
         <Callout type={CalloutType.FriendlyWarning} placement={CalloutPlacementType.OnDesk} headline={t('contactsimporter.file.resumemismatchheadline')}>
-          {t('contactsimporter.file.resumemismatchtext', { fileName: resumeJob.file.name, size: bytes(resumeJob.file.size) })}
+          {allowMapping
+            ? t('contactsimporter.file.resumemismatchtext', { fileName: resumeJob.file.name, size: bytes(resumeJob.file.size) })
+            : t('contactsimporter.file.resumemismatchlockedtext', { fileName: resumeJob.file.name, size: bytes(resumeJob.file.size) })}
         </Callout>
       )}
 
-      <Dropzone onUpload={chooseFile} onActiveChange={setDropActive}>
-        <Paper>
-          <div style={{ padding: Spacing.XL, outline: dropActive ? '2px dashed currentColor' : undefined }}>
+      <Paper>
+          <div style={{ padding: Spacing.XL }}>
             <Stack spacing={Spacing.M}>
               <Row spacing={Spacing.M} alignY={undefined}>
                 <Column>
+                  {/* Outside the Dropzone: its CSS sets `pointer-events: none` on every div inside it, so a button there can't be clicked. */}
                   <Button
                     label={file ? t('contactsimporter.file.change') : t('contactsimporter.file.select')}
                     color={file ? ButtonColor.Secondary : ButtonColor.Primary}
                     icon="xp-arrow-up-line"
+                    dataTestId={testId(TestIds.fileSelect)}
                     onClick={() => inputRef.current?.click()}
                   />
                 </Column>
                 <Column>
-                  <Text hint={true} style={{ paddingTop: Spacing.S }}>
-                    {dropActive ? t('contactsimporter.file.dropactive') : t('contactsimporter.file.drophint')}
-                  </Text>
+                  <Dropzone onUpload={chooseFile} onActiveChange={setDropActive}>
+                    <div
+                      data-testid={TestIds.fileDropzone}
+                      style={{
+                        padding: Spacing.S,
+                        outline: dropActive ? '2px dashed currentColor' : '1px dashed transparent',
+                      }}
+                    >
+                      <Text hint={true}>
+                        {dropActive ? t('contactsimporter.file.dropactive') : t('contactsimporter.file.drophint')}
+                      </Text>
+                    </div>
+                  </Dropzone>
                 </Column>
               </Row>
               {/* Hidden native input: the button above opens it; tests set its files directly. */}
@@ -203,7 +225,7 @@ export const FileStep = ({
                 ref={inputRef}
                 type="file"
                 data-testid={TestIds.fileInput}
-                accept=".csv,.tsv,.tab,.txt,.ndjson,.jsonl,.gz"
+                accept=".csv,.tsv,.tab,.txt,.ndjson,.jsonl,.json,.xlsx,.gz,.zip"
                 style={{ display: 'none' }}
                 onChange={(event) => {
                   chooseFile(event.target.files);
@@ -235,8 +257,7 @@ export const FileStep = ({
               )}
             </Stack>
           </div>
-        </Paper>
-      </Dropzone>
+      </Paper>
 
       {error && <NotificationBarAlert>{error}</NotificationBarAlert>}
 
@@ -264,6 +285,7 @@ export const FileStep = ({
               onClick={() => onResumeUpload(selected)}
             />
         )}
+        {allowMapping && (
           <Button
             label={t('contactsimporter.file.next')}
             color={selected && fingerprintMatches && canResumeUpload(selected) ? ButtonColor.Secondary : ButtonColor.Primary}
@@ -271,6 +293,8 @@ export const FileStep = ({
             dataTestId={testId(TestIds.fileNext)}
             onClick={() => selected && onNext(selected)}
           />
+        )}
+        {actions}
       </Inline>
     </Stack>
   );
@@ -294,7 +318,11 @@ const SourceSettingsForm = ({ settings, sample, disabled, onChange }: SourceSett
   const formatOptions: Option[] = [
     { value: 'csv', label: t('contactsimporter.file.formatcsv') },
     { value: 'ndjson', label: t('contactsimporter.file.formatndjson') },
+    { value: 'json', label: t('contactsimporter.file.formatjson') },
+    { value: 'xlsx', label: t('contactsimporter.file.formatxlsx') },
   ];
+  const sheets = sample?.info.sheets ?? [];
+  const sheetOptions: Option[] = sheets.map((sheet) => ({ value: sheet, label: sheet }));
   const encodingOptions: Option[] = [
     {
       value: '',
@@ -334,18 +362,33 @@ const SourceSettingsForm = ({ settings, sample, disabled, onChange }: SourceSett
             value={format_}
             options={formatOptions}
             disabled={disabled}
-            onChange={(value) => onChange({ format: value === 'ndjson' ? 'ndjson' : 'csv' })}
+            dataTestId={TestIds.fileFormat}
+            onChange={(value) => onChange({ format: toSourceFormat(value), sheet: '' })}
           />
         </Column>
-        <Column cols={Cols.Col3}>
-          <OptionSelect
-            label={t('contactsimporter.file.encoding')}
-            value={settings.encoding}
-            options={encodingOptions}
-            disabled={disabled}
-            onChange={(value) => onChange({ encoding: value })}
-          />
-        </Column>
+        {format_ === 'xlsx' && sheets.length > 1 && (
+          <Column cols={Cols.Col3}>
+            <OptionSelect
+              label={t('contactsimporter.file.sheet')}
+              value={settings.sheet !== '' ? settings.sheet : (sample?.info.sheet ?? '')}
+              options={sheetOptions}
+              disabled={disabled}
+              dataTestId={TestIds.fileSheet}
+              onChange={(value) => onChange({ sheet: value })}
+            />
+          </Column>
+        )}
+        {format_ !== 'xlsx' && (
+          <Column cols={Cols.Col3}>
+            <OptionSelect
+              label={t('contactsimporter.file.encoding')}
+              value={settings.encoding}
+              options={encodingOptions}
+              disabled={disabled}
+              onChange={(value) => onChange({ encoding: value })}
+            />
+          </Column>
+        )}
         {format_ === 'csv' && (
           <Column cols={Cols.Col3}>
             <OptionSelect
@@ -369,9 +412,20 @@ const SourceSettingsForm = ({ settings, sample, disabled, onChange }: SourceSett
           </Column>
         )}
       </Row>
+      {sample?.info.zipEntry && (
+        <Text hint={true} data-testid={TestIds.fileZipEntry}>
+          {t('contactsimporter.file.zipentry', { entry: sample.info.zipEntry })}
+        </Text>
+      )}
     </Stack>
   );
 };
+
+const SOURCE_FORMATS: readonly SourceFormat[] = ['csv', 'ndjson', 'json', 'xlsx'];
+
+function toSourceFormat(value: string): SourceFormat {
+  return SOURCE_FORMATS.find((format) => format === value) ?? 'csv';
+}
 
 function delimiterName(delimiter: string, t: (key: string) => string): string {
   switch (delimiter) {

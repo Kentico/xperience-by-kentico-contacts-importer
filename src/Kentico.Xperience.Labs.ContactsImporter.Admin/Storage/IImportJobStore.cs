@@ -2,7 +2,8 @@ namespace Kentico.Xperience.Labs.ContactsImporter.Admin;
 
 /// <summary>
 /// File storage of import jobs under the configured storage path:
-/// <c>{root}/{jobId}/job.json</c>, <c>status.json</c>, <c>chunks/{n}.ndjson.gz</c> (+ <c>chunks/{n}.json</c> metadata)
+/// <c>{root}/{jobId}/job.json</c>, <c>status.json</c>, <c>chunks/{n}.ndjson.gz</c> (+ <c>chunks/{n}.json</c> metadata,
+/// <c>chunks/samples-{first row}.json</c> value examples of the analysis)
 /// and <c>report-*</c> files. Job IDs are GUIDs, so a job path can never leave the root.
 /// </summary>
 /// <remarks>
@@ -83,7 +84,29 @@ internal interface IImportJobStore
 
     public void DeleteChunk(Guid jobId, int index);
 
+    /// <summary>
+    /// Deletes the uploaded chunks and everything else stored with them (the value examples of the analysis).
+    /// </summary>
     public void DeleteChunks(Guid jobId);
+
+    /// <summary>
+    /// First rows of the stored parts of the value examples of the analysis (<see cref="ImportValueSample"/>), ordered.
+    /// The examples hold personal data, so they are stored with the uploaded data (<c>chunks/samples-{first row}.json</c>)
+    /// and deleted with it (<see cref="DeleteChunks"/>).
+    /// </summary>
+    public IReadOnlyList<long> ListSampleParts(Guid jobId);
+
+    /// <summary>
+    /// Stores a part of the value examples, replacing a part with the same first row. Does nothing when the uploaded data
+    /// is already deleted (the job finished meanwhile), so no examples are left without it.
+    /// </summary>
+    public void WriteSamplePart(Guid jobId, long firstRow, IReadOnlyList<ImportValueSample> samples);
+
+    /// <summary>A part of the value examples, or <c>null</c> when it does not exist.</summary>
+    public IReadOnlyList<ImportValueSample>? ReadSamplePart(Guid jobId, long firstRow);
+
+    /// <summary>Deletes a part of the value examples; does nothing when it does not exist.</summary>
+    public void DeleteSamplePart(Guid jobId, long firstRow);
 
     /// <summary>File names of the job's reports (<c>report-*</c>).</summary>
     public IReadOnlyList<string> ListReports(Guid jobId);

@@ -4,11 +4,12 @@ import { useBlocker } from 'react-router';
 
 import type { ExecuteCommand } from '../shared/commands';
 import { useText } from '../shared/i18n';
-import { Text } from '../shared/ui';
+import { DelayedReveal, DIALOG_MAX_WIDTH, Text } from '../shared/ui';
 
 import { CancelImport } from './CancelImport';
 import { progressFor } from './model';
 import type { JobView } from './model';
+import { OtherImportCallout, useOtherRuns } from './OtherImportRunning';
 import { ProcessPanel } from './ProcessPanel';
 import type { CountCardTexts } from './ProcessPanel';
 import { useProcessLoop } from './useProcessLoop';
@@ -18,13 +19,15 @@ export interface RunStepProps {
   readonly view: JobView;
   /** The job changed on the server (import finished, failed, cancelled, changed elsewhere): load it again. */
   readonly onReload: () => void;
+  /** Opens another import (the one whose unfinished Run keeps this one from starting). */
+  readonly onOpenImport: (jobId: string) => void;
 }
 
 /**
  * Run step: drives the import with `PROCESS_NEXT` calls, shows progress and running counts,
  * and why the import waits when it does. Leaving the page pauses the import.
  */
-export const RunStep = ({ execute, view, onReload }: RunStepProps) => {
+export const RunStep = ({ execute, view, onReload, onOpenImport }: RunStepProps) => {
   const { t } = useText();
   const cards = useMemo<CountCardTexts>(
     () => ({
@@ -52,6 +55,10 @@ export const RunStep = ({ execute, view, onReload }: RunStepProps) => {
   });
   const { status } = loop.snapshot;
   const active = status === 'running' || status === 'pausing';
+  // The server refused to start the Run (PLAN D60): show the other import and watch it until it ends.
+  const blockedByOther = status === 'paused' && loop.snapshot.pauseReason === 'otherImportRunning';
+  const otherRuns = useOtherRuns(execute, blockedByOther);
+  const otherImport = blockedByOther ? otherRuns.blocker : null;
 
   useEffect(() => {
     if (status === 'finished') {
@@ -78,37 +85,42 @@ export const RunStep = ({ execute, view, onReload }: RunStepProps) => {
   const blocker = useBlocker(active);
 
   return (
-    <Stack spacing={Spacing.L}>
-      <Headline size={HeadlineSize.M}>{t('contactsimporter.run.headline')}</Headline>
-      <ProcessPanel
-        view={loop}
-        runningText={loop.snapshot.calls === 0 ? t('contactsimporter.run.starting') : t('contactsimporter.run.running')}
-        cards={cards}
-        titleName={view.job.file.name}
-        usesList={view.job.options.recipientListId !== null}
-        usesConsent={view.job.options.consent !== 'none'}
-        actions={
-          <CancelImport
-            execute={execute}
-            message={t('contactsimporter.run.cancelmessage')}
-            keepLabel={t('contactsimporter.run.cancelkeep')}
-            onBeforeCancel={loop.pause}
-            onCancelled={onReload}
-          />
-        }
-      />
+    <DelayedReveal>
+      <Stack spacing={Spacing.L}>
+        <Headline size={HeadlineSize.M}>{t('contactsimporter.run.headline')}</Headline>
+        <ProcessPanel
+          view={loop}
+          runningText={loop.snapshot.calls === 0 ? t('contactsimporter.run.starting') : t('contactsimporter.run.running')}
+          cards={cards}
+          titleName={view.job.file.name}
+          usesList={view.job.options.recipientListId !== null}
+          usesConsent={view.job.options.consent !== 'none'}
+          pauseDetails={otherImport && <OtherImportCallout running={otherImport} onOpenImport={onOpenImport} />}
+          continueDisabled={otherImport !== null}
+          actions={
+            <CancelImport
+              execute={execute}
+              message={t('contactsimporter.run.cancelmessage')}
+              keepLabel={t('contactsimporter.run.cancelkeep')}
+              onBeforeCancel={loop.pause}
+              onCancelled={onReload}
+            />
+          }
+        />
 
-      <Dialog
-        isOpen={blocker.state === 'blocked'}
-        headline={t('contactsimporter.leave.headline')}
-        headerCloseButton={{ tooltipText: t('contactsimporter.leave.close') }}
-        isDismissable={true}
-        onClose={() => blocker.reset?.()}
-        confirmAction={{ label: t('contactsimporter.leave.leave'), onClick: () => blocker.proceed?.() }}
-        cancelAction={{ label: t('contactsimporter.leave.stay'), onClick: () => blocker.reset?.() }}
-      >
-        <Text>{t('contactsimporter.run.leavemessage')}</Text>
-      </Dialog>
-    </Stack>
+        <Dialog
+          maxWidth={DIALOG_MAX_WIDTH}
+          isOpen={blocker.state === 'blocked'}
+          headline={t('contactsimporter.leave.headline')}
+          headerCloseButton={{ tooltipText: t('contactsimporter.leave.close') }}
+          isDismissable={true}
+          onClose={() => blocker.reset?.()}
+          confirmAction={{ label: t('contactsimporter.leave.leave'), onClick: () => blocker.proceed?.() }}
+          cancelAction={{ label: t('contactsimporter.leave.stay'), onClick: () => blocker.reset?.() }}
+        >
+          <Text>{t('contactsimporter.run.leavemessage')}</Text>
+        </Dialog>
+      </Stack>
+    </DelayedReveal>
   );
 };

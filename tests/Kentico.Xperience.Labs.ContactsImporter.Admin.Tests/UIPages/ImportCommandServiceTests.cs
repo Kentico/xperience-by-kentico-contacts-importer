@@ -11,6 +11,7 @@ internal class ImportCommandServiceTests
     private MutableTimeProvider time = null!;
     private FakeContactFieldSchemaProvider schema = null!;
     private FakeUserNameProvider users = null!;
+    private Processing.FakeEventPublisher events = null!;
     private ImportCommandService service = null!;
     private Guid jobId;
     private string id = null!;
@@ -27,6 +28,7 @@ internal class ImportCommandServiceTests
         time = new MutableTimeProvider(TestData.Now);
         schema = new FakeContactFieldSchemaProvider(TestData.Fields);
         users = new FakeUserNameProvider { Names = { [UserId] = "administrator" } };
+        events = new Processing.FakeEventPublisher();
         var ingest = new ChunkIngestService(temp.Store, schema, temp.Options, time);
         var cleanup = new ImportJobCleanupService(temp.Store, temp.Options, time, NullLogger<ImportJobCleanupService>.Instance);
         var processor = new ImportProcessor(
@@ -37,7 +39,8 @@ internal class ImportCommandServiceTests
             new Processing.FakeCacheInvalidator(),
             temp.Options,
             time,
-            NullLogger<ImportProcessor>.Instance);
+            NullLogger<ImportProcessor>.Instance,
+            events: events);
         service = new ImportCommandService(
             temp.Store,
             ingest,
@@ -162,7 +165,7 @@ internal class ImportCommandServiceTests
                                                                                        Assert.That(service.TruncateChunks(invalidId, new TruncateChunksRequest { FromIndex = 0 }).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
                                                                                        Assert.That(service.CompleteUpload(invalidId, Profile(1, 1)).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
                                                                                        Assert.That(service.Cancel(invalidId, UserId).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
-                                                                                       Assert.That(service.DeleteFiles(invalidId, UserId).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+                                                                                       Assert.That(service.DeleteImport(invalidId, null, UserId).Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
                                                                                        Assert.That(Directory.Exists(temp.Root) ? Directory.GetFileSystemEntries(temp.Root) : [], Is.Empty);
                                                                                    });
 
@@ -749,38 +752,123 @@ internal class ImportCommandServiceTests
     }
 
     [Test]
-    public void DeleteFiles_Deletes_Chunks_And_Reports_And_Cancels_An_Unfinished_Job()
+    public void DeleteImport_Cancels_An_Unfinished_Job_Raises_The_Event_And_Then_Deletes_The_Folder()
     {
         StartUpload();
         Upload(0, 1, 3);
         File.WriteAllText(temp.JobPath(jobId, "report-analyze.csv.gz"), "x");
+        bool folderAtEvent = false;
+        events.OnPublish = () => folderAtEvent = temp.Store.JobExists(jobId);
 
-        var response = service.DeleteFiles(id, UserId);
+        var response = service.DeleteImport(id, null, UserId);
 
         Assert.Multiple(() =>
         {
             Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK));
-            Assert.That(response.Status!.State, Is.EqualTo("Cancelled"));
-            Assert.That(temp.Store.HasChunks(jobId), Is.False);
-            Assert.That(temp.Store.ListReports(jobId), Is.Empty);
-            Assert.That(temp.Store.JobExists(jobId), Is.True);
+            Assert.That(response.Status, Is.Null);
+            Assert.That(Directory.Exists(temp.JobPath(jobId)), Is.False);
+            Assert.That(events.Events.Select(e => (e.Job.JobId, e.Outcome, e.IsDryRun, e.UserId)), Is.EqualTo(new[] { (jobId, ContactImportStatus.Cancelled, true, (int?)UserId) }));
+            Assert.That(folderAtEvent, Is.True);
         });
     }
 
     [Test]
-    public void DeleteFiles_Keeps_The_State_Of_A_Finished_Job_And_Refuses_Unknown_Jobs()
+    public void DeleteImport_Deletes_A_Finished_Job_Without_An_Event()
     {
         StartUpload();
         temp.Store.UpdateStatus(jobId, s => s with { State = ImportJobState.Completed });
         File.WriteAllText(temp.JobPath(jobId, "report-execute.csv.gz"), "x");
 
-        var response = service.DeleteFiles(id, UserId);
+        var response = service.DeleteImport(id, null, UserId);
 
         Assert.Multiple(() =>
         {
-            Assert.That(response.Status!.State, Is.EqualTo("Completed"));
-            Assert.That(temp.Store.ListReports(jobId), Is.Empty);
-            Assert.That(service.DeleteFiles(Guid.NewGuid().ToString("D"), UserId).Code, Is.EqualTo(ImportCommandCodes.JOB_NOT_FOUND));
+            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK));
+            Assert.That(Directory.Exists(temp.JobPath(jobId)), Is.False);
+            Assert.That(events.Events, Is.Empty);
+            Assert.That(service.ListImports().Imports, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void DeleteImport_Of_A_Deleted_Or_Unknown_Job_Is_Ok()
+    {
+        StartUpload();
+        service.DeleteImport(id, null, UserId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(service.DeleteImport(id, null, UserId).Code, Is.EqualTo(ImportCommandCodes.OK));
+            Assert.That(service.DeleteImport(Guid.NewGuid().ToString("D"), null, UserId).Code, Is.EqualTo(ImportCommandCodes.OK));
+            Assert.That(events.Events, Has.Count.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void DeleteImport_Deletes_A_Job_With_An_Unreadable_Status()
+    {
+        StartUpload();
+        File.WriteAllText(temp.JobPath(jobId, "status.json"), "{ not json");
+
+        var response = service.DeleteImport(id, null, UserId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK));
+            Assert.That(Directory.Exists(temp.JobPath(jobId)), Is.False);
+        });
+    }
+
+    [TestCase(ImportJobState.Analyzing)]
+    [TestCase(ImportJobState.Running)]
+    public void DeleteImport_Refuses_A_Job_Another_Driver_Processes_Right_Now(ImportJobState state)
+    {
+        StartUpload();
+        temp.Store.UpdateStatus(jobId, s => s with { State = state, HeartbeatUtc = TestData.Now, DriverToken = "driver-1" });
+
+        var refused = service.DeleteImport(id, "other-driver", UserId);
+        var stateAfterRefusal = State();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(refused.Code, Is.EqualTo(ImportCommandCodes.IMPORT_ACTIVE));
+            Assert.That(refused.Message, Does.Contain("cannot be deleted"));
+            Assert.That(stateAfterRefusal, Is.EqualTo(state));
+            Assert.That(events.Events, Is.Empty);
+            Assert.That(service.DeleteImport(id, null, UserId).Code, Is.EqualTo(ImportCommandCodes.IMPORT_ACTIVE));
+        });
+    }
+
+    [Test]
+    public void DeleteImport_Lets_The_Driver_Delete_Its_Own_Analysis()
+    {
+        StartUpload();
+        temp.Store.UpdateStatus(jobId, s => s with { State = ImportJobState.Analyzing, HeartbeatUtc = TestData.Now, DriverToken = "driver-1" });
+
+        var response = service.DeleteImport(id, "driver-1", UserId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK));
+            Assert.That(Directory.Exists(temp.JobPath(jobId)), Is.False);
+            Assert.That(events.Events.Single().Outcome, Is.EqualTo(ContactImportStatus.Cancelled));
+        });
+    }
+
+    [Test]
+    public void DeleteImport_Cancels_And_Deletes_A_Paused_Import()
+    {
+        StartUpload();
+        temp.Store.UpdateStatus(jobId, s => s with { State = ImportJobState.Running, HeartbeatUtc = TestData.Now, DriverToken = "driver-1" });
+        time.Advance(TimeSpan.FromMinutes(10));
+
+        var response = service.DeleteImport(id, null, UserId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK));
+            Assert.That(Directory.Exists(temp.JobPath(jobId)), Is.False);
+            Assert.That(events.Events.Single().Outcome, Is.EqualTo(ContactImportStatus.Cancelled));
         });
     }
 
@@ -809,7 +897,6 @@ internal class ImportCommandServiceTests
             Assert.That(list.Imports.Select(i => i.State), Is.EqualTo(new[] { "Cancelled", "Uploading", "Uploaded" }));
             Assert.That(list.Imports.Select(i => i.CreatedBy), Is.EqualTo(new[] { "administrator", "", "administrator" }));
             Assert.That(list.Imports.Select(i => i.CanContinue), Is.EqualTo(new[] { false, true, true }));
-            Assert.That(list.Imports.Select(i => i.HasFiles), Is.EqualTo(new[] { false, false, true }));
             Assert.That(list.Imports[2].RowsValid, Is.EqualTo(3));
             Assert.That(list.Imports[2].JobId, Is.EqualTo(id));
             Assert.That(list.Imports[2].FileSize, Is.EqualTo(1234));

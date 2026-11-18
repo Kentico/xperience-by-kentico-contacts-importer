@@ -36,6 +36,19 @@ module.exports.pitch = function pitch(request) {
   );
 
   child.runAsChild((error, entries, compilation) => {
+    // Watch mode (`npm start`): rebuild the worker when any file it imports changes, not only this module.
+    if (compilation) {
+      for (const file of compilation.fileDependencies) {
+        this.addDependency(file);
+      }
+      for (const directory of compilation.contextDependencies) {
+        this.addContextDependency(directory);
+      }
+      for (const missing of compilation.missingDependencies) {
+        this.addMissingDependency(missing);
+      }
+    }
+
     if (error) {
       callback(error);
 

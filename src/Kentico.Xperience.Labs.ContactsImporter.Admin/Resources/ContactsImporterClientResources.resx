@@ -34,7 +34,7 @@
     <value>Imports</value>
   </data>
   <data name="contactsimporter.list.intro" xml:space="preserve">
-    <value>Import contacts from CSV, TSV or NDJSON files. The file is read in your browser; only the columns you map are uploaded.</value>
+    <value>Import contacts from CSV, TSV, NDJSON, JSON or Excel (.xlsx) files. The file is read in your browser; only the columns you map are uploaded.</value>
   </data>
   <data name="contactsimporter.list.newimport" xml:space="preserve">
     <value>New import</value>
@@ -87,20 +87,20 @@
   <data name="contactsimporter.list.continue" xml:space="preserve">
     <value>Continue</value>
   </data>
-  <data name="contactsimporter.list.deletefiles" xml:space="preserve">
-    <value>Delete files</value>
+  <data name="contactsimporter.list.delete" xml:space="preserve">
+    <value>Delete</value>
   </data>
   <data name="contactsimporter.list.deleteheadline" xml:space="preserve">
-    <value>Delete import files?</value>
+    <value>Delete this import?</value>
   </data>
   <data name="contactsimporter.list.deletemessage" xml:space="preserve">
-    <value>The uploaded data and reports of "{{fileName}}" are deleted from the server now. An import that is not finished is cancelled. The import stays in this list.</value>
+    <value>"{{fileName}}" is removed from this list together with its uploaded data, check results and row reports. An import that is not finished is cancelled first. Contacts that were already imported stay as they are. This cannot be undone.</value>
   </data>
   <data name="contactsimporter.list.deleteconfirm" xml:space="preserve">
-    <value>Delete files</value>
+    <value>Delete import</value>
   </data>
   <data name="contactsimporter.list.deletefailed" xml:space="preserve">
-    <value>The files could not be deleted.</value>
+    <value>The import could not be deleted.</value>
   </data>
   <data name="contactsimporter.list.cancel" xml:space="preserve">
     <value>Cancel</value>
@@ -195,6 +195,9 @@
   <data name="contactsimporter.options.invalidemailimport" xml:space="preserve">
     <value>Import the row without the email address</value>
   </data>
+  <data name="contactsimporter.options.contactsheadline" xml:space="preserve">
+    <value>New and existing contacts</value>
+  </data>
   <data name="contactsimporter.options.sourceheadline" xml:space="preserve">
     <value>Mark imported contacts</value>
   </data>
@@ -243,14 +246,14 @@
   <data name="contactsimporter.options.nothingtodo" xml:space="preserve">
     <value>With these options no contact is created or updated, and no recipient list or consent is chosen. Change one of the first two options, or choose a recipient list or a consent below.</value>
   </data>
-  <data name="contactsimporter.options.back" xml:space="preserve">
-    <value>Back to upload</value>
-  </data>
   <data name="contactsimporter.options.save" xml:space="preserve">
     <value>Save and check the file</value>
   </data>
   <data name="contactsimporter.options.next" xml:space="preserve">
     <value>Continue to review</value>
+  </data>
+  <data name="contactsimporter.options.waitingforupload" xml:space="preserve">
+    <value>Waiting for the upload to finish. You can choose the options meanwhile; they are saved when the file is checked.</value>
   </data>
   <data name="contactsimporter.options.saving" xml:space="preserve">
     <value>Saving…</value>
@@ -271,7 +274,7 @@
     <value>Recipient list</value>
   </data>
   <data name="contactsimporter.listoptions.listnone" xml:space="preserve">
-    <value>Do not change recipient lists</value>
+    <value>(None)</value>
   </data>
   <data name="contactsimporter.listoptions.listhelp" xml:space="preserve">
     <value>Contacts that are not on the list yet are added as subscribed. They do not get a confirmation (double opt-in) email.</value>
@@ -286,7 +289,7 @@
     <value>Only add contacts who agreed to receive these emails</value>
   </data>
   <data name="contactsimporter.listoptions.callouttext" xml:space="preserve">
-    <value>The import subscribes contacts directly. Xperience does not send them a confirmation (double opt-in) email and cannot check that they agreed. Only import contacts who agreed to receive the emails of this list, and keep a record of when and how each of them agreed: you may have to show it. The rules for email marketing and consent differ between countries and regions. If you are not sure which rules apply to you, ask the person responsible for data protection in your organization. This is not legal advice.</value>
+    <value>The import subscribes contacts directly. Xperience does not send them a confirmation (double opt-in) email and cannot check that they agreed. Only import contacts who agreed to receive the emails of this list, and keep a record of when and how each of them agreed: you may have to show it. The rules for email marketing and consent differ between countries and regions. If you are not sure which rules apply to you, ask the person responsible for data protection in your organization.</value>
   </data>
   <data name="contactsimporter.listoptions.calloutlink" xml:space="preserve">
     <value>Data protection in the Xperience documentation</value>
@@ -370,7 +373,7 @@
     <value>Use a consent that matches what the contacts agreed to</value>
   </data>
   <data name="contactsimporter.consentoptions.callouttext" xml:space="preserve">
-    <value>Create a separate consent for this import whose text is what these contacts agreed to, and name it so you can tell where it came from, for example "Newsletter – webinar signup form, 2024–2026". Do not use a consent of your website that these contacts never saw. Finish the consent text before you import: each agreement is tied to the text the consent has at that moment. Keep the record of when and how each contact agreed. This is not legal advice.</value>
+    <value>Create a separate consent for this import whose text is what these contacts agreed to, and name it so you can tell where it came from, for example "Newsletter – webinar signup form, 2024–2026". Do not use a consent of your website that these contacts never saw. Finish the consent text before you import: each agreement is tied to the text the consent has at that moment. Keep the record of when and how each contact agreed.</value>
   </data>
   <data name="contactsimporter.consentoptions.timeimport" xml:space="preserve">
     <value>Each agreement gets the time of the import.</value>
@@ -507,11 +510,17 @@
   <data name="contactsimporter.process.paused.activeelsewhere" xml:space="preserve">
     <value>This import is being processed in another browser tab or by another user right now. You can continue here once it stops there.</value>
   </data>
+  <data name="contactsimporter.process.waitingforother" xml:space="preserve">
+    <value>Waiting for the other browser tab or user to stop. The import continues here once it has stopped there; this can take a minute. Pause to stop waiting.</value>
+  </data>
   <data name="contactsimporter.process.paused.stale" xml:space="preserve">
     <value>This import was started in another browser tab or by another user and stopped there. Continue here to take it over.</value>
   </data>
   <data name="contactsimporter.process.paused.takenover" xml:space="preserve">
     <value>Another browser tab or user continued this import. It no longer runs in this tab.</value>
+  </data>
+  <data name="contactsimporter.process.paused.otherimportrunning" xml:space="preserve">
+    <value>Waiting: another import was started and has not finished. Only one import can run at a time. Continue when the other import is finished or cancelled.</value>
   </data>
   <data name="contactsimporter.counts.rows" xml:space="preserve">
     <value>Rows processed</value>
@@ -688,22 +697,67 @@
     <value>The file has rows with the same match value ({{amount}} likely duplicates found during upload). The number of new contacts shown here can be too high; the import itself creates each contact once.</value>
   </data>
   <data name="contactsimporter.review.downloadreport" xml:space="preserve">
-    <value>Download row report</value>
+    <value>Download expected results</value>
   </data>
   <data name="contactsimporter.review.downloadfailed" xml:space="preserve">
     <value>The report could not be downloaded. {{reason}}</value>
   </data>
   <data name="contactsimporter.review.reporthint" xml:space="preserve">
-    <value>Gzipped CSV with one line per row: row number, what happens to it and why.</value>
+    <value>What the import would do with each row and why. Use it to find rows that would be skipped and fix the file before you run the import.</value>
   </data>
   <data name="contactsimporter.review.reporthintkey" xml:space="preserve">
-    <value>Gzipped CSV with one line per row: row number, what happens to it, why, and the match value (personal data).</value>
+    <value>What the import would do with each row and why, with the match value (personal data). Use it to find rows that would be skipped and fix the file before you run the import.</value>
   </data>
   <data name="contactsimporter.review.back" xml:space="preserve">
     <value>Back to options</value>
   </data>
   <data name="contactsimporter.review.run" xml:space="preserve">
     <value>Run import</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.headline" xml:space="preserve">
+    <value>Another import is running</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.text" xml:space="preserve">
+    <value>Only one import can run at a time. You can run this import when the other one is finished or cancelled. Open the other import to continue or cancel it. This page checks again every few seconds.</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.file" xml:space="preserve">
+    <value>File: {{fileName}}</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.user" xml:space="preserve">
+    <value>User: {{user}}</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.started" xml:space="preserve">
+    <value>Started: {{time}}</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.progress" xml:space="preserve">
+    <value>Progress: {{done}} of {{total}} rows</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.starting" xml:space="preserve">
+    <value>It was confirmed and has not started yet.</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.reason" xml:space="preserve">
+    <value>Waiting for the other import to finish or be cancelled.</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.headlinepaused" xml:space="preserve">
+    <value>Another import is paused and not finished</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.headlineconfirmed" xml:space="preserve">
+    <value>Another import is confirmed and not finished</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.confirmed" xml:space="preserve">
+    <value>Confirmed: {{time}}</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.lastprogress" xml:space="preserve">
+    <value>Last progress: {{time}}</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.paused" xml:space="preserve">
+    <value>Nobody is running it right now. It stays unfinished until someone continues or cancels it.</value>
+  </data>
+  <data name="contactsimporter.review.otherrunning.open" xml:space="preserve">
+    <value>Open the other import</value>
+  </data>
+  <data name="contactsimporter.review.olderthanotherrun" xml:space="preserve">
+    <value>Another import finished at {{time}}, after this check. It may have changed the same contacts, so what this import does may differ from the counts below.</value>
   </data>
   <data name="contactsimporter.review.confirmheadline" xml:space="preserve">
     <value>Run this import?</value>
@@ -894,29 +948,11 @@
   <data name="contactsimporter.results.cachetext" xml:space="preserve">
     <value>The import did not finish, so cached contact data was not refreshed. An administrator can clear the cache in the System application.</value>
   </data>
-  <data name="contactsimporter.results.deletefiles" xml:space="preserve">
-    <value>Delete import files now</value>
-  </data>
-  <data name="contactsimporter.results.deleteheadline" xml:space="preserve">
-    <value>Delete the files of this import?</value>
-  </data>
-  <data name="contactsimporter.results.deletemessage" xml:space="preserve">
-    <value>The row reports and any uploaded data left on the server are deleted now. The counts on this page stay.</value>
-  </data>
-  <data name="contactsimporter.results.deleteconfirm" xml:space="preserve">
-    <value>Delete files</value>
-  </data>
-  <data name="contactsimporter.results.deletefailed" xml:space="preserve">
-    <value>The files could not be deleted.</value>
-  </data>
-  <data name="contactsimporter.results.deleted" xml:space="preserve">
-    <value>The files of this import were deleted from the server.</value>
-  </data>
   <data name="contactsimporter.file.headline" xml:space="preserve">
     <value>Choose a file</value>
   </data>
   <data name="contactsimporter.file.intro" xml:space="preserve">
-    <value>CSV, TSV or NDJSON, optionally gzipped (.gz). The file stays on your computer: it is read in the browser and only mapped columns are uploaded.</value>
+    <value>CSV, TSV, NDJSON, JSON (an array of objects) or Excel (.xlsx). Text files can be gzipped (.gz); any of them can be the only file in a .zip. The file stays on your computer: it is read in the browser and only mapped columns are uploaded.</value>
   </data>
   <data name="contactsimporter.file.select" xml:space="preserve">
     <value>Select file</value>
@@ -943,7 +979,7 @@
     <value>The file could not be read: {{reason}}</value>
   </data>
   <data name="contactsimporter.file.unsupported" xml:space="preserve">
-    <value>This file type is not supported. Use CSV, TSV or NDJSON, optionally gzipped.</value>
+    <value>This file type is not supported. Use CSV, TSV, NDJSON, JSON or Excel (.xlsx); text files can be gzipped, and any of them can be in a .zip.</value>
   </data>
   <data name="contactsimporter.file.summary" xml:space="preserve">
     <value>{{fileName}} · {{size}} · about {{rows}} rows · {{columns}} columns</value>
@@ -968,6 +1004,18 @@
   </data>
   <data name="contactsimporter.file.formatndjson" xml:space="preserve">
     <value>NDJSON (one JSON object per line)</value>
+  </data>
+  <data name="contactsimporter.file.formatjson" xml:space="preserve">
+    <value>JSON (an array of objects)</value>
+  </data>
+  <data name="contactsimporter.file.formatxlsx" xml:space="preserve">
+    <value>Excel workbook (.xlsx)</value>
+  </data>
+  <data name="contactsimporter.file.sheet" xml:space="preserve">
+    <value>Sheet</value>
+  </data>
+  <data name="contactsimporter.file.zipentry" xml:space="preserve">
+    <value>Reading {{entry}} from the zip file.</value>
   </data>
   <data name="contactsimporter.file.encoding" xml:space="preserve">
     <value>Encoding</value>
@@ -1029,6 +1077,9 @@
   <data name="contactsimporter.file.resumemismatchtext" xml:space="preserve">
     <value>The import was started with "{{fileName}}" ({{size}}). If you continue with the selected file, the data uploaded so far is deleted and the upload starts over.</value>
   </data>
+  <data name="contactsimporter.file.resumemismatchlockedtext" xml:space="preserve">
+    <value>The import was started with "{{fileName}}" ({{size}}). Select that file to continue the upload, or start a new import.</value>
+  </data>
   <data name="contactsimporter.file.resumecontinue" xml:space="preserve">
     <value>Continue upload</value>
   </data>
@@ -1053,11 +1104,17 @@
   <data name="contactsimporter.map.targetfor" xml:space="preserve">
     <value>Contact field for {{column}}</value>
   </data>
+  <data name="contactsimporter.map.columnsheadline" xml:space="preserve">
+    <value>Columns</value>
+  </data>
+  <data name="contactsimporter.map.matchingheadline" xml:space="preserve">
+    <value>Matching and dates</value>
+  </data>
   <data name="contactsimporter.map.consentheadline" xml:space="preserve">
     <value>Consent columns (optional)</value>
   </data>
   <data name="contactsimporter.map.consentintro" xml:space="preserve">
-    <value>If the file says for each row whether the contact gave consent, choose that column here. In the options you can then record consent agreements only for the rows that say yes. These columns are not saved as contact fields.</value>
+    <value>Does your file have a column that shows which contacts gave consent? Choose it here. In the Options step, you can then record consent only for those contacts. These columns are only used for consent and are not saved to contacts.</value>
   </data>
   <data name="contactsimporter.map.consentagreed" xml:space="preserve">
     <value>Consent given</value>
@@ -1066,7 +1123,7 @@
     <value>No column</value>
   </data>
   <data name="contactsimporter.map.consentagreedhelp" xml:space="preserve">
-    <value>A row says yes with one of these values: y, yes, true, 1, x. Any other value, or no value, means no.</value>
+    <value>Counts as consent: y, yes, true, 1 or x. Any other value, or an empty cell, means no consent.</value>
   </data>
   <data name="contactsimporter.map.consentdate" xml:space="preserve">
     <value>Consent date</value>
@@ -1136,9 +1193,6 @@
   </data>
   <data name="contactsimporter.map.savefailed" xml:space="preserve">
     <value>The mapping could not be saved. Check your connection and try again.</value>
-  </data>
-  <data name="contactsimporter.upload.headline" xml:space="preserve">
-    <value>Upload</value>
   </data>
   <data name="contactsimporter.upload.working" xml:space="preserve">
     <value>Reading the file and uploading mapped columns…</value>
@@ -1224,44 +1278,50 @@
   <data name="contactsimporter.upload.retry" xml:space="preserve">
     <value>Try again</value>
   </data>
-  <data name="contactsimporter.upload.backtomap" xml:space="preserve">
-    <value>Change mapping</value>
+  <data name="contactsimporter.upload.bar.running" xml:space="preserve">
+    <value>Uploading… {{percent}} %</value>
   </data>
-  <data name="contactsimporter.upload.cancelimport" xml:space="preserve">
-    <value>Cancel import</value>
+  <data name="contactsimporter.upload.bar.rate" xml:space="preserve">
+    <value>Speed: {{rate}}/s</value>
   </data>
-  <data name="contactsimporter.upload.cancelheadline" xml:space="preserve">
-    <value>Cancel this import?</value>
+  <data name="contactsimporter.upload.bar.paused" xml:space="preserve">
+    <value>Upload paused at {{percent}} %</value>
+  </data>
+  <data name="contactsimporter.upload.bar.failed" xml:space="preserve">
+    <value>Upload stopped at {{percent}} %</value>
+  </data>
+  <data name="contactsimporter.upload.bar.done" xml:space="preserve">
+    <value>Upload complete</value>
+  </data>
+  <data name="contactsimporter.upload.bar.rows" xml:space="preserve">
+    <value>Rows to import: {{rows}}</value>
+  </data>
+  <data name="contactsimporter.upload.bar.skipped" xml:space="preserve">
+    <value>Rows skipped: {{skipped}}</value>
+  </data>
+  <data name="contactsimporter.upload.bar.earlier" xml:space="preserve">
+    <value>The file was uploaded in an earlier visit. The lists of skipped rows and likely duplicates are created in the browser during the upload, so they are not available any more.</value>
+  </data>
+  <data name="contactsimporter.upload.bar.showdetails" xml:space="preserve">
+    <value>Show details</value>
+  </data>
+  <data name="contactsimporter.upload.bar.hidedetails" xml:space="preserve">
+    <value>Hide details</value>
+  </data>
+  <data name="contactsimporter.startnew.button" xml:space="preserve">
+    <value>Start a new import</value>
+  </data>
+  <data name="contactsimporter.file.cancelmessage" xml:space="preserve">
+    <value>Nothing has been uploaded yet and no contacts have been changed. The import is discarded.</value>
   </data>
   <data name="contactsimporter.upload.cancelmessage" xml:space="preserve">
-    <value>The data uploaded so far is deleted from the server. This cannot be undone.</value>
-  </data>
-  <data name="contactsimporter.upload.cancelconfirm" xml:space="preserve">
-    <value>Cancel import</value>
+    <value>The uploaded data and the check results are deleted. No contacts have been changed. This cannot be undone.</value>
   </data>
   <data name="contactsimporter.upload.cancelkeep" xml:space="preserve">
     <value>Keep import</value>
   </data>
-  <data name="contactsimporter.upload.cancelfailed" xml:space="preserve">
-    <value>The import could not be cancelled.</value>
-  </data>
   <data name="contactsimporter.upload.paused" xml:space="preserve">
     <value>The upload is paused. Parts already uploaded stay on the server.</value>
-  </data>
-  <data name="contactsimporter.upload.selectfile" xml:space="preserve">
-    <value>Select the file again to continue the upload.</value>
-  </data>
-  <data name="contactsimporter.upload.doneheadline" xml:space="preserve">
-    <value>Upload complete</value>
-  </data>
-  <data name="contactsimporter.upload.donetext" xml:space="preserve">
-    <value>Rows ready for the next step: {{amount}}.</value>
-  </data>
-  <data name="contactsimporter.upload.donetextprevious" xml:space="preserve">
-    <value>Rows uploaded earlier and ready for the next step: {{amount}}.</value>
-  </data>
-  <data name="contactsimporter.upload.next" xml:space="preserve">
-    <value>Continue to options</value>
   </data>
   <data name="contactsimporter.upload.errors.worker" xml:space="preserve">
     <value>The file could not be processed: {{reason}}</value>
@@ -1291,7 +1351,7 @@
     <value>Clean data is expected: one row per contact. Duplicates are applied in file order (the last non-empty value wins) and the preview of new contacts may be too high. To fix it, cancel the import, clean the file and start again.</value>
   </data>
   <data name="contactsimporter.upload.downloadduplicates" xml:space="preserve">
-    <value>Download row numbers</value>
+    <value>Download likely duplicates</value>
   </data>
   <data name="contactsimporter.upload.rejectedheadline" xml:space="preserve">
     <value>Skipped rows: {{amount}}</value>
@@ -1331,9 +1391,6 @@
   </data>
   <data name="contactsimporter.leave.message" xml:space="preserve">
     <value>The upload pauses when you leave. You can continue later by opening the import and selecting the same file.</value>
-  </data>
-  <data name="contactsimporter.leave.cancel" xml:space="preserve">
-    <value>Cancel</value>
   </data>
   <data name="contactsimporter.leave.stay" xml:space="preserve">
     <value>Stay</value>
@@ -1428,6 +1485,42 @@
   <data name="contactsimporter.file.readfailednodetail" xml:space="preserve">
     <value>The file could not be read.</value>
   </data>
+  <data name="contactsimporter.file.itemtoolarge" xml:space="preserve">
+    <value>Item {{row}} of the JSON array is longer than {{maxChars}} characters.</value>
+  </data>
+  <data name="contactsimporter.file.unsupportedspreadsheet" xml:space="preserve">
+    <value>.{{extension}} files are not supported. Save the sheet as an Excel workbook (.xlsx) or as CSV and choose that file.</value>
+  </data>
+  <data name="contactsimporter.file.invalidjson" xml:space="preserve">
+    <value>The file is not valid JSON (the error is at item {{item}} of the array). Fix the file or export it again.</value>
+  </data>
+  <data name="contactsimporter.file.jsonnotarray" xml:space="preserve">
+    <value>The JSON file must hold an array of objects ([ {…}, {…} ]). If it has one object per line, choose the NDJSON format.</value>
+  </data>
+  <data name="contactsimporter.file.invalidzip" xml:space="preserve">
+    <value>The zip file is damaged and cannot be read.</value>
+  </data>
+  <data name="contactsimporter.file.zipempty" xml:space="preserve">
+    <value>The zip file holds no data file.</value>
+  </data>
+  <data name="contactsimporter.file.zipmultipleentries" xml:space="preserve">
+    <value>The zip file holds {{files}} files. Put only the file to import in the zip.</value>
+  </data>
+  <data name="contactsimporter.file.zipencrypted" xml:space="preserve">
+    <value>The zip file is password protected. Use a zip without a password.</value>
+  </data>
+  <data name="contactsimporter.file.unsupportedcompression" xml:space="preserve">
+    <value>The zip file uses a compression method that cannot be read in the browser. Create the zip again with standard (deflate) compression.</value>
+  </data>
+  <data name="contactsimporter.file.invalidxlsx" xml:space="preserve">
+    <value>The file is not a readable Excel workbook (.xlsx). Open it in Excel and save it as .xlsx or CSV again.</value>
+  </data>
+  <data name="contactsimporter.file.sheetnotfound" xml:space="preserve">
+    <value>The workbook has no sheet "{{sheet}}". Choose another sheet.</value>
+  </data>
+  <data name="contactsimporter.file.toomanyrows" xml:space="preserve">
+    <value>The sheet has more than {{maxRows}} rows, more than Excel allows.</value>
+  </data>
   <data name="contactsimporter.upload.errors.invalidconfig" xml:space="preserve">
     <value>The mapping does not fit this file. Go back to the mapping and save it again.</value>
   </data>
@@ -1439,5 +1532,56 @@
   </data>
   <data name="contactsimporter.upload.errors.completenodetail" xml:space="preserve">
     <value>The upload could not be finished.</value>
+  </data>
+  <data name="contactsimporter.review.mappingheadline" xml:space="preserve">
+    <value>Mapping</value>
+  </data>
+  <data name="contactsimporter.review.mappingkeymark" xml:space="preserve">
+    <value>Match field</value>
+  </data>
+  <data name="contactsimporter.review.mappingkey" xml:space="preserve">
+    <value>Existing contacts are matched by: {{field}}</value>
+  </data>
+  <data name="contactsimporter.review.mappingdateformat" xml:space="preserve">
+    <value>Date format in the file: {{format}}</value>
+  </data>
+  <data name="contactsimporter.review.mappingconsentagreed" xml:space="preserve">
+    <value>Consent given column: {{column}}</value>
+  </data>
+  <data name="contactsimporter.review.mappingconsentdate" xml:space="preserve">
+    <value>Consent date column: {{column}}</value>
+  </data>
+  <data name="contactsimporter.review.mappingshowall" xml:space="preserve">
+    <value>Show all {{amount}} columns</value>
+  </data>
+  <data name="contactsimporter.review.mappingshowfewer" xml:space="preserve">
+    <value>Show fewer columns</value>
+  </data>
+  <data name="contactsimporter.review.samplesheadline" xml:space="preserve">
+    <value>Examples of changes</value>
+  </data>
+  <data name="contactsimporter.review.samplesintro" xml:space="preserve">
+    <value>Up to three contacts per field, from the first rows of the file. These are examples, not all changes. The expected results report lists every row the import updates.</value>
+  </data>
+  <data name="contactsimporter.review.samplesclearedheadline" xml:space="preserve">
+    <value>Values that will be cleared</value>
+  </data>
+  <data name="contactsimporter.review.samplesclearedtext" xml:space="preserve">
+    <value>The file has an empty value for these contacts, and empty values clear fields. The contacts lose the value they have now.</value>
+  </data>
+  <data name="contactsimporter.review.sampleschangedheadline" xml:space="preserve">
+    <value>Values that will change</value>
+  </data>
+  <data name="contactsimporter.review.samplesrow" xml:space="preserve">
+    <value>Row {{row}}</value>
+  </data>
+  <data name="contactsimporter.review.samplesempty" xml:space="preserve">
+    <value>(empty)</value>
+  </data>
+  <data name="contactsimporter.review.samplesshowall" xml:space="preserve">
+    <value>Show all {{amount}} fields</value>
+  </data>
+  <data name="contactsimporter.review.samplesshowfewer" xml:space="preserve">
+    <value>Show fewer fields</value>
   </data>
 </root>

@@ -55,6 +55,17 @@ internal interface IImportProcessor
     /// <param name="jobId">Job to cancel.</param>
     /// <param name="userId">User who cancels, for the event log and the event; <c>null</c> = not known.</param>
     public ImportCancelResult Cancel(Guid jobId, int? userId = null);
+
+    /// <summary>
+    /// <see cref="Cancel"/> for deleting an import: refuses (<see cref="ImportCancelOutcome.ActiveElsewhere"/>, nothing
+    /// changes) when another driver is analyzing or running the job right now
+    /// (<see cref="ImportJobStateMachine.IsActivelyDriven"/>). The driver with <paramref name="driverToken"/> may cancel
+    /// the job it drives. The check and the cancellation are one status update.
+    /// </summary>
+    /// <param name="jobId">Job to cancel.</param>
+    /// <param name="driverToken">Driver token of the caller; <c>null</c> when the caller does not drive the job.</param>
+    /// <param name="userId">User who cancels, for the event log and the event; <c>null</c> = not known.</param>
+    public ImportCancelResult CancelIfIdle(Guid jobId, string? driverToken, int? userId = null);
 }
 
 internal enum ImportProcessOutcome
@@ -161,6 +172,9 @@ internal enum ImportCancelOutcome
 
     /// <summary>The job is already Completed, Failed or Cancelled.</summary>
     AlreadyFinished,
+
+    /// <summary><see cref="IImportProcessor.CancelIfIdle"/>: another driver analyzes or runs the job right now.</summary>
+    ActiveElsewhere,
 }
 
 /// <param name="Outcome">Result of the cancellation.</param>

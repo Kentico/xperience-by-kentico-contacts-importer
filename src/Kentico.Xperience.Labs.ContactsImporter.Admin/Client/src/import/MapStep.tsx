@@ -6,11 +6,10 @@ import {
   CalloutType,
   Cols,
   Column,
-  Divider,
-  DividerOrientation,
   Headline,
   HeadlineSize,
   Inline,
+  LayoutAlignment,
   NotificationBarAlert,
   NotificationBarWarning,
   Row,
@@ -34,7 +33,7 @@ import {
 import type { MappingProblem, MappingState, SavedMapping } from '../mapping/mapping-state';
 import type { FieldDto } from '../shared/commands';
 import { useText } from '../shared/i18n';
-import { OptionSelect, TestIds, Text, testId } from '../shared/ui';
+import { OptionSelect, Section, TestIds, Text, testId } from '../shared/ui';
 import type { Option } from '../shared/ui';
 
 import { fieldLabel } from './model';
@@ -60,6 +59,8 @@ export interface MapStepProps {
   readonly serverErrors: readonly string[];
   readonly onChange: (mapping: MappingState) => void;
   readonly onBack: () => void;
+  /** Further buttons after "Save and upload" ("Cancel import"). */
+  readonly actions?: React.ReactNode;
   readonly onSave: () => void;
 }
 
@@ -80,11 +81,12 @@ export const MapStep = ({
   serverErrors,
   onChange,
   onBack,
+  actions,
   onSave,
 }: MapStepProps) => {
   const { t, percent } = useText();
   const fieldOptions = useMemo<Option[]>(
-    () => [{ value: '', label: t('contactsimporter.map.donotimport') }, ...fields.map((field) => ({ value: field.name, label: fieldLabel(field) }))],
+    () => [{ value: '', label: t('contactsimporter.map.donotimport') }, ...fields.map((field) => ({ value: field.name, label: fieldLabel(field), secondaryLabel: field.name }))],
     [fields, t],
   );
   const fieldByName = useMemo(() => new Map(fields.map((field) => [field.name, field])), [fields]);
@@ -95,7 +97,7 @@ export const MapStep = ({
     .map((target) => {
       const field = fieldByName.get(target);
 
-      return { value: target, label: field ? fieldLabel(field) : target };
+      return { value: target, label: field ? fieldLabel(field) : target, secondaryLabel: target };
     });
   const keyField = fieldByName.get(mapping.keyField);
   const keyNotAllowed = keyField !== undefined && !keyField.canBeKey;
@@ -114,89 +116,101 @@ export const MapStep = ({
 
   return (
     <Stack spacing={Spacing.L}>
-      <Headline size={HeadlineSize.M}>{t('contactsimporter.map.headline')}</Headline>
-      <Text>{t('contactsimporter.map.intro')}</Text>
-
       <Stack spacing={Spacing.S}>
-        <Row spacing={Spacing.L}>
-          <Column cols={Cols.Col3}>
-            <Text strong={true}>{t('contactsimporter.map.column')}</Text>
-          </Column>
-          <Column cols={Cols.Col4}>
-            <Text strong={true}>{t('contactsimporter.map.examples')}</Text>
-          </Column>
-          <Column cols={Cols.Col1}>
-            <Text strong={true}>{t('contactsimporter.map.filled')}</Text>
-          </Column>
-          <Column cols={Cols.Col4}>
-            <Text strong={true}>{t('contactsimporter.map.target')}</Text>
-          </Column>
-        </Row>
-        <Divider orientation={DividerOrientation.Horizontal} />
-        {mapping.columns.map((column, index) => {
-          const profile = sample.columns[index];
-
-          return (
-            // Column names can repeat, so the position is part of the key.
-            <Row key={`${index}:${column.source}`} spacing={Spacing.L}>
-              <Column cols={Cols.Col3}>
-                <Text style={{ paddingTop: Spacing.S }}>{column.source}</Text>
-              </Column>
-              <Column cols={Cols.Col4}>
-                <Text hint={true} style={{ paddingTop: Spacing.S }}>
-                  {(profile?.examples ?? []).map((example) => truncate(example, 40)).join(' · ')}
-                </Text>
-              </Column>
-              <Column cols={Cols.Col1}>
-                <Text style={{ paddingTop: Spacing.S }}>{profile ? `${percent(Math.round(profile.fillRate * 100))} %` : ''}</Text>
-              </Column>
-              <Column cols={Cols.Col4}>
-                <div data-mapping-column={column.source} aria-label={t('contactsimporter.map.targetfor', { column: column.source })}>
-                  <OptionSelect
-                    value={column.target}
-                    options={fieldOptions}
-                    disabled={saving}
-                    dataTestId={`contacts-importer-target-${index}`}
-                    onChange={(target) => onChange(setColumnTarget(mapping, index, target))}
-                  />
-                </div>
-              </Column>
-            </Row>
-          );
-        })}
+        <Headline size={HeadlineSize.M}>{t('contactsimporter.map.headline')}</Headline>
+        <Text>{t('contactsimporter.map.intro')}</Text>
       </Stack>
 
-      <Row spacing={Spacing.L}>
-        <Column cols={Cols.Col4}>
-          <OptionSelect
-            label={t('contactsimporter.map.keyfield')}
-            value={mapping.keyField}
-            options={keyOptions}
-            disabled={saving || keyOptions.length === 0}
-            explanationText={t('contactsimporter.map.keyfieldhelp')}
-            dataTestId={TestIds.keyField}
-            onChange={(keyField) => onChange(setKeyField(mapping, keyField))}
-          />
-        </Column>
-        {hasDateTarget(mapping, targetFields) && (
-          <Column cols={Cols.Col4}>
+      <Section title={t('contactsimporter.map.columnsheadline')}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: Spacing.S }}>
+          <Row spacing={Spacing.L} alignY={LayoutAlignment.End}>
+            <Column cols={Cols.Col3}>
+              <Text strong={true}>{t('contactsimporter.map.column')}</Text>
+            </Column>
+            <Column cols={Cols.Col4}>
+              <Text strong={true}>{t('contactsimporter.map.examples')}</Text>
+            </Column>
+            <Column cols={Cols.Col1}>
+              <Text strong={true} style={{ textAlign: 'right' }}>
+                {t('contactsimporter.map.filled')}
+              </Text>
+            </Column>
+            <Column cols={Cols.Col4}>
+              <Text strong={true}>{t('contactsimporter.map.target')}</Text>
+            </Column>
+          </Row>
+          {mapping.columns.map((column, index) => {
+            const profile = sample.columns[index];
+            const skipped = column.target === '';
+
+            return (
+              // Column names can repeat, so the position is part of the key.
+              <div key={`${index}:${column.source}`} style={ROW_STYLE}>
+                <Row spacing={Spacing.L} alignY={LayoutAlignment.Center}>
+                  <Column cols={Cols.Col3}>
+                    <Text strong={!skipped} hint={skipped}>
+                      {column.source}
+                    </Text>
+                  </Column>
+                  <Column cols={Cols.Col4}>
+                    <Text hint={true} style={ELLIPSIS_STYLE} title={(profile?.examples ?? []).join(' · ')}>
+                      {(profile?.examples ?? []).map((example) => truncate(example, 40)).join(' · ')}
+                    </Text>
+                  </Column>
+                  <Column cols={Cols.Col1}>
+                    <Text hint={skipped} style={{ textAlign: 'right' }}>
+                      {profile ? `${percent(Math.round(profile.fillRate * 100))} %` : ''}
+                    </Text>
+                  </Column>
+                  <Column cols={Cols.Col4}>
+                    <div data-mapping-column={column.source} aria-label={t('contactsimporter.map.targetfor', { column: column.source })}>
+                      <OptionSelect
+                        value={column.target}
+                        options={fieldOptions}
+                        disabled={saving}
+                        dataTestId={`contacts-importer-target-${index}`}
+                        onChange={(target) => onChange(setColumnTarget(mapping, index, target))}
+                      />
+                    </div>
+                  </Column>
+                </Row>
+              </div>
+            );
+          })}
+        </div>
+      </Section>
+
+      <Section title={t('contactsimporter.map.matchingheadline')}>
+        <Row spacing={Spacing.L}>
+          <Column cols={Cols.Col6}>
             <OptionSelect
-              label={t('contactsimporter.map.dateformat')}
-              value={mapping.dateFormat}
-              options={dateOptions}
-              disabled={saving}
-              explanationText={t('contactsimporter.map.dateformathelp')}
-              onChange={(dateFormat) => onChange(setDateFormat(mapping, dateFormat as DateFormat))}
+              label={t('contactsimporter.map.keyfield')}
+              value={mapping.keyField}
+              options={keyOptions}
+              disabled={saving || keyOptions.length === 0}
+              explanationText={t('contactsimporter.map.keyfieldhelp')}
+              dataTestId={TestIds.keyField}
+              onChange={(keyField) => onChange(setKeyField(mapping, keyField))}
             />
           </Column>
-        )}
-      </Row>
+          {hasDateTarget(mapping, targetFields) && (
+            <Column cols={Cols.Col6}>
+              <OptionSelect
+                label={t('contactsimporter.map.dateformat')}
+                value={mapping.dateFormat}
+                options={dateOptions}
+                disabled={saving}
+                explanationText={t('contactsimporter.map.dateformathelp')}
+                onChange={(dateFormat) => onChange(setDateFormat(mapping, dateFormat as DateFormat))}
+              />
+            </Column>
+          )}
+        </Row>
+      </Section>
 
-      <Stack spacing={Spacing.M}>
-        <Headline size={HeadlineSize.S}>{t('contactsimporter.map.consentheadline')}</Headline>
-        <Text>{t('contactsimporter.map.consentintro')}</Text>
+      <Section title={t('contactsimporter.map.consentheadline')} intro={t('contactsimporter.map.consentintro')}>
         <Row spacing={Spacing.L}>
-          <Column cols={Cols.Col4}>
+          <Column cols={Cols.Col6}>
             <OptionSelect
               label={t('contactsimporter.map.consentagreed')}
               value={mapping.consent.agreed}
@@ -208,7 +222,7 @@ export const MapStep = ({
             />
           </Column>
           {mapping.consent.agreed !== '' && (
-            <Column cols={Cols.Col4}>
+            <Column cols={Cols.Col6}>
               <OptionSelect
                 label={t('contactsimporter.map.consentdate')}
                 value={mapping.consent.date}
@@ -221,7 +235,7 @@ export const MapStep = ({
             </Column>
           )}
         </Row>
-      </Stack>
+      </Section>
 
       {validation.problems.map((problem) => (
         <NotificationBarAlert key={problem}>
@@ -253,10 +267,18 @@ export const MapStep = ({
             dataTestId={testId(TestIds.mapNext)}
             onClick={onSave}
           />
+          {actions}
       </Inline>
     </Stack>
   );
 };
+
+const ROW_STYLE: React.CSSProperties = {
+  borderTop: '1px solid var(--color-border-default, rgba(0, 0, 0, 0.08))',
+  paddingTop: Spacing.S,
+};
+
+const ELLIPSIS_STYLE: React.CSSProperties = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', overflowWrap: 'normal' };
 
 function truncate(value: string, maxLength: number): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;

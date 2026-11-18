@@ -4,6 +4,7 @@ import type {
   EncodedChunk,
   FieldMapping,
   FileLike,
+  ImportErrorCode,
   ImportErrorParams,
   OpenSourceOptions,
   PipelineProgress,
@@ -103,11 +104,7 @@ export interface DoneEvent {
 
 /** `ImportErrorCode` of the import core, `aborted`, or `failed` for anything unexpected. */
 export type WorkerErrorCode =
-  | 'unsupportedFormat'
-  | 'unsupportedEncoding'
-  | 'recordTooLarge'
-  | 'invalidConfig'
-  | 'sourceConsumed'
+  | ImportErrorCode
   | 'aborted'
   | 'failed';
 

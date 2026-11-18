@@ -275,6 +275,39 @@ internal class ImportJobStateMachineTests
     }
 
     [Test]
+    public void New_Driver_Keeps_The_Token_The_Browser_Made()
+    {
+        string proposed = Guid.NewGuid().ToString("N");
+        var abandoned = Status(ImportJobState.Running) with { DriverToken = Guid.NewGuid().ToString("N"), HeartbeatUtc = now.AddMinutes(-5) };
+
+        var first = ImportJobStateMachine.AcquireDriver(Status(ImportJobState.Uploaded), proposed, false, null, now, stale);
+        var takeOver = ImportJobStateMachine.AcquireDriver(abandoned, proposed, true, null, now, stale);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.DriverToken, Is.EqualTo(proposed), "a tab reloaded during its first call still has the token");
+            Assert.That(first.Status.DriverToken, Is.EqualTo(proposed));
+            Assert.That(takeOver.Outcome, Is.EqualTo(ImportDriverOutcome.Acquired));
+            Assert.That(takeOver.DriverToken, Is.EqualTo(proposed));
+        });
+    }
+
+    [TestCase("not-a-guid")]
+    [TestCase("{0f8fad5b-d9cb-469f-a165-70867728950e}")]
+    [TestCase("0f8fad5bd9cb469fa16570867728950e00")]
+    public void New_Driver_Gets_A_Server_Token_For_A_Malformed_Proposal(string proposed)
+    {
+        var result = ImportJobStateMachine.AcquireDriver(Status(ImportJobState.Uploaded), proposed, false, null, now, stale);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(ImportDriverOutcome.Acquired));
+            Assert.That(result.DriverToken, Is.Not.EqualTo(proposed));
+            Assert.That(Guid.TryParseExact(result.DriverToken, "N", out _), Is.True);
+        });
+    }
+
+    [Test]
     public void Current_Driver_Keeps_Driving_Even_After_A_Long_Break()
     {
         var status = Status(ImportJobState.Running) with { DriverToken = "mine", HeartbeatUtc = now.AddHours(-5), LastInstance = "instance-1" };
@@ -388,7 +421,7 @@ internal class ImportJobStateMachineTests
     [TestCase(ImportJobState.Confirmed, ImportJobState.Running)]
     public void Starting_A_Phase_Clears_The_Previous_Error_And_Batch_Time(ImportJobState from, ImportJobState to)
     {
-        var status = Status(from) with { Error = "The key field is not usable.", LongestBatchSeconds = 90 };
+        var status = Status(from) with { Error = "The key field is not usable.", LongestBatchSeconds = 90, PhaseStartedByUserId = 7 };
 
         var started = ImportJobStateMachine.Transition(status, to, now);
 
@@ -396,7 +429,108 @@ internal class ImportJobStateMachineTests
         {
             Assert.That(started.Error, Is.Null);
             Assert.That(started.LongestBatchSeconds, Is.Zero);
+            Assert.That(started.PhaseStartedUtc, Is.EqualTo(now));
+            Assert.That(started.PhaseStartedByUserId, Is.Null);
         });
+    }
+
+    [Test]
+    public void Returning_To_Uploaded_Clears_The_Phase_Start()
+    {
+        var status = Status(ImportJobState.Confirmed) with { PhaseStartedUtc = now, PhaseStartedByUserId = 7 };
+
+        var updated = ImportJobStateMachine.Transition(status, ImportJobState.Uploaded, now);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(updated.PhaseStartedUtc, Is.Null);
+            Assert.That(updated.PhaseStartedByUserId, Is.Null);
+        });
+    }
+
+    // Every state in both phases (PLAN D60): only a confirmed Run that has not ended counts, whatever its heartbeat.
+    [TestCase(ImportJobState.Configuring, ImportPhase.Analyze, false)]
+    [TestCase(ImportJobState.Uploading, ImportPhase.Analyze, false)]
+    [TestCase(ImportJobState.Uploaded, ImportPhase.Analyze, false)]
+    [TestCase(ImportJobState.Analyzing, ImportPhase.Analyze, false)]
+    [TestCase(ImportJobState.Analyzed, ImportPhase.Analyze, false)]
+    [TestCase(ImportJobState.Paused, ImportPhase.Analyze, false)]
+    [TestCase(ImportJobState.Confirmed, ImportPhase.Analyze, true)]
+    [TestCase(ImportJobState.Confirmed, ImportPhase.Execute, true)]
+    [TestCase(ImportJobState.Running, ImportPhase.Execute, true)]
+    [TestCase(ImportJobState.Paused, ImportPhase.Execute, true)]
+    [TestCase(ImportJobState.Completed, ImportPhase.Execute, false)]
+    [TestCase(ImportJobState.Failed, ImportPhase.Execute, false)]
+    [TestCase(ImportJobState.Cancelled, ImportPhase.Execute, false)]
+    [TestCase(ImportJobState.Failed, ImportPhase.Analyze, false)]
+    [TestCase(ImportJobState.Cancelled, ImportPhase.Analyze, false)]
+    public void IsUnfinishedRun_Counts_Confirmed_And_Started_Runs_That_Did_Not_End(ImportJobState state, ImportPhase phase, bool expected)
+    {
+        foreach (var heartbeat in new DateTime?[] { now, now.AddHours(-1), null })
+        {
+            var status = Status(state) with { Checkpoint = new ImportCheckpoint { Phase = phase }, HeartbeatUtc = heartbeat };
+
+            Assert.That(ImportJobStateMachine.IsUnfinishedRun(status), Is.EqualTo(expected), $"heartbeat {heartbeat}");
+        }
+    }
+
+    [Test]
+    public void IsUnfinishedRun_Counts_A_Running_Import_That_Shows_As_Paused()
+    {
+        var status = Status(ImportJobState.Running) with { Checkpoint = new ImportCheckpoint { Phase = ImportPhase.Execute }, HeartbeatUtc = now.AddHours(-1) };
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ImportJobStateMachine.GetEffectiveState(status, now, stale), Is.EqualTo(ImportJobState.Paused));
+            Assert.That(ImportJobStateMachine.IsUnfinishedRun(status), Is.True);
+        });
+    }
+
+    [Test]
+    public void BlocksRunStart_Lets_The_Job_Confirmed_First_Start()
+    {
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var earlier = Status(ImportJobState.Confirmed) with { UpdatedUtc = now.AddMinutes(-2) };
+        var later = Status(ImportJobState.Confirmed) with { UpdatedUtc = now };
+        var sameTime = Status(ImportJobState.Confirmed) with { UpdatedUtc = now };
+        var (lowId, highId) = first.CompareTo(second) < 0 ? (first, second) : (second, first);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ImportJobStateMachine.BlocksRunStart(earlier, first, later, second), Is.True, "confirmed first blocks");
+            Assert.That(ImportJobStateMachine.BlocksRunStart(later, second, earlier, first), Is.False, "confirmed later does not block");
+            Assert.That(ImportJobStateMachine.BlocksRunStart(sameTime, lowId, later, highId), Is.True, "same time: lower ID first");
+            Assert.That(ImportJobStateMachine.BlocksRunStart(later, highId, sameTime, lowId), Is.False);
+            Assert.That(ImportJobStateMachine.BlocksRunStart(later, first, later, first), Is.False, "a job never blocks itself");
+        });
+    }
+
+    [TestCase(ImportJobState.Running, true)]
+    [TestCase(ImportJobState.Analyzed, false)]
+    [TestCase(ImportJobState.Analyzing, false)]
+    [TestCase(ImportJobState.Completed, false)]
+    [TestCase(ImportJobState.Cancelled, false)]
+    public void BlocksRunStart_Started_Runs_Block_Whenever_They_Started(ImportJobState state, bool expected)
+    {
+        var other = Status(state) with { UpdatedUtc = now, Checkpoint = new ImportCheckpoint { Phase = ImportPhase.Execute } };
+        var starting = Status(ImportJobState.Confirmed) with { UpdatedUtc = now.AddHours(-2) };
+
+        Assert.That(ImportJobStateMachine.BlocksRunStart(other, Guid.NewGuid(), starting, Guid.NewGuid()), Is.EqualTo(expected));
+    }
+
+    [TestCase(ImportJobState.Completed, ImportPhase.Execute, true)]
+    [TestCase(ImportJobState.Failed, ImportPhase.Execute, true)]
+    [TestCase(ImportJobState.Cancelled, ImportPhase.Execute, true)]
+    [TestCase(ImportJobState.Failed, ImportPhase.Analyze, false)]
+    [TestCase(ImportJobState.Cancelled, ImportPhase.Analyze, false)]
+    [TestCase(ImportJobState.Running, ImportPhase.Execute, false)]
+    [TestCase(ImportJobState.Analyzed, ImportPhase.Analyze, false)]
+    public void IsEndedRun_Counts_Finished_Imports_That_Wrote_Contacts(ImportJobState state, ImportPhase phase, bool expected)
+    {
+        var status = Status(state) with { Checkpoint = new ImportCheckpoint { Phase = phase }, FinishedUtc = ImportJobStateMachine.IsTerminal(state) ? now : null };
+
+        Assert.That(ImportJobStateMachine.IsEndedRun(status), Is.EqualTo(expected));
     }
 
     [TestCase(ImportJobState.Uploaded)]

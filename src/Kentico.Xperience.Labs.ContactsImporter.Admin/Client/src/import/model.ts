@@ -27,7 +27,8 @@ export function stepForState(state: JobState, phase: ProcessPhase = 'execute'): 
       return 'file';
     case 'Uploading':
     case 'Uploaded':
-      return 'upload';
+      // The upload runs in the background (upload bar); the Options step is in view meanwhile.
+      return 'options';
     case 'Analyzing':
     case 'Analyzed':
       return 'review';
@@ -49,15 +50,112 @@ export function isFinished(state: JobState): boolean {
   return state === 'Completed' || state === 'Failed' || state === 'Cancelled';
 }
 
+/**
+ * How a step shows in the step header. `done`: finished and can be opened again; `locked`: finished
+ * (or passed) and cannot be opened again for this import; `upcoming`: not reached yet, or running
+ * (the upload in the background).
+ */
+export type StepState = 'current' | 'done' | 'upcoming' | 'locked';
+
+export interface StepView {
+  readonly state: StepState;
+  /** The header offers the step as a button. */
+  readonly clickable: boolean;
+}
+
+export interface StepContext {
+  /** Step in view. */
+  readonly current: Step;
+  /** State of the stored job; `null` before the first save (no job yet). */
+  readonly jobState: JobState | null;
+  /** Phase of a `Paused` job (`analyze` = paused check). */
+  readonly phase?: ProcessPhase;
+}
+
+/**
+ * Step header rules (D50): File, Map and Upload lock once the upload has started; Options and
+ * Review stay open until the import is confirmed (Review once a check exists or runs); from the
+ * confirmation on every earlier step is locked; a finished import offers only Results.
+ */
+export function stepViews({ current, jobState, phase = 'execute' }: StepContext): Record<Step, StepView> {
+  const view = (step: Step, state: StepState): StepView =>
+    step === current ? { state: 'current', clickable: false } : { state, clickable: state === 'done' };
+  const build = (pick: (step: Step, index: number) => StepView): Record<Step, StepView> =>
+    Object.fromEntries(STEPS.map((step, index) => [step, pick(step, index)])) as Record<Step, StepView>;
+
+  switch (stageOf(jobState, phase)) {
+    case 'setup': {
+      // Before the upload: back to an earlier step, never ahead.
+      const currentIndex = STEPS.indexOf(current);
+
+      return build((step, index) => view(step, index < currentIndex ? 'done' : 'upcoming'));
+    }
+    case 'prepare': {
+      const uploading = jobState === 'Uploading';
+      const checkExists = jobState === 'Analyzing' || jobState === 'Analyzed' || jobState === 'Paused';
+
+      return build((step) => {
+        switch (step) {
+          case 'file':
+          case 'map':
+            // File is in view again only to select the file of an interrupted upload (resume).
+            return view(step, 'locked');
+          case 'upload':
+            return view(step, uploading ? 'upcoming' : 'locked');
+          case 'options':
+            // While the file is selected again for a resume, the upload has not continued yet.
+            return view(step, uploading && current === 'file' ? 'upcoming' : 'done');
+          case 'review':
+            return view(step, checkExists ? 'done' : 'upcoming');
+          default:
+            return view(step, 'upcoming');
+        }
+      });
+    }
+    case 'execute': {
+      const runIndex = STEPS.indexOf('run');
+
+      return build((step, index) => view(step, index < runIndex ? 'locked' : 'upcoming'));
+    }
+    default:
+      // Finished: Results is the only step left.
+      return build((step) => view(step, step === 'results' ? 'done' : 'locked'));
+  }
+}
+
+type Stage = 'setup' | 'prepare' | 'execute' | 'finished';
+
+function stageOf(state: JobState | null, phase: ProcessPhase): Stage {
+  switch (state) {
+    case null:
+    case 'Configuring':
+      return 'setup';
+    case 'Uploading':
+    case 'Uploaded':
+    case 'Analyzing':
+    case 'Analyzed':
+      return 'prepare';
+    case 'Paused':
+      return phase === 'analyze' ? 'prepare' : 'execute';
+    case 'Confirmed':
+    case 'Running':
+      return 'execute';
+    default:
+      return 'finished';
+  }
+}
+
 /** How the file is read; empty strings mean "detect". Chosen in the File step. */
 export interface SourceSettings {
   readonly format: '' | SourceFormat;
   readonly encoding: string;
   readonly delimiter: string;
   readonly hasHeader: boolean;
+  /** XLSX worksheet; empty = the first visible sheet. */
+  readonly sheet: string;
 }
 
-export const DEFAULT_SOURCE_SETTINGS: SourceSettings = { format: '', encoding: '', delimiter: '', hasHeader: true };
+export const DEFAULT_SOURCE_SETTINGS: SourceSettings = { format: '', encoding: '', delimiter: '', hasHeader: true, sheet: '' };
 
 export function toOpenOptions(settings: SourceSettings): OpenSourceOptions {
   return {
@@ -65,6 +163,7 @@ export function toOpenOptions(settings: SourceSettings): OpenSourceOptions {
     ...(settings.encoding !== '' && { encoding: settings.encoding }),
     ...(settings.delimiter !== '' && { delimiter: settings.delimiter }),
     hasHeader: settings.hasHeader,
+    ...(settings.sheet !== '' && { sheet: settings.sheet }),
   };
 }
 
@@ -98,9 +197,30 @@ export function chunkSizes(limits: LimitsDto): { targetChunkBytes: number; maxCh
   };
 }
 
-/** Caption of a contact field for the mapping selects: `Email (ContactEmail)` or just the name. */
+/**
+ * Readable name of a contact field: its caption, or, when the field has none (Xperience system
+ * fields: caption = column name), the column name without the `Contact` prefix in words
+ * (`ContactBusinessPhone` → `Business phone`). The column name itself is `field.name`.
+ */
 export function fieldLabel(field: Pick<FieldDto, 'name' | 'caption'>): string {
-  return field.caption && field.caption !== field.name ? `${field.caption} (${field.name})` : field.name;
+  if (field.caption && field.caption !== field.name) {
+    return field.caption;
+  }
+
+  return humanizeFieldName(field.name);
+}
+
+function humanizeFieldName(name: string): string {
+  const bare = /^Contact[A-Z]/.test(name) ? name.slice('Contact'.length) : name;
+  const words = bare
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .split(/[\s_]+/)
+    .filter((word) => word.length > 0)
+    // Keep acronyms (ID, URL) as they are.
+    .map((word, index) => (index === 0 || /^[A-Z0-9]{2,}$/.test(word) ? word : word.toLowerCase()));
+
+  return words.length > 0 ? words.join(' ') : name;
 }
 
 /** A stored job as `GET_JOB` returns it. */

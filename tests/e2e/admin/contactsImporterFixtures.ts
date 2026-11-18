@@ -11,12 +11,12 @@ type ImporterFixtures = {
   // Copies a file from tests/e2e/fixtures under a name unique to this test run, so the test finds
   // its own import in the list and can run again. Returns the path and the unique file name.
   uniqueFixture: (fixtureName: string) => Promise<{ path: string; name: string }>;
-  // Writes generated content to a uniquely named file.
-  uniqueFile: (baseName: string, content: string) => Promise<{ path: string; name: string }>;
+  // Writes generated content (text or bytes) to a uniquely named file.
+  uniqueFile: (baseName: string, content: string | Uint8Array) => Promise<{ path: string; name: string }>;
 };
 
 // Importer specs use this `test`: page objects plus cleanup of the imports the test created
-// ("Delete files" cancels the import and deletes its uploaded data from the server).
+// ("Delete" removes the import; an unfinished one is cancelled first). Imported contacts stay.
 export const test = base.extend<ImporterFixtures>({
   importsList: async ({ page }, use) => {
     await use(new ImportsListPage(page));
@@ -48,10 +48,8 @@ export const test = base.extend<ImporterFixtures>({
         page.on("dialog", (dialog) => void dialog.accept().catch(() => undefined));
         await page.unrouteAll({ behavior: "ignoreErrors" });
         await list.goto();
-        // Finished imports keep only their reports, which the retention deletes.
-        const finished = ["Cancelled", "Completed", "Failed"];
-        if ((await list.row(name).count()) > 0 && !finished.includes(await list.cell(name, "state").innerText())) {
-          await list.deleteFiles(name);
+        if ((await list.row(name).count()) > 0) {
+          await list.deleteImport(name);
         }
       } catch (error) {
         console.warn(`Could not clean up the import of ${name}: ${String(error)}`);

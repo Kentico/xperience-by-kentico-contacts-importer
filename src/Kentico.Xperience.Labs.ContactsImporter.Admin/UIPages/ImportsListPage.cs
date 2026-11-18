@@ -16,7 +16,7 @@ using Kentico.Xperience.Labs.ContactsImporter.Admin;
 namespace Kentico.Xperience.Labs.ContactsImporter.Admin;
 
 /// <summary>
-/// Recent imports with "New import", continue and "Delete files". Opening the list needs the View permission;
+/// Recent imports with "New import", continue and "Delete". Opening the list needs the View permission;
 /// everything that changes an import needs <see cref="ContactsImporterPermissions.IMPORT"/>.
 /// </summary>
 [UIEvaluatePermission(SystemPermissions.VIEW)]
@@ -46,9 +46,10 @@ internal sealed class ImportsListPage(
     public Task<ICommandResponse<ImportListResponse>> ListImports() =>
         Task.FromResult(ResponseFrom(commands.ListImports()));
 
-    [PageCommand(CommandName = ImportCommands.DELETE_FILES, Permission = ContactsImporterPermissions.IMPORT)]
-    public async Task<ICommandResponse<ImportActionResponse>> DeleteFiles(ImportJobRequest request) =>
-        ResponseFrom(commands.DeleteFiles(request?.JobId, (await authenticatedUserAccessor.Get())?.UserID ?? 0));
+    /// <summary>"Delete" row action: deletes the whole import. The list never drives an import, so no driver token.</summary>
+    [PageCommand(CommandName = ImportCommands.DELETE_IMPORT, Permission = ContactsImporterPermissions.IMPORT)]
+    public async Task<ICommandResponse<ImportActionResponse>> DeleteImport(DeleteImportRequest request) =>
+        ResponseFrom(commands.DeleteImport(request?.JobId, null, (await authenticatedUserAccessor.Get())?.UserID ?? 0));
 }
 
 internal sealed class ImportsListClientProperties : TemplateClientProperties

@@ -58,6 +58,11 @@ internal sealed class ImportPage(
     public Task<ICommandResponse<ImportJobResponse>> GetJob() =>
         Task.FromResult(ResponseFrom(commands.GetJob(JobId)));
 
+    /// <summary>Another import that runs right now; the Review step asks every few seconds (PLAN D53).</summary>
+    [PageCommand(CommandName = ImportCommands.GET_RUNNING_IMPORT, Permission = ContactsImporterPermissions.IMPORT)]
+    public Task<ICommandResponse<RunningImportResponse>> GetRunningImport() =>
+        Task.FromResult(ResponseFrom(commands.GetRunningImport(JobId)));
+
     [PageCommand(CommandName = ImportCommands.SAVE_CONFIG, Permission = ContactsImporterPermissions.IMPORT)]
     public async Task<ICommandResponse<SaveConfigResponse>> SaveConfig(SaveConfigRequest request)
     {
@@ -108,13 +113,19 @@ internal sealed class ImportPage(
     public Task<ICommandResponse<GetReportResponse>> GetReport(GetReportRequest request, CancellationToken cancellationToken) =>
         Task.FromResult(ResponseFrom(commands.GetReport(JobId, request, cancellationToken)));
 
+    /// <summary>Examples of changed and cleared values (personal data); the Review step loads them once (PLAN D57).</summary>
+    [PageCommand(CommandName = ImportCommands.GET_SAMPLES, Permission = ContactsImporterPermissions.IMPORT)]
+    public Task<ICommandResponse<GetSamplesResponse>> GetSamples() =>
+        Task.FromResult(ResponseFrom(commands.GetSamples(JobId)));
+
     [PageCommand(CommandName = ImportCommands.CANCEL_IMPORT, Permission = ContactsImporterPermissions.IMPORT)]
     public async Task<ICommandResponse<ImportActionResponse>> Cancel() =>
         ResponseFrom(commands.Cancel(JobId, await CurrentUserId()));
 
-    [PageCommand(CommandName = ImportCommands.DELETE_FILES, Permission = ContactsImporterPermissions.IMPORT)]
-    public async Task<ICommandResponse<ImportActionResponse>> DeleteFiles() =>
-        ResponseFrom(commands.DeleteFiles(JobId, await CurrentUserId()));
+    /// <summary>Cancel before Run: deletes the whole import. The job comes from the URL, not from the request.</summary>
+    [PageCommand(CommandName = ImportCommands.DELETE_IMPORT, Permission = ContactsImporterPermissions.IMPORT)]
+    public async Task<ICommandResponse<ImportActionResponse>> DeleteImport(DeleteImportRequest request) =>
+        ResponseFrom(commands.DeleteImport(JobId, request?.DriverToken, await CurrentUserId()));
 
     /// <summary>Signed-in user, for the event log and the job; 0 when unknown.</summary>
     private async Task<int> CurrentUserId() => (await authenticatedUserAccessor.Get())?.UserID ?? 0;

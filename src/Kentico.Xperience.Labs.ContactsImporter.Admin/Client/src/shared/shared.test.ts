@@ -109,8 +109,8 @@ describe('import model', () => {
   it('maps every job state to a step', () => {
     const expected: Record<JobState, string> = {
       Configuring: 'file',
-      Uploading: 'upload',
-      Uploaded: 'upload',
+      Uploading: 'options',
+      Uploaded: 'options',
       Analyzing: 'review',
       Analyzed: 'review',
       Confirmed: 'run',
@@ -132,12 +132,13 @@ describe('import model', () => {
   });
 
   it('turns source settings into open options, leaving detection on for empty values', () => {
-    expect(toOpenOptions({ format: '', encoding: '', delimiter: '', hasHeader: true })).toEqual({ hasHeader: true });
-    expect(toOpenOptions({ format: 'csv', encoding: 'windows-1252', delimiter: ';', hasHeader: false })).toEqual({
+    expect(toOpenOptions({ format: '', encoding: '', delimiter: '', hasHeader: true, sheet: '' })).toEqual({ hasHeader: true });
+    expect(toOpenOptions({ format: 'csv', encoding: 'windows-1252', delimiter: ';', hasHeader: false, sheet: 'Q1' })).toEqual({
       format: 'csv',
       encoding: 'windows-1252',
       delimiter: ';',
       hasHeader: false,
+      sheet: 'Q1',
     });
   });
 
@@ -166,7 +167,11 @@ describe('import model', () => {
   });
 
   it('labels fields with caption and name when they differ', () => {
-    expect(fieldLabel({ name: 'ContactEmail', caption: 'Email' })).toBe('Email (ContactEmail)');
-    expect(fieldLabel({ name: 'ContactEmail', caption: 'ContactEmail' })).toBe('ContactEmail');
+    expect(fieldLabel({ name: 'ContactEmail', caption: 'Email address' })).toBe('Email address');
+    expect(fieldLabel({ name: 'ContactEmail', caption: 'ContactEmail' })).toBe('Email');
+    expect(fieldLabel({ name: 'ContactBusinessPhone', caption: '' })).toBe('Business phone');
+    expect(fieldLabel({ name: 'ContactCountryID', caption: 'ContactCountryID' })).toBe('Country ID');
+    expect(fieldLabel({ name: 'Contact', caption: '' })).toBe('Contact');
+    expect(fieldLabel({ name: 'LoyaltyTier', caption: 'LoyaltyTier' })).toBe('Loyalty tier');
   });
 });

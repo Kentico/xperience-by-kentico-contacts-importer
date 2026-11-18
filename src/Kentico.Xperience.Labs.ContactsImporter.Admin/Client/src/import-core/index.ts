@@ -16,3 +16,7 @@ export * from './bytes';
 export * from './chunker';
 export * from './fingerprint';
 export * from './pipeline';
+export * from './json';
+export * from './zip';
+export * from './xml';
+export * from './xlsx';

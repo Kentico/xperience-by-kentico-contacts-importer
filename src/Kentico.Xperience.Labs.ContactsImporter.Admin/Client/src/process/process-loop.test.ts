@@ -62,6 +62,7 @@ function harness(steps: Step[], options: Partial<ProcessLoopOptions> = {}) {
   let inFlight = 0;
   let maxInFlight = 0;
   let signal: AbortSignal | undefined;
+  let made = 0;
 
   const loop = new ProcessLoop({
     phase: 'execute',
@@ -96,6 +97,7 @@ function harness(steps: Step[], options: Partial<ProcessLoopOptions> = {}) {
     },
     random: () => 0.5,
     now: () => 1000 + requests.length,
+    newToken: () => `new-${++made}`,
     ...options,
   });
 
@@ -111,7 +113,7 @@ describe('ProcessLoop', () => {
     await h.loop.whenIdle();
 
     expect(h.requests).toEqual([
-      { phase: 'execute', driverToken: null, takeOver: false },
+      { phase: 'execute', driverToken: 'new-1', takeOver: false },
       { phase: 'execute', driverToken: 'token-1', takeOver: false },
       { phase: 'execute', driverToken: 'token-1', takeOver: false },
     ]);
@@ -167,7 +169,7 @@ describe('ProcessLoop', () => {
     await h.loop.whenIdle();
 
     expect(h.sleeps).toEqual([2000, 4000]);
-    expect(h.requests.map((r) => r.driverToken)).toEqual([null, 'token-1', 'token-1', 'token-1', 'token-1']);
+    expect(h.requests.map((r) => r.driverToken)).toEqual(['new-1', 'token-1', 'token-1', 'token-1', 'token-1']);
     expect(h.snapshots.filter((s) => s.retry?.kind === 'server').map((s) => [s.retry?.attempt, s.error])).toEqual([
       [1, 'temporary'],
       [2, 'busy'],
@@ -260,32 +262,113 @@ describe('ProcessLoop', () => {
     expect(h.loop.snapshot).toMatchObject({ status: 'paused', pauseReason: 'user', retry: null });
   });
 
-  it('asks the user when another tab is active or left the import, and takes over on request', async () => {
+  it('asks the user when another tab left the import, and takes over on request with a new token', async () => {
+    const h = harness([answer('staleRequiresTakeOver', 30, { state: 'Paused' }), answer('processed', 50, { driverToken: 'new-2' }), answer('phaseFinished', 100)]);
+
+    h.loop.start();
+    await h.loop.whenIdle();
+    expect(h.loop.snapshot).toMatchObject({ status: 'paused', pauseReason: 'stale', calls: 1, processedCalls: 0 });
+    expect(h.loop.snapshot.progress?.rowsProcessed).toBe(30);
+
+    h.loop.start({ takeOver: true });
+    await h.loop.whenIdle();
+    expect(h.requests.map((r) => [r.driverToken, r.takeOver])).toEqual([
+      ['new-1', false],
+      ['new-2', true],
+      ['new-2', false],
+    ]);
+    expect(h.loop.snapshot.status).toBe('finished');
+  });
+
+  it('pauses when another import holds the unfinished Run, keeps the token, and starts on Continue', async () => {
     const h = harness([
-      answer('activeElsewhere', 30),
-      answer('staleRequiresTakeOver', 30, { state: 'Paused' }),
-      answer('processed', 50, { driverToken: 'token-2' }),
+      answer('otherImportRunning', 0, { state: 'Confirmed', error: "Another import ('other.csv') was started and has not finished." }),
+      answer('processed', 50, { driverToken: 'new-1' }),
       answer('phaseFinished', 100),
     ]);
 
     h.loop.start();
     await h.loop.whenIdle();
-    expect(h.loop.snapshot).toMatchObject({ status: 'paused', pauseReason: 'activeElsewhere', calls: 1, processedCalls: 0 });
-    expect(h.loop.snapshot.progress?.rowsProcessed).toBe(30);
+    expect(h.loop.snapshot).toMatchObject({
+      status: 'paused',
+      pauseReason: 'otherImportRunning',
+      retry: null,
+      calls: 1,
+      error: "Another import ('other.csv') was started and has not finished.",
+    });
+    expect(h.loop.snapshot.progress?.state).toBe('Confirmed');
+    expect(h.sleeps).toEqual([]);
 
-    h.loop.start({ takeOver: true });
-    await h.loop.whenIdle();
-    expect(h.loop.snapshot).toMatchObject({ status: 'paused', pauseReason: 'stale' });
-
-    h.loop.start({ takeOver: true });
+    h.loop.start();
     await h.loop.whenIdle();
     expect(h.requests.map((r) => [r.driverToken, r.takeOver])).toEqual([
-      [null, false],
-      [null, true],
-      [null, true],
-      ['token-2', false],
+      ['new-1', false],
+      ['new-1', false],
+      ['new-1', false],
     ]);
     expect(h.loop.snapshot.status).toBe('finished');
+  });
+
+  it('pauses when another tab is active; "Continue here" waits and asks again until it can take over', async () => {
+    const h = harness(
+      [answer('activeElsewhere', 30), answer('activeElsewhere', 30), answer('activeElsewhere', 35), answer('processed', 50, { driverToken: 'new-2' }), answer('phaseFinished', 100)],
+      { takeOverPollMs: 4000 },
+    );
+
+    h.loop.start();
+    await h.loop.whenIdle();
+    expect(h.loop.snapshot).toMatchObject({ status: 'paused', pauseReason: 'activeElsewhere', waitingForOther: false });
+
+    const waiting: boolean[] = [];
+    const seen = h.snapshots.length;
+    h.loop.start({ takeOver: true });
+    await h.loop.whenIdle();
+    waiting.push(...h.snapshots.slice(seen).map((s) => s.waitingForOther));
+
+    expect(h.sleeps).toEqual([4000, 4000]);
+    expect(waiting).toContain(true);
+    expect(h.requests.map((r) => [r.driverToken, r.takeOver])).toEqual([
+      ['new-1', false],
+      ['new-2', true],
+      ['new-2', true],
+      ['new-2', true],
+      ['new-2', false],
+    ]);
+    expect(h.loop.snapshot).toMatchObject({ status: 'finished', waitingForOther: false });
+  });
+
+  it('pause stops waiting for another tab', async () => {
+    const wait = deferred<void>();
+    const h = harness([answer('activeElsewhere', 30), answer('activeElsewhere', 30)], {
+      sleep: (_ms, signal) =>
+        new Promise<void>((resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          void wait.promise.then(resolve);
+        }),
+    });
+
+    h.loop.start();
+    await h.loop.whenIdle();
+    h.loop.start({ takeOver: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(h.loop.snapshot.waitingForOther).toBe(true);
+
+    h.loop.pause();
+    await h.loop.whenIdle();
+    expect(h.loop.snapshot).toMatchObject({ status: 'paused', pauseReason: 'user', waitingForOther: false });
+    expect(h.requests).toHaveLength(2);
+  });
+
+  it('stores a new token before the first call, so a reload during it keeps the driver', async () => {
+    const gate = deferred<ProgressDto>();
+    const h = harness([() => gate.promise]);
+
+    h.loop.start();
+    await Promise.resolve();
+    expect(h.tokens.value).toBe('new-1');
+    expect(h.requests[0]?.driverToken).toBe('new-1');
+    h.loop.dispose();
+    gate.resolve(answer('processed', 10));
   });
 
   it.each<[JobState, Partial<LoopSnapshot>]>([

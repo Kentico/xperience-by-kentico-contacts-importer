@@ -389,10 +389,15 @@ internal sealed class ContactImportRepository(
         return value is DBNull ? null : (T)Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture);
     }
 
-    public IDisposable? TryLockJob(Guid jobId, TimeSpan timeout)
-    {
-        string resource = JobLockResource(jobId);
+    public IDisposable? TryLockJob(Guid jobId, TimeSpan timeout) => TryAppLock(JobLockResource(jobId), timeout);
 
+    /// <summary>
+    /// Takes the exclusive database application lock <paramref name="resource"/> (<c>sp_getapplock</c>, owned by the
+    /// session of a connection kept open for this thread), waiting up to <paramref name="timeout"/>. <c>null</c> when
+    /// another session holds it. The lock spans all application instances that share the database. Dispose releases it.
+    /// </summary>
+    internal static IDisposable? TryAppLock(string resource, TimeSpan timeout)
+    {
         // The scope keeps one open connection as the current connection of this thread. The lock belongs to its
         // session (not to a transaction), so it spans the batch transactions and the checkpoints between them.
         var scope = new CMSConnectionScope().Open();

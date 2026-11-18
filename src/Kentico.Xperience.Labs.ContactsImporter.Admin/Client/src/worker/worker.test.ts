@@ -66,7 +66,7 @@ describe('ImportWorkerSession', () => {
     const events: WorkerEvent[] = [];
     const session = new ImportWorkerSession((event) => events.push(event));
 
-    await session.handle({ type: 'profile', requestId: 1, file: makeFile('x', 'contacts.xlsx'), source: {}, targetFields: [] });
+    await session.handle({ type: 'profile', requestId: 1, file: makeFile('x', 'contacts.xls'), source: {}, targetFields: [] });
 
     expect(events).toEqual([expect.objectContaining({ type: 'error', requestId: 1, code: 'unsupportedFormat' })]);
   });

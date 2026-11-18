@@ -15,6 +15,8 @@ export interface ProcessLoopView {
   readonly rate: RateEstimate;
   /** Another tab of this browser is processing the import. */
   readonly lockedByOtherTab: boolean;
+  /** The user chose "Continue here": waiting until the other tab or user stops (`pause` stops waiting). */
+  readonly waitingForOther: boolean;
   /** Starts or continues; `takeOver` after the user chose to continue an import left elsewhere. */
   readonly start: (takeOver?: boolean) => void;
   /** Lets the call in flight finish and sends no further one. */
@@ -52,9 +54,12 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
     calls: 0,
     processedCalls: 0,
     lastAnswerAtMs: null,
+    waitingForOther: false,
   }));
   const [rate, setRate] = useState<RateEstimate>(IDLE_RATE);
   const [lockedByOtherTab, setLockedByOtherTab] = useState(false);
+  const [waitingForLock, setWaitingForLock] = useState(false);
+  const lockWaitRef = useRef<AbortController | null>(null);
 
   const start = useCallback(
     (takeOver = false) => {
@@ -65,7 +70,20 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
         }
 
         if (!lockRef.current) {
-          const lock = await acquireTabLock(`contacts-importer:${jobId}`);
+          const name = `contacts-importer:${jobId}`;
+          let lock = await acquireTabLock(name);
+          // "Continue here" while another tab holds the lock: wait for it to let go.
+          if (!lock && takeOver && loopRef.current === loop && !lockWaitRef.current) {
+            const waiting = new AbortController();
+            lockWaitRef.current = waiting;
+            setLockedByOtherTab(false);
+            setWaitingForLock(true);
+            lock = await acquireTabLock(name, undefined, waiting.signal);
+            if (lockWaitRef.current === waiting) {
+              lockWaitRef.current = null;
+            }
+            setWaitingForLock(false);
+          }
           if (loopRef.current !== loop) {
             lock?.release();
 
@@ -96,7 +114,7 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
     const loop = new ProcessLoop({
       phase,
       initialProgress: initialRef.current.initialProgress,
-      tokens: storageTokenStore(sessionStorageOrUndefined(), `contacts-importer:driver:${jobId}`),
+      tokens: driverTokenStore(jobId),
       call: (request, signal) => execute<ProgressDto, ProcessNextRequest>(Commands.ProcessNext, request, signal),
       onChange: (next) => {
         if (next.calls !== calls && next.progress) {
@@ -115,15 +133,30 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
 
     return () => {
       loopRef.current = null;
+      lockWaitRef.current?.abort();
+      lockWaitRef.current = null;
       loop.dispose();
       lockRef.current?.release();
       lockRef.current = null;
     };
   }, [execute, jobId, phase, start]);
 
-  const pause = useCallback(() => loopRef.current?.pause(), []);
+  const pause = useCallback(() => {
+    lockWaitRef.current?.abort();
+    loopRef.current?.pause();
+  }, []);
 
-  return { snapshot, rate, lockedByOtherTab, start, pause };
+  return { snapshot, rate, lockedByOtherTab, waitingForOther: waitingForLock || snapshot.waitingForOther, start, pause };
+}
+
+/** Driver token of this tab for the import, kept in session storage (survives a reload of the tab). */
+function driverTokenStore(jobId: string) {
+  return storageTokenStore(sessionStorageOrUndefined(), `contacts-importer:driver:${jobId}`);
+}
+
+/** The token this tab drives the import with, or `null`; `DELETE_IMPORT` sends it so the tab may delete its own check. */
+export function currentDriverToken(jobId: string): string | null {
+  return driverTokenStore(jobId).get();
 }
 
 function sessionStorageOrUndefined(): Storage | undefined {

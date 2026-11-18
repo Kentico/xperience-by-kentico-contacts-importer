@@ -272,43 +272,4 @@ internal class ImportJobCleanupServiceTests
             Assert.That(HasReports(jobId), Is.True);
         });
     }
-
-    [Test]
-    public void DeleteImportFiles_Removes_Chunks_And_Reports_And_Keeps_Finished_State()
-    {
-        var jobId = CreateJob(ImportJobState.Completed);
-
-        bool deleted = service.DeleteImportFiles(jobId);
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(deleted, Is.True);
-            Assert.That(HasChunks(jobId), Is.False);
-            Assert.That(HasReports(jobId), Is.False);
-            Assert.That(temp.Store.ReadStatus(jobId)!.State, Is.EqualTo(ImportJobState.Completed));
-            Assert.That(temp.Store.ReadJob(jobId), Is.Not.Null);
-        });
-    }
-
-    [Test]
-    public void DeleteImportFiles_Cancels_An_Unfinished_Job()
-    {
-        var jobId = CreateJob(ImportJobState.Analyzed);
-        time.Advance(TimeSpan.FromMinutes(5));
-
-        service.DeleteImportFiles(jobId);
-
-        var status = temp.Store.ReadStatus(jobId)!;
-        Assert.Multiple(() =>
-        {
-            Assert.That(status.State, Is.EqualTo(ImportJobState.Cancelled));
-            Assert.That(status.FinishedUtc, Is.EqualTo(time.UtcNow));
-            Assert.That(HasChunks(jobId), Is.False);
-            Assert.That(HasReports(jobId), Is.False);
-        });
-    }
-
-    [Test]
-    public void DeleteImportFiles_Returns_False_For_Unknown_Job() =>
-        Assert.That(service.DeleteImportFiles(Guid.NewGuid()), Is.False);
 }

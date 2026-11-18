@@ -110,9 +110,9 @@ All client-side, in a **Web Worker** (keeps admin UI responsive).
 
 - **CSV/TSV**: streaming parser (e.g. Papa Parse on `File.stream()`); delimiter/quote/encoding detection w/ override, BOM, header row.
 - **NDJSON**: line-by-line over `File.stream()` + `TextDecoderStream`.
-- **JSON**: top-level array, streaming JSON parser (⚠️ pick lib). Nested objects flattened to dotted paths (`address.city`).
-- **XLSX**: first/chosen sheet, header row, 1,048,576 row cap. ⚠️ Spike: browser streaming XLSX (zip + SAX over sheet XML, e.g. zip.js + saxes) vs full-load libs (SheetJS memory ~10× file size). Fallback: cap XLSX size (e.g. 200 MB) + tell marketer to export CSV.
-- **Compressed**: `.gz` via `DecompressionStream('gzip')`; `.zip` single entry via zip lib.
+- **JSON**: top-level array, hand-written streaming parser (D49). Nested objects flattened to dotted paths (`address.city`).
+- **XLSX**: first visible / chosen sheet, header row, 1,048,576 row cap. Hand-written zip + streaming sheet XML (D49); shared strings table held in memory (1M unique emails: ~130 MB heap, Node). No size cap.
+- **Compressed**: `.gz` via `DecompressionStream('gzip')`; `.zip` single entry (ZIP64, stored/deflate via `DecompressionStream('deflate-raw')`, D49).
 - Parser abstraction in TS: `RecordSource` → async iterator of `{ rowNumber, values }`.
 
 ## 6. Normalization & upload steps (D1, D17, D18, D34)
@@ -170,7 +170,7 @@ All client-side, in a **Web Worker** (keeps admin UI responsive).
 | Invalid email (only when email ≠ dedupe key; email = key → row always skipped, §6, D34) | skip row / import w/o email (repeatable: key present; applied server-side) | skip row |
 | Recipient list: not member | selecting a list = add as **confirmed** (no options; attested via Run confirm dialog) | — (no list selected = no list changes) |
 | Recipient list: unsubscribed | keep unsubscribed / resubscribe (attest) ("report only" dropped, D46; Sean 2026-11-17: not coming back) | keep |
-| Recipient list: bounced address (XbyK send-time rule: hard bounce OR `EmailBounceSoftBounceCount >= SoftBounceLimit`, §2, D35) | add to list + report / skip list add + report | add + report (XbyK excludes at send; importer never edits `EmailBounceInfo`) |
+| Recipient list: bounced address (XbyK send-time rule: hard bounce OR `EmailBounceSoftBounceCount >= SoftBounceLimit`, §2, D35) | add to list + report / skip list add + report | skip + report (Sean 2026-11-17; was add + report). XbyK excludes at send either way; importer never edits `EmailBounceInfo` |
 | Consent | none / blanket / blanket + per-row column override (attest) | none |
 | Consent previously revoked | keep revoked / re-agree (attest) | keep |
 | Import source field stamp | created only / created + updated | created only |
@@ -199,7 +199,7 @@ Rows w/ missing/invalid dedupe key: always skipped client-side (§6, D34), not a
 - `ConsentHash` pins consent text version → finalize dedicated consent text before import.
 - Already agreed (newest row not revoked) → skip. Revoked → keep revoked by default; note backdated agreement older than existing revocation stays revoked (newest wins).
 - After `Completed` run (D36): `CacheHelper.ClearCache("consentagreement|")` (10-min `IsAgreed` cache).
-- Warn if mapped consent date older than N months (staleness).
+- ~~Warn if mapped consent date older than N months~~ — dropped (D56).
 
 ### GDPR notes (not legal advice — needs Kentico legal review)
 
@@ -219,7 +219,7 @@ Rows w/ missing/invalid dedupe key: always skipped client-side (§6, D34), not a
   - Aggregates: rows read/valid/invalid, invalid email (skipped / imported w/o email), in-file dupes, create/update/unchanged/multi-match, list adds (confirmed), kept-unsubscribed, resubscribed, consents recorded/skipped/revoked.
   - Field change stats for updates ("12,301 contacts: FirstName changes").
   - Row-level report (row #, outcome, reason) as downloadable gzipped CSV; CSV-injection safe. **No key/PII by default** — marketer has original file, row # locates the row. Optional "include key column" (then PII, same cleanup rules).
-  - Sample before/after diffs.
+  - Sample before/after values per changed field, cleared values first (D57).
 - **Confirm**: `ConfirmationDialog` restating counts; includes consent statement when list add / resubscribe / consent behaviors on (= attestation, D26); type-to-confirm when updates > N.
 - **Execute**: progress (see below), pause/cancel.
 
@@ -247,7 +247,7 @@ Every long phase shows: what's happening, how much is done, how much is left (wh
   - `appsettings`: `ContactsImporter:StoragePath` (default `~/App_Data/contacts-importer`), plus max file size, chunk size, batch size, retention (see "File cleanup").
   - Files per job (`{root}/{jobId}/`): `job.json` (mapping, options, attestation), `status.json` (state, checkpoint, aggregates, heartbeat, driver token, last instance), `chunks/{n}.ndjson.gz`, `report-*.csv.gz`.
   - Writes via CMS.IO (write temp + replace) so path mapping works.
-- **Shared storage**: Setup docs (§14) show custom path mapping ([storage path mapping docs](https://docs.kentico.com/documentation/developers-and-admins/api/files-api-and-cms-io/file-system-providers/storage-path-mapping)) for SaaS/web farm so chunks + status reach all instances. ⚠️ Option: `AddContactsImporter(o => o.RegisterStoragePath = true)` calls `AddStoragePathRegistration` for the user.
+- **Shared storage**: Setup docs (§14) show custom path mapping ([storage path mapping docs](https://docs.kentico.com/documentation/developers-and-admins/api/files-api-and-cms-io/file-system-providers/storage-path-mapping)) for SaaS/web farm so chunks + status reach all instances. No `RegisterStoragePath` option: docs show the `AddStoragePathRegistration` call (D59).
 - **Web farm / cache** (D28, D36; replaces custom task in D7): no custom web farm task. Built-in calls already create web farm tasks:
   - `CacheHelper.TouchKeys` for `om.contact|all`, `om.contactgroupmembercontact|all`, `emaillibrary.emailsubscriptionconfirmation|all`, `cms.consentagreement|all`
   - `CacheHelper.TouchKeys("om.recipientlist|byid|{listId}")` (subscription `IsConfirmed` cache, 10 min)
@@ -376,11 +376,11 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 0. **Spike**: browser streaming XLSX + JSON parsing (memory on 1M rows); TS↔C# key normalization parity; 2 GB chunked page-command upload behind Cloudflare/SaaS; `PROCESS_NEXT` throughput (rows/s) on S1 + L2 for 1M/10M rows; set-based OPENJSON update throughput (data from DataGenerator, §14). Done (see spike-findings.md): WhereIn, indexes, bounce exclusion, consent bulk insert + backdating, cache keys, raw SQL API.
 1. **MVP**: all formats (§5) parsed client-side, dedupe/merge, update policies, recipient list (confirmed w/ attest; keep-unsubscribed / resubscribe; bounce option + report, D35), consent (blanket + column), profiling, full dry run + reports, resumable execute, results, recent imports, permissions, event log + `AfterContactImportEvent`, source field stamp. Definition of done includes README "Limitations" + Usage guide limitations section populated (§14, D38).
 2. **Phase 2** (if customer traction): custom object types (job history, import status), undo created contacts, automation trigger ("Contacts imported"), mapping presets.
-3. **Backlog**: non-recipient contact group assignment, API/CLI import, recurring imports from remote source, import suppression list from previous ESP into `EmailBounceInfo` (hard bounces).
+3. **Backlog**: multiple recipient lists per import (Sean 2026-11-17: not now; workaround = re-run file w/ next list, idempotent; touches options, attestation, audience SQL, per-list counts/report, event payload `RecipientListID` → list), non-recipient contact group assignment, API/CLI import, recurring imports from remote source, import suppression list from previous ESP into `EmailBounceInfo` (hard bounces).
 
 ## 16. Open questions
 
-1. Streaming JSON + XLSX libs for browser (spike).
+1. ~~Streaming JSON + XLSX libs for browser~~ → D49.
 2. SaaS autoscale-in behavior during long imports (low impact now — browser-driven calls just retry).
 
 ## 17. Decisions log
@@ -436,3 +436,16 @@ App: **Contacts Importer (Labs)** under Digital marketing.
 | D46 | Slice 4 (spec 4): list + consent apply to every row that resolves to a contact (incl. "existing: don't update"); list add = manual membership (type 0, FromManual) + approved confirmation dated import time, no DOI email; contacts w/o email not added; "subscribed" = member + newest confirmation approved; bounced = hard OR soft ≥ `SoftBounceLimit`; consent via `BulkInsert` `ConsentAgreementInfo`, column override `y|yes|true|1|x`, future date → not recorded, backdated older than revocation stays revoked; `unsubscribed: reportOnly` dropped; no consent "source" column (no storage in XbyK); attestation required when list or consent set, statement version server-side, `ConfirmConsent` checked server-side; idempotent writes via deterministic GUIDs. | 2026-11-17 |
 | D47 | `AfterContactImportEvent` payload typed (Sean): `ContactImportEventData.Options` = `ContactImportOptions` (dedicated public enums per option), `.Counts` = `ContactImportCounts` (one `long` per count + `FieldChanges`). Reflection tests fail when an internal option value or count key has no public counterpart. | 2026-11-17 |
 | D48 | Admin UI text via Xperience admin localization (Sean): client strings in resx registered for `LocalizationTarget.Client` + `useTranslation()`; server messages via `ILocalizationService` `GetString`/`GetStringFormat`; plain string keys `contactsimporter.*` (per docs), key-coverage tests instead of typed constants; numbers/dates in admin UI culture. Event log text, report CSV headers + outcome codes stay English/fixed. Attestation statement en-US only, culture not stored. `status.json` stores errors as `error` = resource key + `errorArguments` = placeholder values (field names etc., never contact data; omitted when none), resolved in the viewer's admin UI language via `GetStringFormat`; older jobs with English text in `error` shown as stored. | 2026-11-17 |
+| D49 | No npm parser deps where possible (Sean, slice 5). Zip (single entry, ZIP64, stored/deflate) via `File.slice` + `DecompressionStream('deflate-raw')`; JSON array + XLSX sheet XML via hand-written streaming tokenizers. XLSX shared strings loaded in memory, no size cap (1M unique: ~130 MB heap). XLSX dates (Sean ok): serial 60 → `1900-02-29` (rejected as date), time-only → `1899-12-31THH:mm:ss`, midnight drops time. Resolves §16 Q1. | 2026-11-17 |
+| D50 | Step flow (Sean, slice 6, spec 6): File/Map/Upload lock once upload starts; "Start a new import" (cancel + new, options not kept) replaces going back; upload runs in a background status bar (expandable details, auto-opens on problems) while Options is shown; "Save and check" waits for upload; header: Options/Review clickable until Run confirmed, then locked; terminal → Results only; Review shows read-only mapping card. Bounced default = do not add. | 2026-11-17 |
+| D51 | Delete imports (Sean, spec 6C): cancel before Run deletes the whole import (folder) and returns to the list; list has one "Delete" action removing the whole import (cancels unfinished, refuses actively running); cancel during Run unchanged (Results w/ partial counts). Deleted imports leave only event log + audit event. Supersedes D12 "Delete import files now". | 2026-11-17 |
+| D52 | Step actions (Sean, after testing): "Cancel import" on every step before Run (File, Map, Options, Review; deletes per D51); "Start a new import" only once the upload is complete (Options, Review), opens a new import and keeps this one, no confirmation (replaces the D50 cancel-and-start-new); Results has "Delete" = list Delete action. | 2026-11-17 |
+| D53 | Concurrent imports (Sean, supersedes D13): Review warns when another import is running (execute, actively driven) and names it; Run import disabled meanwhile, server refuses CONFIRM_IMPORT too. Another import analyzing does not block. | 2026-11-17 |
+| D54 | Optional scheduled cleanup task class in the package (admins create a task config in Scheduled tasks); lazy sweep stays. Docs in Setup "File cleanup". | 2026-11-17 |
+| D55 | Consent / DOI callouts: "This is not legal advice." removed (Sean). | 2026-11-17 |
+| D56 | Stale consent date warning (§9): not built (Sean). | 2026-11-17 |
+| D57 | Review shows sample before/after values per changed contact field, esp. values that would be cleared; samples stored with the check (personal data, same cleanup as uploads/reports). | 2026-11-17 |
+| D58 | Adaptive batch size for Run (execute): batch size follows measured batch time toward a target, shrinks on SQL timeout/deadlock, within min/max options. | 2026-11-17 |
+| D59 | `RegisterStoragePath` option dropped; Setup docs keep the `AddStoragePathRegistration` example. | 2026-11-17 |
+| D60 | One unfinished Run at a time (Sean, replaces D53 heartbeat rule): an import whose Run was confirmed and has not ended (Confirmed / Running / Paused in execute, any heartbeat) blocks confirming another Run; server refuses CONFIRM_IMPORT and a starting PROCESS_NEXT; global DB lock around check+confirm. Review names the blocker with a link to open it (continue or cancel there). Note on Review when the check predates another import finishing. Checks (analyze) never blocked. | 2026-11-17 |
+| D61 | Imports list State column shows Xperience built-in icons with color per state. | 2026-11-17 |

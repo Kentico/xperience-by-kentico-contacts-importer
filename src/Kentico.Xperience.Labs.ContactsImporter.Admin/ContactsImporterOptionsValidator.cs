@@ -17,6 +17,12 @@ internal sealed class ContactsImporterOptionsValidator : IValidateOptions<Contac
         RequirePositive(errors, options.ChunkSizeBytes, nameof(ContactsImporterOptions.ChunkSizeBytes));
         RequirePositive(errors, options.MaxChunkUncompressedBytes, nameof(ContactsImporterOptions.MaxChunkUncompressedBytes));
         RequirePositive(errors, options.BatchSize, nameof(ContactsImporterOptions.BatchSize));
+        RequirePositive(errors, options.MinBatchSize, nameof(ContactsImporterOptions.MinBatchSize));
+        if (!(options.TargetBatchSeconds > 0) || double.IsInfinity(options.TargetBatchSeconds))
+        {
+            errors.Add($"{nameof(ContactsImporterOptions.TargetBatchSeconds)} must be greater than 0.");
+        }
+
         RequirePositive(errors, options.ProcessingTimeBudgetSeconds, nameof(ContactsImporterOptions.ProcessingTimeBudgetSeconds));
         RequirePositive(errors, options.AnalysisValidHours, nameof(ContactsImporterOptions.AnalysisValidHours));
         RequirePositive(errors, options.HeartbeatStaleSeconds, nameof(ContactsImporterOptions.HeartbeatStaleSeconds));

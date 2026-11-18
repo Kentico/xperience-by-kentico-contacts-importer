@@ -82,7 +82,7 @@ public class ImportEventPublisherTests
             Assert.That(data.Options.MultipleMatches, Is.EqualTo(ContactImportMultipleMatches.UpdateNewest));
             Assert.That(data.Options.InvalidEmail, Is.EqualTo(ContactImportInvalidEmail.SkipRow));
             Assert.That(data.Options.Unsubscribed, Is.EqualTo(ContactImportUnsubscribed.Resubscribe));
-            Assert.That(data.Options.BouncedAddress, Is.EqualTo(ContactImportBouncedAddress.AddAndReport));
+            Assert.That(data.Options.BouncedAddress, Is.EqualTo(ContactImportBouncedAddress.SkipAndReport));
             Assert.That(data.Options.Consent, Is.EqualTo(ContactImportConsent.Blanket));
             Assert.That(data.Options.RevokedConsent, Is.EqualTo(ContactImportRevokedConsent.Keep));
             Assert.That(data.Options.SourceStamp, Is.EqualTo(ContactImportSourceStamp.CreatedOnly));

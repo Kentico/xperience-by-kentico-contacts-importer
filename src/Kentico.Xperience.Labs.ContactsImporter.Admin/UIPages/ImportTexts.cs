@@ -42,12 +42,15 @@ internal static class ImportTextKeys
     public const string JOB_ID_MISMATCH = PREFIX + "jobidmismatch";
     public const string TRUNCATE_INDEX = PREFIX + "truncateindex";
     public const string BUSY = PREFIX + "busy";
+    public const string IMPORT_ACTIVE = PREFIX + "importactive";
+    public const string DELETE_FAILED = PREFIX + "deletefailed";
     public const string SOURCE_FIELD_MAPPED = PREFIX + "sourcefieldmapped";
     public const string ANALYSIS_EXPIRED = PREFIX + "analysisexpired";
     public const string NO_REPORT = PREFIX + "noreport";
     public const string CONSENT_COLUMN_REQUIRED = PREFIX + "consentcolumnrequired";
     public const string CONSENT_PERMISSION_REQUIRED = PREFIX + "consentpermissionrequired";
     public const string ATTESTATION_REQUIRED = PREFIX + "attestationrequired";
+    public const string OTHER_IMPORT_RUNNING = PREFIX + "otherimportrunning";
 
     // Processing (stored in the job status, shown on the Options and Results steps).
     public const string FAILED = PREFIX + "failed";
@@ -208,6 +211,9 @@ internal static class ImportMessages
 
     /// <param name="state">The job state, by its name.</param>
     public static ImportMessage InvalidState(ImportJobState state) => new(ImportTextKeys.INVALID_STATE, state.ToString());
+
+    /// <param name="fileName">File name of the import whose Run is unfinished.</param>
+    public static ImportMessage OtherImportRunning(string fileName) => new(ImportTextKeys.OTHER_IMPORT_RUNNING, fileName);
 
     public static ImportMessage ChunkMissing(int chunkIndex) => new(ImportTextKeys.CHUNK_MISSING, chunkIndex);
 

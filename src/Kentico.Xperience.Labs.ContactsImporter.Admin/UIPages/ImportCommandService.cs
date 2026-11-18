@@ -22,6 +22,14 @@ internal interface IImportCommandService
     public ImportJobResponse GetJob(string? jobId);
 
     /// <summary>
+    /// Another import whose Run was confirmed and has not ended (<see cref="ImportJobStateMachine.IsUnfinishedRun"/>), so
+    /// the Review and Run steps can say why the job <paramref name="jobId"/> cannot run yet, and when the last Run of
+    /// another import ended. Reads only the status files (and the configuration of the blocking job); called every few
+    /// seconds while the Review step is shown or the Run step waits.
+    /// </summary>
+    public RunningImportResponse GetRunningImport(string? jobId);
+
+    /// <summary>
     /// Creates the job or changes its file and mapping, then opens it for chunks (Configuring → Uploading).
     /// A changed mapping of a job with uploaded data deletes that data.
     /// </summary>
@@ -67,11 +75,25 @@ internal interface IImportCommandService
     /// <summary>One page of the row report of the analysis or the import.</summary>
     public GetReportResponse GetReport(string? jobId, GetReportRequest? request, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Examples of values the import changes or clears in existing contacts, from the current analysis (PLAN D57).
+    /// <c>invalidState</c> when the job is not Analyzed or Confirmed.
+    /// </summary>
+    public GetSamplesResponse GetSamples(string? jobId);
+
     /// <summary>Cancels an unfinished job and deletes its uploaded chunks. A processing request stops after its current batch.</summary>
     public ImportActionResponse Cancel(string? jobId, int userId);
 
-    /// <summary>"Delete import files now": deletes chunks and reports; cancels the job when it is not finished.</summary>
-    public ImportActionResponse DeleteFiles(string? jobId, int userId);
+    /// <summary>
+    /// Deletes the whole import (job folder: configuration, status, uploaded chunks, reports). An unfinished import is
+    /// cancelled first (event log entry and <see cref="AfterContactImportEvent"/>). Refused with <c>importActive</c>
+    /// while another browser tab or user analyzes or runs the import (fresh heartbeat); the tab that drives the
+    /// analysis itself passes its driver token. An import that no longer exists counts as deleted (<c>ok</c>).
+    /// </summary>
+    /// <param name="jobId">Job to delete.</param>
+    /// <param name="driverToken">Driver token of the calling tab; <c>null</c> when it does not drive the import.</param>
+    /// <param name="userId">The deleting user, for the event log and the event.</param>
+    public ImportActionResponse DeleteImport(string? jobId, string? driverToken, int userId);
 }
 
 internal sealed class ImportCommandService(
@@ -89,10 +111,22 @@ internal sealed class ImportCommandService(
     IImportAudienceResolver audience,
     IOptions<ContactsImporterOptions> options,
     TimeProvider timeProvider,
-    ILogger<ImportCommandService>? logger = null) : IImportCommandService
+    ILogger<ImportCommandService>? logger = null,
+    IImportRunLock? runLock = null) : IImportCommandService
 {
     /// <summary>Chunk uploads the browser runs at the same time.</summary>
     internal const int ParallelUploads = 3;
+
+    /// <summary>
+    /// Longest wait for the application-wide Run lock (<see cref="IImportRunLock"/>); it is held only while the other
+    /// imports are checked and the job is confirmed or checked before its start.
+    /// </summary>
+    internal static readonly TimeSpan RunLockTimeout = TimeSpan.FromSeconds(5);
+
+    private static readonly EventId deletedEvent = new(0, "CONTACT_IMPORT_DELETE");
+
+    /// <summary>Waits before the next attempt to delete a job folder whose files are briefly locked.</summary>
+    private static readonly int[] deleteRetryDelaysMs = [100, 250, 500, 1000];
 
     /// <summary>Most imports returned by <see cref="ListImports"/>.</summary>
     internal const int MaxListedImports = 200;
@@ -166,7 +200,6 @@ internal sealed class ImportCommandService(
                 Created = ImportStarted(j.Status) ? j.Status.Aggregates.GetValueOrDefault(ImportAggregateKeys.Created) : 0,
                 Updated = ImportStarted(j.Status) ? j.Status.Aggregates.GetValueOrDefault(ImportAggregateKeys.ContactsUpdated) : 0,
                 CanContinue = !ImportJobStateMachine.IsTerminal(j.Status.State),
-                HasFiles = HasFiles(j.Job.JobId),
                 RecipientListName = j.Job.Options.RecipientListId is { } listId ? listNames.GetValueOrDefault(listId) : null,
                 ConsentName = j.Job.Options.Consent != ConsentMode.None && j.Job.Options.ConsentId is { } consentId ? consentNames.GetValueOrDefault(consentId) : null,
             })],
@@ -193,6 +226,51 @@ internal sealed class ImportCommandService(
         }
 
         return JobResponse(ImportCommandCodes.OK, job, status);
+    }
+
+    public RunningImportResponse GetRunningImport(string? jobId)
+    {
+        if (!ImportJobId.TryParse(jobId, out var id))
+        {
+            return new RunningImportResponse { Code = ImportCommandCodes.INVALID_REQUEST, Message = texts.Get(ImportTextKeys.INVALID_JOB_ID) };
+        }
+
+        var runs = FindOtherRuns(id, null);
+        if (runs.Blocker is not { } blocker)
+        {
+            return new RunningImportResponse { Code = ImportCommandCodes.OK, LastRunEndedUtc = runs.LastRunEndedUtc };
+        }
+
+        var (job, status) = blocker;
+        bool started = status.State == ImportJobState.Running;
+        // The user who started the Run; for a Run not started yet, who confirmed it; otherwise the creator.
+        int userId = job.CreatedByUserId;
+        if (started && status.PhaseStartedByUserId is { } startedBy)
+        {
+            userId = startedBy;
+        }
+        else if (!started && job.Attestation is { UserId: > 0 } attestation)
+        {
+            userId = attestation.UserId;
+        }
+
+        return new RunningImportResponse
+        {
+            Code = ImportCommandCodes.OK,
+            LastRunEndedUtc = runs.LastRunEndedUtc,
+            Import = new RunningImportDto
+            {
+                JobId = ImportJobId.Format(job.JobId),
+                FileName = job.File.Name,
+                UserName = userNames.GetUserNames([userId]).GetValueOrDefault(userId, ""),
+                State = EffectiveState(status, UtcNow()).ToString(),
+                StartedUtc = started ? status.PhaseStartedUtc : null,
+                ConfirmedUtc = started ? null : status.UpdatedUtc,
+                LastProgressUtc = started ? status.HeartbeatUtc : null,
+                RowsProcessed = started ? status.Aggregates.GetValueOrDefault(ImportAggregateKeys.Rows) : 0,
+                RowsTotal = status.Profile.RowsValid,
+            },
+        };
     }
 
     public ImportJobResponse SaveOptions(string? jobId, ImportOptionsDto? request)
@@ -323,6 +401,11 @@ internal sealed class ImportCommandService(
 
         try
         {
+            if (phase == ImportPhase.Execute && RefuseRunStart(id) is { } refused)
+            {
+                return refused;
+            }
+
             return ProgressDto(processor.ProcessNext(id, phase, token, request!.TakeOver, cancellationToken, UserOrNull(userId)));
         }
         finally
@@ -330,6 +413,93 @@ internal sealed class ImportCommandService(
             processGate.Exit(id);
         }
     }
+
+    /// <summary>
+    /// One unfinished Run at a time (PLAN D60), backstop of the check in <see cref="Confirm"/> (a confirmation by an
+    /// earlier version, or two confirmed jobs): a call that would start the Run of a Confirmed job is refused while
+    /// another job blocks it (<see cref="ImportJobStateMachine.BlocksRunStart"/>). A Run that already started (Running,
+    /// also when Paused) is never checked: it is the one allowed to finish. <c>null</c> = go on.
+    /// </summary>
+    private ImportProgressDto? RefuseRunStart(Guid id)
+    {
+        ImportJobStatus? status;
+        try
+        {
+            status = store.ReadStatus(id);
+        }
+        catch (InvalidDataException)
+        {
+            // The processor reports the unreadable job.
+            return null;
+        }
+
+        if (status?.State != ImportJobState.Confirmed)
+        {
+            return null;
+        }
+
+        if (TryEnterRunLock(id) is not { } held)
+        {
+            return NotStartedProgress(status) with { Outcome = ImportCommandCodes.BUSY, Error = texts.Get(ImportTextKeys.BUSY) };
+        }
+
+        using (held)
+        {
+            if (FindOtherRuns(id, status).Blocker is not { } blocker)
+            {
+                return null;
+            }
+
+            return NotStartedProgress(status) with
+            {
+                Outcome = ImportCommandCodes.OTHER_IMPORT_RUNNING,
+                Error = texts.Get(ImportMessages.OtherImportRunning(blocker.Job.File.Name)),
+            };
+        }
+    }
+
+    /// <summary>
+    /// Takes the application-wide Run lock (<see cref="IImportRunLock"/>); <c>null</c> when another request holds it
+    /// longer than <see cref="RunLockTimeout"/> or the database cannot be reached: the caller answers "busy, try again".
+    /// Without a lock service (tests) nothing is locked.
+    /// </summary>
+    private IDisposable? TryEnterRunLock(Guid id)
+    {
+        if (runLock is null)
+        {
+            return NoLock.Instance;
+        }
+
+        try
+        {
+            return runLock.TryEnter(RunLockTimeout);
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "Contact import {JobId}: the Run lock could not be taken; the request is to be repeated.", id);
+
+            return null;
+        }
+    }
+
+    private sealed class NoLock : IDisposable
+    {
+        public static readonly NoLock Instance = new();
+
+        public void Dispose()
+        {
+        }
+    }
+
+    /// <summary>Progress of a Confirmed job whose Run has not started: nothing imported yet.</summary>
+    private ImportProgressDto NotStartedProgress(ImportJobStatus status) => ProgressDto(new ImportProgress
+    {
+        Outcome = ImportProcessOutcome.Processed,
+        Phase = ImportPhase.Execute,
+        State = status.State,
+        RowsTotal = status.Profile.RowsValid,
+        AnalyzedUtc = status.Analysis?.FinishedUtc,
+    });
 
     public ImportJobResponse Confirm(string? jobId, ConfirmImportRequest? request, int userId, bool canConfirmConsent)
     {
@@ -373,14 +543,34 @@ internal sealed class ImportCommandService(
             attestation = new ImportAttestation { UserId = userId, Utc = UtcNow(), StatementVersion = ImportAttestationPolicy.StatementVersion };
         }
 
-        ImportConfirmResult result;
-        try
+        // One unfinished Run at a time (PLAN D60). The Review step disables Run while another Run is unfinished; this
+        // check covers the time between that page's last check and the click. The check and the confirmation hold the
+        // application-wide Run lock, so two confirmations (also on different instances) cannot both pass the check.
+        // Only a job that is not confirmed yet is refused, so repeating the confirmation of this job stays harmless.
+        if (TryEnterRunLock(id) is not { } held)
         {
-            result = processor.Confirm(id, attestation);
+            return JobResponse(ImportCommandCodes.BUSY, current, currentStatus) with { Message = texts.Get(ImportTextKeys.BUSY) };
         }
-        catch (InvalidDataException)
+
+        ImportConfirmResult result;
+        using (held)
         {
-            return JobFailed(ImportCommandCodes.INVALID_STATE, ImportTextKeys.JOB_UNREADABLE);
+            if (currentStatus.State == ImportJobState.Analyzed && FindOtherRuns(id, null).Blocker is { } other)
+            {
+                return JobResponse(ImportCommandCodes.OTHER_IMPORT_RUNNING, current, currentStatus) with
+                {
+                    Message = texts.Get(ImportMessages.OtherImportRunning(other.Job.File.Name)),
+                };
+            }
+
+            try
+            {
+                result = processor.Confirm(id, attestation);
+            }
+            catch (InvalidDataException)
+            {
+                return JobFailed(ImportCommandCodes.INVALID_STATE, ImportTextKeys.JOB_UNREADABLE);
+            }
         }
 
         if (result.Outcome == ImportConfirmOutcome.JobNotFound || !TryRead(id, out var job, out var status) || job is null || status is null)
@@ -436,6 +626,43 @@ internal sealed class ImportCommandService(
             Done = page.Done,
         };
     }
+
+    public GetSamplesResponse GetSamples(string? jobId)
+    {
+        if (!ImportJobId.TryParse(jobId, out var id))
+        {
+            return new GetSamplesResponse { Code = ImportCommandCodes.INVALID_REQUEST, Message = texts.Get(ImportTextKeys.INVALID_JOB_ID) };
+        }
+
+        if (!TryRead(id, out var job, out var status) || job is null || status is null)
+        {
+            return new GetSamplesResponse { Code = ImportCommandCodes.JOB_NOT_FOUND, Message = texts.Get(ImportTextKeys.JOB_NOT_FOUND) };
+        }
+
+        // Only the examples of a finished analysis that is still valid: a new analysis replaces them as it goes.
+        if (status.Analysis is null || status.State is not (ImportJobState.Analyzed or ImportJobState.Confirmed))
+        {
+            return new GetSamplesResponse { Code = ImportCommandCodes.INVALID_STATE };
+        }
+
+        return new GetSamplesResponse
+        {
+            Code = ImportCommandCodes.OK,
+            Fields =
+            [
+                .. ImportValueSamples.Read(store, id)
+                    .GroupBy(sample => sample.Field, StringComparer.Ordinal)
+                    .Select(group => new ImportFieldSamplesDto
+                    {
+                        Field = group.Key,
+                        Cleared = [.. group.Where(sample => sample.Cleared).Select(SampleDto)],
+                        Changed = [.. group.Where(sample => !sample.Cleared).Select(SampleDto)],
+                    }),
+            ],
+        };
+    }
+
+    private static ImportValueSampleDto SampleDto(ImportValueSample sample) => new(sample.Row, sample.Key, sample.Current, sample.New);
 
     public SaveConfigResponse SaveConfig(string? jobId, SaveConfigRequest? request, int userId)
     {
@@ -655,25 +882,86 @@ internal sealed class ImportCommandService(
         {
             ImportCancelOutcome.Cancelled when result.Status is not null => new ImportActionResponse { Code = ImportCommandCodes.OK, Status = ToDto(id, result.Status) },
             ImportCancelOutcome.AlreadyFinished => ActionFailed(ImportCommandCodes.INVALID_STATE, ImportMessages.InvalidState(EffectiveState(result.Status ?? status, UtcNow()))),
-            ImportCancelOutcome.JobNotFound or _ => ActionFailed(ImportCommandCodes.JOB_NOT_FOUND, ImportTextKeys.JOB_NOT_FOUND),
+            // Not an outcome of Cancel (only of CancelIfIdle).
+            ImportCancelOutcome.ActiveElsewhere => ActionFailed(ImportCommandCodes.IMPORT_ACTIVE, ImportTextKeys.IMPORT_ACTIVE),
+            ImportCancelOutcome.Cancelled or ImportCancelOutcome.JobNotFound or _ => ActionFailed(ImportCommandCodes.JOB_NOT_FOUND, ImportTextKeys.JOB_NOT_FOUND),
         };
     }
 
-    public ImportActionResponse DeleteFiles(string? jobId, int userId)
+    public ImportActionResponse DeleteImport(string? jobId, string? driverToken, int userId)
     {
         if (!ImportJobId.TryParse(jobId, out var id))
         {
             return ActionFailed(ImportCommandCodes.INVALID_REQUEST, ImportTextKeys.INVALID_JOB_ID);
         }
 
-        if (!store.JobExists(id) || !cleanup.DeleteImportFiles(id, UserOrNull(userId)))
+        // Already deleted (another tab, the cleanup sweep, a repeated request): nothing left to do.
+        if (!store.JobExists(id))
         {
-            return ActionFailed(ImportCommandCodes.JOB_NOT_FOUND, ImportTextKeys.JOB_NOT_FOUND);
+            return new ImportActionResponse { Code = ImportCommandCodes.OK };
         }
 
-        return TryRead(id, out _, out var status) && status is not null
-            ? new ImportActionResponse { Code = ImportCommandCodes.OK, Status = ToDto(id, status) }
-            : new ImportActionResponse { Code = ImportCommandCodes.OK };
+        string? token = string.IsNullOrEmpty(driverToken) || driverToken.Length > MaxDriverTokenLength ? null : driverToken;
+        ImportJobStatus? status;
+        try
+        {
+            status = store.ReadStatus(id);
+        }
+        catch (InvalidDataException)
+        {
+            // An unreadable status cannot be continued or cancelled; the folder is deleted all the same.
+            status = null;
+        }
+
+        if (status is not null && !ImportJobStateMachine.IsTerminal(status.State))
+        {
+            // Cancel first: the event log entry and the event say how far the import got.
+            var cancelled = processor.CancelIfIdle(id, token, UserOrNull(userId));
+            if (cancelled.Outcome == ImportCancelOutcome.ActiveElsewhere)
+            {
+                return ActionFailed(ImportCommandCodes.IMPORT_ACTIVE, ImportTextKeys.IMPORT_ACTIVE);
+            }
+        }
+
+        if (!TryDeleteJobFolder(id))
+        {
+            return ActionFailed(ImportCommandCodes.DELETE_FAILED, ImportTextKeys.DELETE_FAILED);
+        }
+
+        logger?.LogInformation(deletedEvent, "Contact import {JobId} was deleted by user {UserId}.", id, UserOrNull(userId)?.ToString(CultureInfo.InvariantCulture) ?? "unknown");
+
+        return new ImportActionResponse { Code = ImportCommandCodes.OK };
+    }
+
+    /// <summary>
+    /// Deletes the job folder. A file written a moment ago (the status of the cancel, a report part) can still be held
+    /// open briefly by the operating system (virus scanner, indexer) or a request finishing on it, so a failed
+    /// attempt is repeated a few times.
+    /// </summary>
+    private bool TryDeleteJobFolder(Guid id)
+    {
+        for (int attempt = 0; attempt <= deleteRetryDelaysMs.Length; attempt++)
+        {
+            try
+            {
+                store.DeleteJob(id);
+
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt == deleteRetryDelaysMs.Length)
+                {
+                    logger?.LogWarning(ex, "Contact import {JobId} could not be deleted.", id);
+                }
+                else
+                {
+                    Thread.Sleep(deleteRetryDelaysMs[attempt]);
+                }
+            }
+        }
+
+        return false;
     }
 
     private static bool TryBuildConfig(
@@ -783,7 +1071,7 @@ internal sealed class ImportCommandService(
             || !TryParseOption<InvalidEmailBehavior>(request.InvalidEmail, out var invalidEmail)
             || !TryParseOption<SourceStampBehavior>(request.SourceStamp, out var sourceStamp)
             || !TryParseOption<UnsubscribedBehavior>(request.Unsubscribed ?? OptionName(UnsubscribedBehavior.Keep), out var unsubscribed)
-            || !TryParseOption<BouncedAddressBehavior>(request.BouncedAddress ?? OptionName(BouncedAddressBehavior.AddAndReport), out var bouncedAddress)
+            || !TryParseOption<BouncedAddressBehavior>(request.BouncedAddress ?? OptionName(BouncedAddressBehavior.SkipAndReport), out var bouncedAddress)
             || !TryParseOption<ConsentMode>(request.Consent ?? OptionName(ConsentMode.None), out var consent)
             || !TryParseOption<RevokedConsentBehavior>(request.RevokedConsent ?? OptionName(RevokedConsentBehavior.Keep), out var revokedConsent)
             || request.RecipientListId is <= 0
@@ -808,7 +1096,7 @@ internal sealed class ImportCommandService(
             // revoked): a choice like "subscribe again" never stays behind for a list chosen later.
             RecipientListId = request.RecipientListId,
             Unsubscribed = request.RecipientListId is null ? UnsubscribedBehavior.Keep : unsubscribed,
-            BouncedAddress = request.RecipientListId is null ? BouncedAddressBehavior.AddAndReport : bouncedAddress,
+            BouncedAddress = request.RecipientListId is null ? BouncedAddressBehavior.SkipAndReport : bouncedAddress,
             Consent = consent,
             ConsentId = consent == ConsentMode.None ? null : request.ConsentId,
             RevokedConsent = consent == ConsentMode.None ? RevokedConsentBehavior.Keep : revokedConsent,
@@ -1030,8 +1318,6 @@ internal sealed class ImportCommandService(
     private ImportJobState EffectiveState(ImportJobStatus status, DateTime utcNow) =>
         ImportJobStateMachine.GetEffectiveState(status, utcNow, options.Value.HeartbeatStale);
 
-    private bool HasFiles(Guid jobId) => store.HasChunks(jobId) || store.ListReports(jobId).Count > 0;
-
     /// <summary>Deletes stored chunks from the highest index down, so an interruption never leaves a gap below a kept chunk.</summary>
     private int DeleteChunksFrom(Guid jobId, int fromIndex)
     {
@@ -1044,6 +1330,85 @@ internal sealed class ImportCommandService(
 
         return deleted;
     }
+
+    /// <summary>
+    /// The Runs of the imports other than <paramref name="exceptJobId"/> (PLAN D60): the one that blocks a Run of
+    /// that job (<see cref="ImportJobStateMachine.IsUnfinishedRun"/>; with <paramref name="starting"/>, the status of the
+    /// job about to start, <see cref="ImportJobStateMachine.BlocksRunStart"/>), a started one before a confirmed one and
+    /// the earliest when there are several; and when the last Run of another import ended. Reads the status of every job
+    /// and the configuration of the blocking one only; jobs that cannot be read are left out.
+    /// </summary>
+    private OtherRuns FindOtherRuns(Guid exceptJobId, ImportJobStatus? starting)
+    {
+        (Guid Id, ImportJobStatus Status)? found = null;
+        DateTime? lastEnded = null;
+        foreach (var jobId in store.ListJobs())
+        {
+            if (jobId == exceptJobId)
+            {
+                continue;
+            }
+
+            try
+            {
+                if (store.ReadStatus(jobId) is not { } status)
+                {
+                    continue;
+                }
+
+                if (ImportJobStateMachine.IsEndedRun(status) && (lastEnded is null || status.FinishedUtc > lastEnded))
+                {
+                    lastEnded = status.FinishedUtc;
+                }
+
+                bool blocks = starting is null
+                    ? ImportJobStateMachine.IsUnfinishedRun(status)
+                    : ImportJobStateMachine.BlocksRunStart(status, jobId, starting, exceptJobId);
+                if (blocks && (found is null || Order(status).CompareTo(Order(found.Value.Status)) < 0))
+                {
+                    found = (jobId, status);
+                }
+            }
+            catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+            {
+                // A job that cannot be read (damaged, being deleted) does not block other imports.
+            }
+        }
+
+        (ImportJob Job, ImportJobStatus Status)? blocker = null;
+        if (found is { } candidate)
+        {
+            try
+            {
+                // A blocker without a readable configuration still blocks; it is shown by its ID.
+                var job = store.ReadJob(candidate.Id) ?? UnknownJob(candidate.Id);
+                blocker = (job, candidate.Status);
+            }
+            catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+            {
+                blocker = (UnknownJob(candidate.Id), candidate.Status);
+            }
+        }
+
+        return new OtherRuns(blocker, lastEnded);
+
+        static (int, DateTime) Order(ImportJobStatus status) =>
+            (status.State == ImportJobState.Confirmed ? 1 : 0, status.PhaseStartedUtc ?? status.UpdatedUtc);
+
+        static ImportJob UnknownJob(Guid id) => new()
+        {
+            JobId = id,
+            CreatedByUserId = 0,
+            File = new ImportFileDescriptor { Name = ImportJobId.Format(id), Size = 0, Fingerprint = "" },
+            KeyField = "",
+            Mapping = [],
+            CreatedUtc = DateTime.MinValue,
+        };
+    }
+
+    /// <param name="Blocker">The other job that keeps this one from running; <c>null</c> when none.</param>
+    /// <param name="LastRunEndedUtc">When the last Run of another import ended; <c>null</c> when none did.</param>
+    private sealed record OtherRuns((ImportJob Job, ImportJobStatus Status)? Blocker, DateTime? LastRunEndedUtc);
 
     /// <summary>Reads job and status; <c>false</c> when a file exists but cannot be read.</summary>
     private bool TryRead(Guid jobId, out ImportJob? job, out ImportJobStatus? status)

@@ -59,7 +59,7 @@ public class ImportJsonTests
         var json = ToJson(new ImportOptions());
 
         Assert.That(json.ToJsonString(), Is.EqualTo(
-            """{"newContacts":"create","existingContacts":"update","emptyValues":"ignore","multipleMatches":"updateNewest","invalidEmail":"skipRow","recipientListId":null,"unsubscribed":"keep","bouncedAddress":"addAndReport","consent":"none","consentId":null,"revokedConsent":"keep","sourceField":null,"sourceValue":null,"sourceStamp":"createdOnly","reportIncludesKey":false}"""));
+            """{"newContacts":"create","existingContacts":"update","emptyValues":"ignore","multipleMatches":"updateNewest","invalidEmail":"skipRow","recipientListId":null,"unsubscribed":"keep","bouncedAddress":"skipAndReport","consent":"none","consentId":null,"revokedConsent":"keep","sourceField":null,"sourceValue":null,"sourceStamp":"createdOnly","reportIncludesKey":false}"""));
     }
 
     [Test]
@@ -77,11 +77,11 @@ public class ImportJsonTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(json.Select(p => p.Key), Is.EqualTo(new[] { "state", "chunks", "profile", "checkpoint", "aggregates", "analysis", "heartbeatUtc", "driverToken", "lastInstance", "updatedUtc", "finishedUtc", "error", "errorArguments", "version", "driverCallId", "longestBatchSeconds" }));
+            Assert.That(json.Select(p => p.Key), Is.EqualTo(new[] { "state", "chunks", "profile", "checkpoint", "aggregates", "analysis", "heartbeatUtc", "driverToken", "lastInstance", "updatedUtc", "finishedUtc", "error", "errorArguments", "version", "driverCallId", "longestBatchSeconds", "phaseStartedUtc", "phaseStartedByUserId" }));
             Assert.That(json["state"]!.GetValue<string>(), Is.EqualTo("Uploading"));
             Assert.That(json["chunks"]![0]!.ToJsonString(), Is.EqualTo("""{"index":0,"sha256":"abc","rows":1234,"firstRow":1,"lastRow":1300}"""));
             Assert.That(json["profile"]!.ToJsonString(), Is.EqualTo("""{"rowsRead":0,"rowsValid":0,"rowsRejected":0,"likelyDuplicates":0,"chunkCount":0}"""));
-            Assert.That(json["checkpoint"]!.ToJsonString(), Is.EqualTo("""{"phase":"analyze","chunkIndex":0,"rowOffset":0,"lastRow":0}"""));
+            Assert.That(json["checkpoint"]!.ToJsonString(), Is.EqualTo("""{"phase":"analyze","chunkIndex":0,"rowOffset":0,"lastRow":0,"batchSize":null}"""));
             Assert.That(json["analysis"], Is.Null);
             Assert.That(json["aggregates"]!.ToJsonString(), Is.EqualTo("{}"));
             Assert.That(json["heartbeatUtc"], Is.Null);

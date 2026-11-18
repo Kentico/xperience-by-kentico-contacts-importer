@@ -98,7 +98,7 @@ internal class ImportConsentCommandTests
     private static ImportOptionsDto Options(
         int? recipientListId = null,
         string? unsubscribed = "keep",
-        string? bouncedAddress = "addAndReport",
+        string? bouncedAddress = "skipAndReport",
         string? consent = "none",
         int? consentId = null,
         string? revokedConsent = "keep") => new()
@@ -169,7 +169,7 @@ internal class ImportConsentCommandTests
         {
             Assert.That(job.Options.RecipientListId, Is.Null);
             Assert.That(job.Options.Unsubscribed, Is.EqualTo("keep"));
-            Assert.That(job.Options.BouncedAddress, Is.EqualTo("addAndReport"));
+            Assert.That(job.Options.BouncedAddress, Is.EqualTo("skipAndReport"));
             Assert.That(job.Options.Consent, Is.EqualTo("none"));
             Assert.That(job.Options.ConsentId, Is.Null);
             Assert.That(job.Options.RevokedConsent, Is.EqualTo("keep"));

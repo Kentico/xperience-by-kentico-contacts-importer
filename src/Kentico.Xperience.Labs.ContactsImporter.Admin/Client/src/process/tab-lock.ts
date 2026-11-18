@@ -10,15 +10,23 @@ export interface TabLock {
 
 type LockManagerLike = Pick<LockManager, 'request'>;
 
-/** Takes the lock when it is free; `null` when another tab holds it. */
-export async function acquireTabLock(name: string, locks: LockManagerLike | undefined = globalThis.navigator?.locks): Promise<TabLock | null> {
+/**
+ * Takes the lock when it is free; `null` when another tab holds it. With `wait`, waits until the
+ * other tab releases it ("Continue here"); `null` when the wait is aborted.
+ */
+export async function acquireTabLock(
+  name: string,
+  locks: LockManagerLike | undefined = globalThis.navigator?.locks,
+  wait?: AbortSignal,
+): Promise<TabLock | null> {
   if (!locks) {
     return { release: () => undefined };
   }
 
   return new Promise<TabLock | null>((resolve) => {
+    const options: LockOptions = wait ? { signal: wait } : { ifAvailable: true };
     void locks
-      .request(name, { ifAvailable: true }, (lock) => {
+      .request(name, options, (lock) => {
         if (!lock) {
           resolve(null);
 
@@ -28,6 +36,7 @@ export async function acquireTabLock(name: string, locks: LockManagerLike | unde
         // The lock is held until this promise settles.
         return new Promise<void>((release) => resolve({ release }));
       })
-      .catch(() => resolve({ release: () => undefined }));
+      // Aborted wait: no lock. Other errors (no lock support in this context): the server checks alone.
+      .catch(() => resolve(wait?.aborted ? null : { release: () => undefined }));
   });
 }

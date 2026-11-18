@@ -32,6 +32,7 @@ public static class ContactsImporterServiceCollectionExtensions
 
         // Processing engine (Processing)
         services.TryAddSingleton<IContactImportRepository, ContactImportRepository>();
+        services.TryAddSingleton<IImportRunLock, ImportRunLock>();
         services.TryAddSingleton<IImportCacheInvalidator, ImportCacheInvalidator>();
         services.TryAddSingleton<IImportReportReader, ImportReportReader>();
         services.TryAddSingleton<IImportAudienceResolver, ImportAudienceResolver>();

@@ -39,7 +39,7 @@ const CONTEXT: OptionsContext = {
 const NO_LIST_OR_CONSENT = {
   recipientListId: null,
   unsubscribed: 'keep',
-  bouncedAddress: 'addAndReport',
+  bouncedAddress: 'skipAndReport',
   consent: 'none',
   consentId: null,
   revokedConsent: 'keep',
@@ -61,7 +61,7 @@ describe('initialOptions', () => {
       // the safe defaults: no list, keep unsubscribed, no consent, keep revoked
       recipientListId: null,
       unsubscribed: 'keep',
-      bouncedAddress: 'addAndReport',
+      bouncedAddress: 'skipAndReport',
       consent: 'none',
       consentId: null,
       revokedConsent: 'keep',

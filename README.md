@@ -4,9 +4,20 @@
 
 ## Description
 
-Lets marketers import contacts from CSV, Excel, and JSON files into Xperience by Kentico, with deduplication, dry runs, and recipient list assignment.
+Lets marketers import contacts into Xperience by Kentico from CSV, TSV, NDJSON, JSON and Excel (`.xlsx`) files, also gzipped (`.gz`) or zipped (`.zip`), with deduplication, dry runs, recipient list assignment and consent agreements. The file is read in the browser; only mapped columns are uploaded.
 
----Also list any limitations of the functionality that may result in unexpected behavior for the end user. These can be caused, e.g., by scope cuts or unexpected issues during implementation.---
+### Limitations
+
+Some behavior is intentional, for speed on large files. Details: [Limitations and documented choices](./docs/Usage-Guide.md#limitations-and-documented-choices).
+
+- Contacts are written with set-based SQL: per-object event handlers, automation triggers and contact group recalculation do not run for imported contacts. Recalculate contact groups after an import.
+- Caches are cleared by type keys, and fully only when an import completes. After a cancelled or failed import, clear the cache in the System application. Custom caches keyed only per contact stay stale until they expire.
+- Clean data is expected: duplicate rows are applied in file order (last non-empty value wins). Rows without a valid match value are always skipped.
+- Reference fields (country, state, contact status, owner) take IDs, not names.
+- The browser tab drives the import: closing it pauses the import. Do not import during deployments.
+- Contacts added to a recipient list get no double opt-in email. Bounce records are never changed.
+- Web farm and SaaS need shared storage for the import files; see [Setup](./docs/Setup.md#storage).
+- File size is limited (5 GB by default); request size limits and timeouts of the hosting apply.
 
 ## Requirements
 
@@ -39,6 +50,10 @@ dotnet add package --prerelease Kentico.Xperience.Labs.ContactsImporter.Admin
 
    builder.Services.AddContactsImporter();
    ```
+
+1. In **Role management**, give marketers the **View** and **Import contacts** permissions of **Contacts Importer (Labs)**. Users who add contacts to recipient lists or record consent also need **Confirm consent for imported contacts**. See [Permissions](./docs/Setup.md#permissions).
+1. Web farm or SaaS: import files are stored under `~/App_Data/contacts-importer` by default and must be shared by all instances (and, on Azure App Service, registered for storage path mapping). See [Storage](./docs/Setup.md#storage).
+1. Open **Contacts Importer (Labs)** in the **Digital marketing** category and select **New import**.
 
 ## Full Instructions
 

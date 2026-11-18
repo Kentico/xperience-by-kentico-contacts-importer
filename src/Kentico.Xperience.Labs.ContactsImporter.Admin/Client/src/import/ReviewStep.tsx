@@ -25,17 +25,20 @@ import { Commands } from '../shared/commands';
 import type { AggregatesDto, ConfirmImportRequest, ExecuteCommand, FieldDto, ImportJobResponse } from '../shared/commands';
 import { useIsMounted } from '../shared/hooks';
 import { useText } from '../shared/i18n';
-import { TestIds, Text, testId } from '../shared/ui';
+import { DelayedReveal, DIALOG_MAX_WIDTH, TestIds, Text, testId } from '../shared/ui';
 
 import { AggregatesTable, Count, FieldChangesTable, bouncedContacts, clearedValues } from './Aggregates';
-import { CancelImport } from './CancelImport';
 import { ConsentSummary } from './ConsentSummary';
+import { MappingSummaryCard } from './MappingSummary';
 import { CONFIRM_TYPING_THRESHOLD, progressFor } from './model';
 import type { JobView } from './model';
+import { OtherImportCallout, useOtherRuns } from './OtherImportRunning';
 import { ProcessPanel } from './ProcessPanel';
 import type { CountCardTexts } from './ProcessPanel';
 import { ReportButton } from './ReportButton';
+import { isCheckOlderThanOtherRun } from './running-import';
 import { useProcessLoop } from './useProcessLoop';
+import { ValueSamplesCard } from './ValueSamples';
 
 export interface ReviewStepProps {
   readonly execute: ExecuteCommand;
@@ -46,10 +49,14 @@ export interface ReviewStepProps {
   /** Shown above the progress (why the file is checked again). */
   readonly notice: string | null;
   readonly onBackToOptions: () => void;
+  /** "Cancel import" and "Start a new import" (both delete this import); `onBeforeCancel` stops the check first. */
+  readonly renderActions?: (onBeforeCancel?: () => void) => React.ReactNode;
   /** The job changed on the server (check finished, cancelled, changed elsewhere): load it again. */
   readonly onReload: () => void;
   /** The import is confirmed; the response holds the job as it is now. */
   readonly onConfirmed: (response: ImportJobResponse) => void;
+  /** Opens another import (the one whose unfinished Run keeps this one from running). */
+  readonly onOpenImport: (jobId: string) => void;
 }
 
 /**
@@ -59,7 +66,7 @@ export interface ReviewStepProps {
 export const ReviewStep = (props: ReviewStepProps) =>
   props.view.status.state === 'Analyzed' ? <Summary {...props} /> : <Analyzing {...props} />;
 
-const Analyzing = ({ execute, view, notice, onBackToOptions, onReload }: ReviewStepProps) => {
+const Analyzing = ({ execute, view, notice, onBackToOptions, renderActions, onReload }: ReviewStepProps) => {
   const { t } = useText();
   const cards = useMemo<CountCardTexts>(
     () => ({
@@ -94,40 +101,44 @@ const Analyzing = ({ execute, view, notice, onBackToOptions, onReload }: ReviewS
   }, [finished, onReload]);
 
   return (
-    <Stack spacing={Spacing.L}>
-      <Headline size={HeadlineSize.M}>{t('contactsimporter.review.headlinerunning')}</Headline>
-      {notice && <NotificationBarInfo>{notice}</NotificationBarInfo>}
-      <ProcessPanel
-        view={loop}
-        runningText={t('contactsimporter.review.running')}
-        cards={cards}
-        titleName={view.job.file.name}
-        usesList={view.job.options.recipientListId !== null}
-        usesConsent={view.job.options.consent !== 'none'}
-        actions={
-          <>
-            <Button label={t('contactsimporter.review.back')} color={ButtonColor.Secondary} dataTestId={testId(TestIds.reviewBack)} onClick={onBackToOptions} />
-            <CancelImport
-              execute={execute}
-              message={t('contactsimporter.upload.cancelmessage')}
-              keepLabel={t('contactsimporter.upload.cancelkeep')}
-              onBeforeCancel={loop.pause}
-              onCancelled={onReload}
-            />
-          </>
-        }
-      />
-    </Stack>
+    <DelayedReveal>
+      <Stack spacing={Spacing.L}>
+        <Headline size={HeadlineSize.M}>{t('contactsimporter.review.headlinerunning')}</Headline>
+        {notice && <NotificationBarInfo>{notice}</NotificationBarInfo>}
+        <ProcessPanel
+          view={loop}
+          runningText={t('contactsimporter.review.running')}
+          cards={cards}
+          titleName={view.job.file.name}
+          usesList={view.job.options.recipientListId !== null}
+          usesConsent={view.job.options.consent !== 'none'}
+          actions={[
+            <Button
+              key="back"
+              label={t('contactsimporter.review.back')}
+              color={ButtonColor.Secondary}
+              dataTestId={testId(TestIds.reviewBack)}
+              onClick={onBackToOptions}
+            />,
+            renderActions?.(loop.pause),
+          ]}
+        />
+      </Stack>
+    </DelayedReveal>
   );
 };
 
-const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, onReload, onConfirmed }: ReviewStepProps) => {
+const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, renderActions, onReload, onConfirmed, onOpenImport }: ReviewStepProps) => {
   const { t, number, dateTime } = useText();
   const isMounted = useIsMounted();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [typed, setTyped] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Another import whose Run was confirmed and has not ended (PLAN D60): Run waits for it. Checked while this view is shown.
+  const otherRuns = useOtherRuns(execute, true);
+  const otherRunning = otherRuns.blocker;
+  const refreshOtherRuns = otherRuns.refresh;
 
   const { job, status, progress, reports } = view;
   // The counts of the finished check, computed by the server.
@@ -164,20 +175,31 @@ const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, on
       setConfirmOpen(false);
       setError(t('contactsimporter.review.confirmstatementchanged'));
       onReload();
+    } else if (response?.code === 'otherImportRunning') {
+      // Another import started after the last check: show it and keep Run disabled until it ends.
+      setError(response.message ?? t('contactsimporter.review.otherrunning.headline'));
+      refreshOtherRuns();
     } else if (response?.code === 'consentPermissionRequired') {
       setError(response.message ?? t('contactsimporter.review.confirmnopermission'));
     } else {
       setError(t('contactsimporter.review.confirmfailed', { reason: response?.message ?? '' }));
     }
-  }, [execute, isMounted, job.attestationVersion, mustAttest, onConfirmed, onReload, t]);
+  }, [execute, isMounted, job.attestationVersion, mustAttest, onConfirmed, onReload, refreshOtherRuns, t]);
 
   return (
-    <Stack spacing={Spacing.L}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: Spacing.L }}>
       <Headline size={HeadlineSize.M}>{t('contactsimporter.review.headlinedone')}</Headline>
       <Text data-testid={TestIds.processStatus} data-process-status="finished" data-process-phase="analyze" data-job-state={status.state}>
         {t('contactsimporter.review.done')}
         {progress.analyzedUtc ? ` ${t('contactsimporter.review.analyzedat', { time: dateTime(progress.analyzedUtc) })}` : ''}
       </Text>
+      {otherRuns.lastRunEndedUtc && isCheckOlderThanOtherRun(progress.analyzedUtc, otherRuns.lastRunEndedUtc) && (
+        <div data-testid={TestIds.checkOlderThanOtherRun} data-last-run-ended={otherRuns.lastRunEndedUtc}>
+          <Callout type={CalloutType.QuickTip} placement={CalloutPlacementType.OnDesk}>
+            {t('contactsimporter.review.olderthanotherrun', { time: dateTime(otherRuns.lastRunEndedUtc) })}
+          </Callout>
+        </div>
+      )}
 
       <Row spacing={Spacing.L}>
         <Column cols={Cols.Col3}>
@@ -229,6 +251,8 @@ const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, on
         </Callout>
       )}
 
+      <MappingSummaryCard job={job} fields={fields} />
+
       <ConsentSummary job={job} />
       {usesList && bounced > 0 && (
         <Callout
@@ -250,6 +274,8 @@ const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, on
         </>
       )}
 
+      {analysis.fields.length > 0 && <ValueSamplesCard execute={execute} fields={fields} analyzedUtc={progress.analyzedUtc} />}
+
       {reports.analyze && (
         <ReportButton
           execute={execute}
@@ -259,11 +285,14 @@ const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, on
         />
       )}
 
+      {otherRunning && <OtherImportCallout running={otherRunning} onOpenImport={onOpenImport} />}
+
       <Inline spacing={Spacing.M}>
         <Button label={t('contactsimporter.review.back')} color={ButtonColor.Secondary} dataTestId={testId(TestIds.reviewBack)} onClick={onBackToOptions} />
         <Button
           label={t('contactsimporter.review.run')}
           color={ButtonColor.Primary}
+          disabled={otherRunning !== null}
           dataTestId={testId(TestIds.reviewRun)}
           onClick={() => {
             setTyped('');
@@ -271,15 +300,12 @@ const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, on
             setConfirmOpen(true);
           }}
         />
-        <CancelImport
-          execute={execute}
-          message={t('contactsimporter.upload.cancelmessage')}
-          keepLabel={t('contactsimporter.upload.cancelkeep')}
-          onCancelled={onReload}
-        />
+        {otherRunning && <Text>{t('contactsimporter.review.otherrunning.reason')}</Text>}
+        {renderActions?.()}
       </Inline>
 
       <Dialog
+        maxWidth={DIALOG_MAX_WIDTH}
         isOpen={confirmOpen}
         headline={t('contactsimporter.review.confirmheadline')}
         headerCloseButton={{ tooltipText: t('contactsimporter.leave.close') }}
@@ -288,7 +314,7 @@ const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, on
         onClose={() => setConfirmOpen(false)}
         confirmAction={{
           label: t('contactsimporter.review.confirmrun'),
-          disabled: !typedOk || blockedByPermission,
+          disabled: !typedOk || blockedByPermission || otherRunning !== null,
           onClick: () => void confirm(),
         }}
         cancelAction={{ label: t('contactsimporter.review.confirmcancel'), onClick: () => setConfirmOpen(false) }}
@@ -342,6 +368,6 @@ const Summary = ({ execute, view, fields, canConfirmConsent, onBackToOptions, on
           )}
         </Stack>
       </Dialog>
-    </Stack>
+    </div>
   );
 };

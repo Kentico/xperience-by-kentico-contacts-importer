@@ -17,7 +17,7 @@ describe('consentSummaryLines', () => {
   });
 
   it('names the list and every list choice', () => {
-    const lines = consentSummaryLines({ ...NOTHING, options: { ...DEFAULT_OPTIONS, recipientListId: 11 }, recipientListName: 'Newsletter' });
+    const lines = consentSummaryLines({ ...NOTHING, options: { ...DEFAULT_OPTIONS, recipientListId: 11, bouncedAddress: 'addAndReport' }, recipientListName: 'Newsletter' });
 
     expect(lines).toEqual([
       'Recipient list: Newsletter',

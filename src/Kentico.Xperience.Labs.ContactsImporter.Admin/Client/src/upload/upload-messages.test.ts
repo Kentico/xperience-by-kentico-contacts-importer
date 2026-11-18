@@ -52,6 +52,25 @@ describe('workerErrorMessage', () => {
     expect(workerErrorMessage(new ImportWorkerError('unsupportedFormat', 'dev'), 'upload').key).toBe('contactsimporter.file.unsupported');
   });
 
+  it('describes the errors of the JSON, zip and XLSX readers', () => {
+    const message = (code: ConstructorParameters<typeof ImportWorkerError>[0], params = {}) =>
+      enMessage(workerErrorMessage(new ImportWorkerError(code, 'dev', params), 'file'));
+
+    expect(message('unsupportedFormat', { extension: 'xls' })).toBe(
+      '.xls files are not supported. Save the sheet as an Excel workbook (.xlsx) or as CSV and choose that file.',
+    );
+    expect(message('recordTooLarge', { item: 4, maxChars: 10 })).toBe('Item 4 of the JSON array is longer than 10 characters.');
+    expect(message('invalidJson', { item: 2 })).toBe(
+      'The file is not valid JSON (the error is at item 2 of the array). Fix the file or export it again.',
+    );
+    expect(message('zipMultipleEntries', { count: 3 })).toBe('The zip file holds 3 files. Put only the file to import in the zip.');
+    expect(message('sheetNotFound', { sheet: 'Q1' })).toBe('The workbook has no sheet "Q1". Choose another sheet.');
+    expect(message('tooManyRows', { maxRows: 1048576 })).toBe('The sheet has more than 1048576 rows, more than Excel allows.');
+    for (const code of ['jsonNotArray', 'invalidZip', 'zipEmpty', 'zipEncrypted', 'unsupportedCompression', 'invalidXlsx'] as const) {
+      expect(workerErrorMessage(new ImportWorkerError(code, 'dev'), 'file').key, code).toBe(`contactsimporter.file.${code.toLowerCase()}`);
+    }
+  });
+
   it('shows the message of an unexpected error as the detail', () => {
     expect(enMessage(workerErrorMessage(new ImportWorkerError('failed', 'Out of memory'), 'file'))).toBe('The file could not be read: Out of memory');
     expect(enMessage(workerErrorMessage(new ImportWorkerError('failed', ''), 'upload'))).toBe('The file could not be processed.');

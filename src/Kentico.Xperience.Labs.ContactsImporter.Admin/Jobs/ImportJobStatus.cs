@@ -80,6 +80,15 @@ internal sealed record ImportJobStatus
     /// </summary>
     public double LongestBatchSeconds { get; init; }
 
+    /// <summary>
+    /// When the current phase (analysis or import) started; <c>null</c> before it starts and for jobs of earlier versions.
+    /// Shown to users who want to run another import while this one runs.
+    /// </summary>
+    public DateTime? PhaseStartedUtc { get; init; }
+
+    /// <summary>User whose request started the current phase; <c>null</c> when not known.</summary>
+    public int? PhaseStartedByUserId { get; init; }
+
     /// <summary>The status with <paramref name="error"/> as <see cref="Error"/> and <see cref="ErrorArguments"/>.</summary>
     public ImportJobStatus WithError(ImportMessage? error) =>
         this with { Error = error?.Key, ErrorArguments = error is { Arguments.Count: > 0 } ? error.Arguments : null };
@@ -155,6 +164,13 @@ internal sealed record ImportCheckpoint
 
     /// <summary>Source file row number of the last processed record; 0 when nothing is processed yet.</summary>
     public long LastRow { get; init; }
+
+    /// <summary>
+    /// Rows of the next import batch, adapted to the database (<see cref="ContactsImporterOptions.AdaptiveBatchSize"/>).
+    /// <c>null</c> = the configured <see cref="ContactsImporterOptions.BatchSize"/>: the analysis, the first batch of
+    /// an import, an import back at the configured size, and jobs of earlier versions. Kept here so the next call, on any instance, continues with it.
+    /// </summary>
+    public int? BatchSize { get; init; }
 }
 
 /// <summary>

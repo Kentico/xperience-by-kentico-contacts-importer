@@ -13,11 +13,13 @@ export const Commands = {
   TruncateChunks: 'TRUNCATE_CHUNKS',
   CompleteUpload: 'COMPLETE_UPLOAD',
   CancelImport: 'CANCEL_IMPORT',
-  DeleteFiles: 'DELETE_FILES',
+  DeleteImport: 'DELETE_IMPORT',
   SaveOptions: 'SAVE_OPTIONS',
   ProcessNext: 'PROCESS_NEXT',
   ConfirmImport: 'CONFIRM_IMPORT',
   GetReport: 'GET_REPORT',
+  GetRunningImport: 'GET_RUNNING_IMPORT',
+  GetSamples: 'GET_SAMPLES',
 } as const;
 
 export type CommandName = (typeof Commands)[keyof typeof Commands];
@@ -44,7 +46,15 @@ export type CommandCode =
   /** `CONFIRM_IMPORT`: the import needs the consent confirmation and the request did not carry the current statement version. */
   | 'attestationRequired'
   /** `CONFIRM_IMPORT`: the user lacks the "Confirm consent" permission the import needs. */
-  | 'consentPermissionRequired';
+  | 'consentPermissionRequired'
+  /** `CONFIRM_IMPORT`: another import's Run was confirmed and has not ended; only one Run is unfinished at a time. */
+  | 'otherImportRunning'
+  /** `CONFIRM_IMPORT`: the server is checking another confirmation right now; try again. */
+  | 'busy'
+  /** `DELETE_IMPORT`: another browser tab or user analyzes or runs the import right now. */
+  | 'importActive'
+  /** `DELETE_IMPORT`: the files of the import could not be deleted. */
+  | 'deleteFailed';
 
 /** Job states (PLAN §4). `Paused` is derived by the server from a stale heartbeat. */
 export type JobState =
@@ -172,7 +182,9 @@ export type ProcessOutcome =
   | 'transientError'
   | 'failed'
   | 'invalidRequest'
-  | 'busy';
+  | 'busy'
+  /** A call that would start the Run: another import's Run is unfinished (PLAN D60). Nothing changed. */
+  | 'otherImportRunning';
 
 export interface FieldChangeDto {
   field: string;
@@ -349,8 +361,12 @@ export interface ImportActionResponse {
   status: StatusDto | null;
 }
 
-export interface ImportJobRequest {
-  jobId: string;
+/** `DELETE_IMPORT` data. */
+export interface DeleteImportRequest {
+  /** Job to delete, on the imports list; the import page takes the job from its URL. */
+  jobId?: string | null;
+  /** Driver token of this tab when it analyzes the import, so the tab may delete the import it drives itself. */
+  driverToken?: string | null;
 }
 
 export interface ImportListItemDto {
@@ -366,7 +382,6 @@ export interface ImportListItemDto {
   created: number;
   updated: number;
   canContinue: boolean;
-  hasFiles: boolean;
   /** Name of the recipient list the import adds contacts to; `null` when none (or it no longer exists). */
   recipientListName: string | null;
   /** Name of the consent the import records agreements for; `null` when none (or it no longer exists). */
@@ -376,4 +391,57 @@ export interface ImportListItemDto {
 export interface ImportListResponse {
   imports: ImportListItemDto[];
   truncated: boolean;
+}
+
+/** Another import that runs right now (`GET_RUNNING_IMPORT`). File identity and counts only. */
+export interface RunningImportDto {
+  jobId: string;
+  fileName: string;
+  /** Who started the import (before it starts: who confirmed it, or the creator); empty when the user no longer exists. */
+  userName: string;
+  /** `Running`, `Paused` (started, waits to be continued or cancelled), or `Confirmed` (not started yet). */
+  state: JobState;
+  /** When the import started; `null` before it starts or when not known. */
+  startedUtc: string | null;
+  /** When a Run that has not started yet was confirmed; `null` once it started. */
+  confirmedUtc?: string | null;
+  /** Last progress of a started Run; `null` when not known. */
+  lastProgressUtc?: string | null;
+  rowsProcessed: number;
+  rowsTotal: number;
+}
+
+export interface RunningImportResponse {
+  code: CommandCode;
+  message: string | null;
+  /** `null` when no other import's Run is unfinished. */
+  import: RunningImportDto | null;
+  /** When the newest Run of another import ended (completed, failed or cancelled); `null` when none did. */
+  lastRunEndedUtc?: string | null;
+}
+
+/** An example of a value the import changes in an existing contact (`GET_SAMPLES`). Personal data. */
+export interface ValueSampleDto {
+  /** Source file row number. */
+  row: number;
+  /** Match value of the row (for example the email). */
+  key: string;
+  /** Current value of the contact; `null` when it has none. */
+  current: string | null;
+  /** Value after the import; `null` when it is cleared. */
+  new: string | null;
+}
+
+/** Examples of one contact field: at most three cleared and three changed values, lowest rows first. */
+export interface FieldSamplesDto {
+  field: string;
+  cleared: ValueSampleDto[];
+  changed: ValueSampleDto[];
+}
+
+/** Result of `GET_SAMPLES`: examples from the current check (dry run). `invalidState` when the job is not checked. */
+export interface GetSamplesResponse {
+  code: CommandCode;
+  message: string | null;
+  fields: FieldSamplesDto[];
 }

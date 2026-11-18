@@ -4,20 +4,18 @@ import {
   Callout,
   CalloutPlacementType,
   CalloutType,
-  Dialog,
   Headline,
   HeadlineSize,
   Inline,
   NotificationBarAlert,
-  NotificationBarInfo,
   Spacing,
   Stack,
 } from '@kentico/xperience-admin-components';
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 
-import { Commands } from '../shared/commands';
-import type { ExecuteCommand, FieldDto, ImportActionResponse } from '../shared/commands';
-import { useIsMounted } from '../shared/hooks';
+import type { ExecuteCommand, FieldDto } from '../shared/commands';
+
+import { DeleteImport } from './DeleteImport';
 import { useText } from '../shared/i18n';
 import { TestIds, Text, testId } from '../shared/ui';
 
@@ -32,21 +30,15 @@ export interface ResultsStepProps {
   readonly fields: readonly FieldDto[];
   readonly onOpenContactGroups: () => void;
   readonly onBackToList: () => void;
-  /** Files were deleted: load the job again. */
-  readonly onReload: () => void;
 }
 
 /**
  * Results step: how the import ended, the counts of the check next to what was imported, the row
- * reports, and what is left for the marketer to do (contact groups, cache).
+ * reports, and what is left for the marketer to do (contact groups, cache). "Delete" removes the
+ * import like the Delete action of the imports list (D51).
  */
-export const ResultsStep = ({ execute, view, fields, onOpenContactGroups, onBackToList, onReload }: ResultsStepProps) => {
+export const ResultsStep = ({ execute, view, fields, onOpenContactGroups, onBackToList }: ResultsStepProps) => {
   const { t } = useText();
-  const isMounted = useIsMounted();
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleted, setDeleted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const { job, status, progress, reports } = view;
   const usesList = job.options.recipientListId !== null;
@@ -58,24 +50,6 @@ export const ResultsStep = ({ execute, view, fields, onOpenContactGroups, onBack
   // Nothing about the list or consent to show for an import that never had either and never started.
   const showConsentSummary = usesList || usesConsent || job.attestation !== null;
   const hasReports = reports.analyze || reports.execute;
-
-  const deleteFiles = useCallback(async () => {
-    setDeleting(true);
-    setError(null);
-    const response = await execute<ImportActionResponse>(Commands.DeleteFiles);
-    if (!isMounted()) {
-      return;
-    }
-
-    setDeleting(false);
-    setDeleteOpen(false);
-    if (response?.code === 'ok') {
-      setDeleted(true);
-      onReload();
-    } else {
-      setError(response?.message ?? t('contactsimporter.results.deletefailed'));
-    }
-  }, [execute, isMounted, onReload, t]);
 
   let summary: string;
   if (imported === null) {
@@ -102,8 +76,6 @@ export const ResultsStep = ({ execute, view, fields, onOpenContactGroups, onBack
         {summary}
       </Text>
       {state === 'Failed' && status.error && <NotificationBarAlert>{t('contactsimporter.results.error', { reason: status.error })}</NotificationBarAlert>}
-      {error && <NotificationBarAlert onDismiss={() => setError(null)}>{error}</NotificationBarAlert>}
-      {deleted && <NotificationBarInfo onDismiss={() => setDeleted(false)}>{t('contactsimporter.results.deleted')}</NotificationBarInfo>}
 
       {(imported !== null || progress.analysis !== null) && (
         <>
@@ -148,29 +120,8 @@ export const ResultsStep = ({ execute, view, fields, onOpenContactGroups, onBack
 
       <Inline spacing={Spacing.M}>
         <Button label={t('contactsimporter.app.backtolist')} color={ButtonColor.Secondary} onClick={onBackToList} />
-        {hasReports && (
-          <Button
-            label={t('contactsimporter.results.deletefiles')}
-            color={ButtonColor.Secondary}
-            destructive={true}
-            dataTestId={testId(TestIds.deleteFiles)}
-            onClick={() => setDeleteOpen(true)}
-          />
-        )}
+        <DeleteImport execute={execute} jobId={view.job.jobId} fileName={view.job.file.name} onDeleted={onBackToList} />
       </Inline>
-
-      <Dialog
-        isOpen={deleteOpen}
-        headline={t('contactsimporter.results.deleteheadline')}
-        headerCloseButton={{ tooltipText: t('contactsimporter.leave.close') }}
-        isDismissable={!deleting}
-        actionInProgress={deleting}
-        onClose={() => setDeleteOpen(false)}
-        confirmAction={{ label: t('contactsimporter.results.deleteconfirm'), destructive: true, onClick: () => void deleteFiles() }}
-        cancelAction={{ label: t('contactsimporter.leave.cancel'), onClick: () => setDeleteOpen(false) }}
-      >
-        <Text>{t('contactsimporter.results.deletemessage')}</Text>
-      </Dialog>
     </Stack>
   );
 };

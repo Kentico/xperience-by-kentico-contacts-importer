@@ -34,6 +34,7 @@ const PAUSE_KEYS = {
   activeElsewhere: 'contactsimporter.process.paused.activeelsewhere',
   stale: 'contactsimporter.process.paused.stale',
   takenOver: 'contactsimporter.process.paused.takenover',
+  otherImportRunning: 'contactsimporter.process.paused.otherimportrunning',
 } as const;
 
 /** The four running counts of a phase; texts differ between the check and the import. */
@@ -65,22 +66,37 @@ export interface ProcessPanelProps {
   readonly usesConsent?: boolean;
   /** Extra buttons next to Pause / Continue (cancel, back). */
   readonly actions?: React.ReactNode;
+  /** Shown below the reason the work waits (the other import that blocks the Run). */
+  readonly pauseDetails?: React.ReactNode;
+  /** Continue cannot work yet (another import's Run is unfinished). */
+  readonly continueDisabled?: boolean;
 }
 
 /**
  * Progress of the analysis or the import (PLAN §10 "Progress UI"): rows done of total, speed and
  * time left, running counts from the server, and why the work waits when it does.
  */
-export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = false, usesConsent = false, actions }: ProcessPanelProps) => {
+export const ProcessPanel = ({
+  view,
+  runningText,
+  cards,
+  titleName,
+  usesList = false,
+  usesConsent = false,
+  actions,
+  pauseDetails,
+  continueDisabled = false,
+}: ProcessPanelProps) => {
   const { t, number, percent: formatPercent, dateTime } = useText();
-  const { snapshot, rate, lockedByOtherTab } = view;
+  const { snapshot, rate, lockedByOtherTab, waitingForOther } = view;
   const progress = snapshot.progress;
   const done = progress?.rowsProcessed ?? 0;
   const total = progress?.rowsTotal ?? 0;
   const completed = percent(done, total);
-  const active = snapshot.status === 'running' || snapshot.status === 'pausing';
+  // Waiting after "Continue here" counts as active: Pause stops waiting, no second "Continue here".
+  const active = snapshot.status === 'running' || snapshot.status === 'pausing' || waitingForOther;
   const pauseReason = lockedByOtherTab ? 'activeElsewhere' : snapshot.status === 'paused' ? snapshot.pauseReason : null;
-  const waitsForUser = pauseReason !== null || snapshot.status === 'idle';
+  const waitsForUser = !waitingForOther && (pauseReason !== null || snapshot.status === 'idle');
 
   // Progress in the tab title, so it is visible from other tabs.
   useEffect(() => {
@@ -97,7 +113,7 @@ export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = f
   }, [active, completed, formatPercent, t, titleName]);
 
   return (
-    <Stack spacing={Spacing.L}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: Spacing.L }}>
       <Text
         data-testid={TestIds.processStatus}
         data-process-status={lockedByOtherTab ? 'paused' : snapshot.status}
@@ -109,6 +125,12 @@ export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = f
       >
         {snapshot.status === 'pausing' ? t('contactsimporter.process.pausing') : active ? runningText : ''}
       </Text>
+
+      {waitingForOther && (
+        <div data-testid={TestIds.processWaitingForOther}>
+          <NotificationBarInfo>{t('contactsimporter.process.waitingforother')}</NotificationBarInfo>
+        </div>
+      )}
 
       {active && (
         <Callout type={CalloutType.QuickTip} placement={CalloutPlacementType.OnDesk}>
@@ -142,6 +164,7 @@ export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = f
         ) : (
           <NotificationBarWarning>{t(PAUSE_KEYS[pauseReason])}</NotificationBarWarning>
         ))}
+      {pauseReason !== null && pauseDetails}
       {waitsForUser && snapshot.lastAnswerAtMs !== null && (
         <Text hint={true}>{t('contactsimporter.process.lastprogress', { time: dateTime(new Date(snapshot.lastAnswerAtMs).toISOString()) })}</Text>
       )}
@@ -188,13 +211,14 @@ export const ProcessPanel = ({ view, runningText, cards, titleName, usesList = f
           <Button
             label={pauseReason === 'stale' || pauseReason === 'activeElsewhere' || pauseReason === 'takenOver' ? t('contactsimporter.process.takeover') : t('contactsimporter.process.continue')}
             color={ButtonColor.Primary}
+            disabled={continueDisabled}
             dataTestId={testId(TestIds.processContinue)}
             onClick={() => view.start(pauseReason === 'stale' || pauseReason === 'activeElsewhere' || pauseReason === 'takenOver')}
           />
         )}
         {actions}
       </Inline>
-    </Stack>
+    </div>
   );
 };
 

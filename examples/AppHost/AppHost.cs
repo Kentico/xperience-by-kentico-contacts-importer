@@ -88,8 +88,14 @@ if (!builder.Configuration.GetValue("Sql:UseExistingServer", true))
         .WaitForCompletion(databaseInit);
 }
 
-// Admin client webpack dev server (DancingGoat's Development settings use Proxy mode)
-builder.AddJavaScriptApp("admin-client", Path.Combine(repositoryRoot, "src", "Kentico.Xperience.Labs.ContactsImporter.Admin", "Client"), "start")
-    .WithNpm(install: true);
+// Admin client webpack dev server (DancingGoat's Development settings use Proxy mode).
+// DancingGoat waits until the first build is served, so the admin never proxies to a server that is not up yet.
+// Port 3020 is fixed in the client's webpack.config.js.
+var adminClient = builder.AddJavaScriptApp("admin-client", Path.Combine(repositoryRoot, "src", "Kentico.Xperience.Labs.ContactsImporter.Admin", "Client"), "start")
+    .WithNpm(install: true)
+    .WithHttpEndpoint(port: 3020, isProxied: false)
+    .WithHttpHealthCheck("/entry.js");
+
+dancingGoat.WaitFor(adminClient);
 
 builder.Build().Run();

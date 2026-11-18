@@ -14,6 +14,7 @@ namespace Kentico.Xperience.Labs.ContactsImporter.Admin.Tests.UIPages;
 internal class ImportProcessCommandTests
 {
     private const int UserId = 53;
+    private const int OtherUserId = 54;
 
     private TempStore temp = null!;
     private MutableTimeProvider time = null!;
@@ -21,6 +22,7 @@ internal class ImportProcessCommandTests
     private FakeContactRepository repository = null!;
     private FakeCacheInvalidator cache = null!;
     private ImportProcessGate gate = null!;
+    private FakeRunLock runLock = null!;
     private ImportCommandService service = null!;
     private Guid jobId;
     private string id = null!;
@@ -38,6 +40,7 @@ internal class ImportProcessCommandTests
         repository = new FakeContactRepository();
         cache = new FakeCacheInvalidator();
         gate = new ImportProcessGate();
+        runLock = new FakeRunLock();
         service = CreateService(new ImportReportPager(temp.Store));
 
         jobId = Guid.NewGuid();
@@ -58,7 +61,7 @@ internal class ImportProcessCommandTests
             ingest,
             schema,
             cleanup,
-            new NoUserNames(),
+            new KnownUserNames(),
             processor,
             pager,
             new ImportReportReader(temp.Store),
@@ -67,7 +70,8 @@ internal class ImportProcessCommandTests
             new FakeChoiceProvider(),
             new FakeChoiceProvider(),
             temp.Options,
-            time);
+            time,
+            runLock: runLock);
     }
 
     /// <summary>Uploads <paramref name="rows"/> rows (<c>user{n}@example.com</c>) through the commands: the job ends Uploaded.</summary>
@@ -105,7 +109,7 @@ internal class ImportProcessCommandTests
         bool reportIncludesKey = false,
         int? recipientListId = null,
         string? unsubscribed = "keep",
-        string? bouncedAddress = "addAndReport",
+        string? bouncedAddress = "skipAndReport",
         string? consent = "none",
         int? consentId = null,
         string? revokedConsent = "keep") => new()
@@ -719,8 +723,393 @@ internal class ImportProcessCommandTests
         });
     }
 
-    private sealed class NoUserNames : IImportUserNameProvider
+    /// <summary>Stores another import (file <c>other.csv</c>, created by <see cref="UserId"/>) with the given status.</summary>
+    private Guid OtherImport(ImportJobStatus status)
     {
-        public IReadOnlyDictionary<int, string> GetUserNames(IReadOnlyCollection<int> userIds) => new Dictionary<int, string>();
+        var otherId = Guid.NewGuid();
+        temp.Store.CreateJob(TestData.Job(otherId) with
+        {
+            File = new ImportFileDescriptor { Name = "other.csv", Size = 10, Fingerprint = "0a1b2c" },
+        });
+        temp.Store.WriteStatus(otherId, status);
+
+        return otherId;
+    }
+
+    private static ImportJobStatus RunningStatus(DateTime heartbeatUtc) => new()
+    {
+        State = ImportJobState.Running,
+        UpdatedUtc = heartbeatUtc,
+        HeartbeatUtc = heartbeatUtc,
+        DriverToken = "other-driver",
+        PhaseStartedUtc = TestData.Now.AddMinutes(-5),
+        PhaseStartedByUserId = OtherUserId,
+        Checkpoint = new ImportCheckpoint { Phase = ImportPhase.Execute },
+        Profile = new ImportProfile { RowsValid = 100 },
+        Aggregates = new Dictionary<string, long> { [ImportAggregateKeys.Rows] = 40 },
+    };
+
+    [Test]
+    public void GetSamples_Returns_The_Examples_Of_The_Current_Analysis_By_Field()
+    {
+        Upload(5);
+        var context = ProcessingTestData.Context(ProcessingTestData.Email, [ProcessingTestData.Email, ProcessingTestData.FirstName]);
+        repository.Add(context, TestData.Now, "user3@example.com", "Old");
+        repository.Add(context, TestData.Now, "user5@example.com", "Jane");
+        var beforeAnalysis = service.GetSamples(id);
+
+        Drive("analyze");
+        var response = service.GetSamples(id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(beforeAnalysis.Code, Is.EqualTo(ImportCommandCodes.INVALID_STATE));
+            Assert.That(beforeAnalysis.Fields, Is.Empty);
+            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK));
+            Assert.That(response.Fields, Has.Count.EqualTo(1));
+            Assert.That(response.Fields[0].Field, Is.EqualTo("ContactFirstName"));
+            Assert.That(response.Fields[0].Cleared, Is.Empty);
+            Assert.That(response.Fields[0].Changed, Is.EqualTo(new[] { new ImportValueSampleDto(3, "user3@example.com", "Old", "Jane") }));
+            Assert.That(service.GetSamples("x").Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+            Assert.That(service.GetSamples(Guid.NewGuid().ToString("D")).Code, Is.EqualTo(ImportCommandCodes.JOB_NOT_FOUND));
+        });
+
+        // Changed options return the job to Uploaded: the examples of the old analysis are not shown.
+        Assert.That(service.SaveOptions(id, Options(emptyValues: "clear")).Code, Is.EqualTo(ImportCommandCodes.OK));
+        Assert.That(service.GetSamples(id).Code, Is.EqualTo(ImportCommandCodes.INVALID_STATE));
+    }
+
+    [Test]
+    public void GetRunningImport_Names_Another_Import_That_Runs()
+    {
+        Upload();
+        var otherId = OtherImport(RunningStatus(TestData.Now.AddSeconds(-5)));
+
+        var response = service.GetRunningImport(id);
+        var fromTheRunningImport = service.GetRunningImport(otherId.ToString("D"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK));
+            Assert.That(response.Import, Is.EqualTo(new RunningImportDto
+            {
+                JobId = otherId.ToString("D"),
+                FileName = "other.csv",
+                UserName = "mbrown",
+                State = "Running",
+                StartedUtc = TestData.Now.AddMinutes(-5),
+                LastProgressUtc = TestData.Now.AddSeconds(-5),
+                RowsProcessed = 40,
+                RowsTotal = 100,
+            }));
+            Assert.That(fromTheRunningImport.Import, Is.Null, "an import is not blocked by itself");
+            Assert.That(service.GetRunningImport("x").Code, Is.EqualTo(ImportCommandCodes.INVALID_REQUEST));
+        });
+    }
+
+    [Test]
+    public void GetRunningImport_Names_A_Paused_Run_Whatever_Its_Heartbeat()
+    {
+        Upload();
+        var otherId = OtherImport(RunningStatus(TestData.Now.AddDays(-3)));
+
+        var paused = service.GetRunningImport(id).Import;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(paused!.JobId, Is.EqualTo(otherId.ToString("D")));
+            Assert.That(paused.State, Is.EqualTo("Paused"));
+            Assert.That(paused.LastProgressUtc, Is.EqualTo(TestData.Now.AddDays(-3)));
+        });
+    }
+
+    [Test]
+    public void GetRunningImport_Ignores_Analyses_Finished_And_Unreadable_Imports()
+    {
+        Upload();
+        OtherImport(new ImportJobStatus { State = ImportJobState.Analyzing, UpdatedUtc = TestData.Now, HeartbeatUtc = TestData.Now, DriverToken = "d" });
+        OtherImport(new ImportJobStatus { State = ImportJobState.Analyzing, UpdatedUtc = TestData.Now.AddHours(-1), HeartbeatUtc = TestData.Now.AddHours(-1), DriverToken = "d" });
+        OtherImport(new ImportJobStatus { State = ImportJobState.Analyzed, UpdatedUtc = TestData.Now });
+        OtherImport(new ImportJobStatus { State = ImportJobState.Uploaded, UpdatedUtc = TestData.Now });
+        OtherImport(new ImportJobStatus { State = ImportJobState.Completed, UpdatedUtc = TestData.Now, FinishedUtc = TestData.Now, Checkpoint = new ImportCheckpoint { Phase = ImportPhase.Execute } });
+        OtherImport(new ImportJobStatus { State = ImportJobState.Cancelled, UpdatedUtc = TestData.Now, FinishedUtc = TestData.Now });
+        var unreadable = OtherImport(RunningStatus(TestData.Now));
+        File.WriteAllText(temp.JobPath(unreadable, "status.json"), "{ not json");
+
+        Assert.That(service.GetRunningImport(id).Import, Is.Null);
+    }
+
+    [Test]
+    public void GetRunningImport_Returns_When_The_Last_Run_Of_Another_Import_Ended()
+    {
+        Upload();
+        var none = service.GetRunningImport(id).LastRunEndedUtc;
+        OtherImport(new ImportJobStatus { State = ImportJobState.Completed, FinishedUtc = TestData.Now.AddHours(-2), Checkpoint = new ImportCheckpoint { Phase = ImportPhase.Execute } });
+        OtherImport(new ImportJobStatus { State = ImportJobState.Cancelled, FinishedUtc = TestData.Now.AddHours(-1), Checkpoint = new ImportCheckpoint { Phase = ImportPhase.Execute } });
+        // Ended during the analysis: wrote nothing.
+        OtherImport(new ImportJobStatus { State = ImportJobState.Failed, FinishedUtc = TestData.Now, Checkpoint = new ImportCheckpoint { Phase = ImportPhase.Analyze } });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(none, Is.Null);
+            Assert.That(service.GetRunningImport(id).LastRunEndedUtc, Is.EqualTo(TestData.Now.AddHours(-1)));
+        });
+    }
+
+    [Test]
+    public void GetRunningImport_Counts_A_Confirmed_Import_Until_It_Ends()
+    {
+        Upload();
+        Drive("analyze");
+        Assert.That(Confirm().Code, Is.EqualTo(ImportCommandCodes.OK));
+        var otherId = OtherImport(new ImportJobStatus { State = ImportJobState.Analyzed, UpdatedUtc = TestData.Now });
+
+        var justConfirmed = service.GetRunningImport(otherId.ToString("D")).Import;
+        time.Advance(TimeSpan.FromHours(3));
+        var neverStarted = service.GetRunningImport(otherId.ToString("D")).Import;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(justConfirmed, Is.Not.Null);
+            Assert.That(justConfirmed!.JobId, Is.EqualTo(id));
+            Assert.That(justConfirmed.State, Is.EqualTo("Confirmed"));
+            Assert.That(justConfirmed.UserName, Is.EqualTo("jsmith"), "the creator, until the import starts (no consent confirmation)");
+            Assert.That(justConfirmed.StartedUtc, Is.Null);
+            Assert.That(justConfirmed.ConfirmedUtc, Is.EqualTo(TestData.Now));
+            Assert.That(justConfirmed.RowsProcessed, Is.Zero);
+            Assert.That(justConfirmed.RowsTotal, Is.EqualTo(25));
+            Assert.That(neverStarted?.JobId, Is.EqualTo(id), "a Run confirmed hours ago still blocks");
+        });
+    }
+
+    [Test]
+    public void Running_Import_Stores_Who_Started_It_And_When()
+    {
+        temp.Options.Value.ProcessingTimeBudgetSeconds = 0;
+        Upload();
+        Drive("analyze");
+        Confirm();
+        time.Advance(TimeSpan.FromSeconds(3));
+        service.ProcessNext(id, Next("execute"), OtherUserId);
+        var otherId = OtherImport(new ImportJobStatus { State = ImportJobState.Analyzed, UpdatedUtc = TestData.Now });
+
+        var running = service.GetRunningImport(otherId.ToString("D")).Import;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(running!.State, Is.EqualTo("Running"));
+            Assert.That(running.UserName, Is.EqualTo("mbrown"));
+            Assert.That(running.StartedUtc, Is.EqualTo(TestData.Now.AddSeconds(3)));
+            Assert.That(running.ConfirmedUtc, Is.Null);
+            Assert.That(running.RowsProcessed, Is.EqualTo(10));
+        });
+    }
+
+    [Test]
+    public void Confirm_Is_Refused_While_Another_Run_Is_Unfinished_Also_When_Paused()
+    {
+        Upload();
+        Drive("analyze");
+        var otherId = OtherImport(RunningStatus(TestData.Now));
+
+        var refused = Confirm();
+        var stateAfterRefusal = State();
+        time.Advance(TimeSpan.FromMinutes(5));
+        var whilePaused = Confirm();
+        temp.Store.UpdateStatus(otherId, status => ImportJobStateMachine.Transition(status, ImportJobState.Cancelled, TestData.Now.AddMinutes(5)));
+        var afterTheOtherWasCancelled = Confirm();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(refused.Code, Is.EqualTo(ImportCommandCodes.OTHER_IMPORT_RUNNING));
+            Assert.That(refused.Message, Does.Contain("'other.csv'"));
+            Assert.That(refused.Status!.State, Is.EqualTo("Analyzed"));
+            Assert.That(stateAfterRefusal, Is.EqualTo(ImportJobState.Analyzed));
+            Assert.That(whilePaused.Code, Is.EqualTo(ImportCommandCodes.OTHER_IMPORT_RUNNING), "a paused Run blocks until it ends");
+            Assert.That(afterTheOtherWasCancelled.Code, Is.EqualTo(ImportCommandCodes.OK));
+            Assert.That(runLock.Entered, Is.EqualTo(3), "every confirmation checks under the Run lock");
+            Assert.That(runLock.Held, Is.False, "the lock is released");
+        });
+    }
+
+    [Test]
+    public void Confirm_Is_Refused_When_Another_Import_Was_Confirmed()
+    {
+        Upload();
+        Drive("analyze");
+        OtherImport(new ImportJobStatus { State = ImportJobState.Confirmed, UpdatedUtc = TestData.Now.AddDays(-2) });
+
+        Assert.That(Confirm().Code, Is.EqualTo(ImportCommandCodes.OTHER_IMPORT_RUNNING));
+    }
+
+    [Test]
+    public void Confirm_Is_Not_Refused_By_Analyses()
+    {
+        Upload();
+        Drive("analyze");
+        OtherImport(new ImportJobStatus { State = ImportJobState.Analyzing, UpdatedUtc = TestData.Now, HeartbeatUtc = TestData.Now, DriverToken = "d" });
+        OtherImport(new ImportJobStatus { State = ImportJobState.Analyzed, UpdatedUtc = TestData.Now });
+
+        Assert.That(Confirm().Code, Is.EqualTo(ImportCommandCodes.OK));
+    }
+
+    [Test]
+    public void Confirm_Answers_Busy_When_The_Run_Lock_Is_Held_Or_Fails()
+    {
+        Upload();
+        Drive("analyze");
+
+        runLock.Held = true;
+        var whileHeld = Confirm();
+        runLock.Held = false;
+        runLock.Throws = true;
+        var whenTheDatabaseFails = Confirm();
+        var state = State();
+        runLock.Throws = false;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(whileHeld.Code, Is.EqualTo(ImportCommandCodes.BUSY));
+            Assert.That(whileHeld.Message, Is.Not.Empty);
+            Assert.That(whenTheDatabaseFails.Code, Is.EqualTo(ImportCommandCodes.BUSY));
+            Assert.That(state, Is.EqualTo(ImportJobState.Analyzed), "nothing confirmed");
+            Assert.That(Confirm().Code, Is.EqualTo(ImportCommandCodes.OK));
+        });
+    }
+
+    [Test]
+    public void ProcessNext_Refuses_To_Start_A_Run_While_Another_Run_Is_Unfinished()
+    {
+        Upload();
+        Drive("analyze");
+        Assert.That(Confirm().Code, Is.EqualTo(ImportCommandCodes.OK));
+        // Confirmed by an earlier version beside this one, and started since: it is the one allowed to finish.
+        var otherId = OtherImport(RunningStatus(TestData.Now.AddHours(-1)));
+
+        var refused = service.ProcessNext(id, Next("execute"), UserId);
+        var stateAfterRefusal = State();
+        temp.Store.UpdateStatus(otherId, status => ImportJobStateMachine.Transition(status, ImportJobState.Completed, TestData.Now));
+        var started = service.ProcessNext(id, Next("execute"), UserId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(refused.Outcome, Is.EqualTo(ImportCommandCodes.OTHER_IMPORT_RUNNING));
+            Assert.That(refused.Error, Does.Contain("'other.csv'"));
+            Assert.That(refused.State, Is.EqualTo("Confirmed"));
+            Assert.That(refused.Phase, Is.EqualTo("execute"));
+            Assert.That(refused.RowsProcessed, Is.Zero);
+            Assert.That(refused.DriverToken, Is.Null);
+            Assert.That(stateAfterRefusal, Is.EqualTo(ImportJobState.Confirmed));
+            Assert.That(started.Outcome, Is.AnyOf("processed", "phaseFinished"));
+        });
+    }
+
+    [Test]
+    public void ProcessNext_Of_Two_Confirmed_Imports_Starts_The_One_Confirmed_First()
+    {
+        Upload();
+        Drive("analyze");
+        Assert.That(Confirm().Code, Is.EqualTo(ImportCommandCodes.OK));
+        var confirmedLater = OtherImport(new ImportJobStatus { State = ImportJobState.Confirmed, UpdatedUtc = TestData.Now.AddMinutes(1) });
+        var confirmedFirst = OtherImport(new ImportJobStatus { State = ImportJobState.Confirmed, UpdatedUtc = TestData.Now.AddMinutes(-1) });
+
+        var refused = service.ProcessNext(id, Next("execute"), UserId);
+        temp.Store.UpdateStatus(confirmedFirst, status => ImportJobStateMachine.Transition(status, ImportJobState.Cancelled, TestData.Now));
+        var started = service.ProcessNext(id, Next("execute"), UserId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(refused.Outcome, Is.EqualTo(ImportCommandCodes.OTHER_IMPORT_RUNNING));
+            Assert.That(started.Outcome, Is.AnyOf("processed", "phaseFinished"), $"confirmed later ({confirmedLater}) does not block");
+        });
+    }
+
+    [Test]
+    public void ProcessNext_Continues_A_Started_Run_Whatever_Other_Imports_Do()
+    {
+        temp.Options.Value.ProcessingTimeBudgetSeconds = 0;
+        Upload();
+        Drive("analyze");
+        Confirm();
+        var first = service.ProcessNext(id, Next("execute"), UserId);
+        Assert.That(first.Outcome, Is.EqualTo("processed"));
+        // Another Run, confirmed by an earlier version while this one ran.
+        OtherImport(RunningStatus(TestData.Now));
+        runLock.Held = true;
+        int calls = runLock.Calls;
+
+        var next = service.ProcessNext(id, Next("execute", first.DriverToken), UserId);
+        time.Advance(TimeSpan.FromHours(1));
+        var resumed = service.ProcessNext(id, Next("execute", takeOver: true), UserId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(next.Outcome, Is.EqualTo("processed"));
+            Assert.That(resumed.Outcome, Is.AnyOf("processed", "phaseFinished"), "continuing a paused Run is always allowed");
+            Assert.That(runLock.Calls, Is.EqualTo(calls), "a started Run takes no Run lock");
+        });
+    }
+
+    [Test]
+    public void ProcessNext_Answers_Busy_When_The_Run_Lock_Is_Held_At_The_Start()
+    {
+        Upload();
+        Drive("analyze");
+        Confirm();
+        runLock.Held = true;
+
+        var busy = service.ProcessNext(id, Next("execute"), UserId);
+        var analysis = State();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(busy.Outcome, Is.EqualTo(ImportCommandCodes.BUSY));
+            Assert.That(busy.Error, Is.Not.Empty);
+            Assert.That(analysis, Is.EqualTo(ImportJobState.Confirmed));
+        });
+    }
+
+    /// <summary>Run lock of the tests: <see cref="Held"/> = another request holds it.</summary>
+    private sealed class FakeRunLock : IImportRunLock
+    {
+        public bool Held { get; set; }
+
+        public bool Throws { get; set; }
+
+        public int Entered { get; private set; }
+
+        public int Calls { get; private set; }
+
+        public IDisposable? TryEnter(TimeSpan timeout)
+        {
+            Calls++;
+            if (Throws)
+            {
+                throw new InvalidOperationException("The database is not reachable.");
+            }
+
+            if (Held)
+            {
+                return null;
+            }
+
+            Held = true;
+            Entered++;
+
+            return new Release(this);
+        }
+
+        private sealed class Release(FakeRunLock owner) : IDisposable
+        {
+            public void Dispose() => owner.Held = false;
+        }
+    }
+
+    private sealed class KnownUserNames : IImportUserNameProvider
+    {
+        private static readonly Dictionary<int, string> names = new() { [UserId] = "jsmith", [OtherUserId] = "mbrown" };
+
+        public IReadOnlyDictionary<int, string> GetUserNames(IReadOnlyCollection<int> userIds) =>
+            names.Where(n => userIds.Contains(n.Key)).ToDictionary(n => n.Key, n => n.Value);
     }
 }

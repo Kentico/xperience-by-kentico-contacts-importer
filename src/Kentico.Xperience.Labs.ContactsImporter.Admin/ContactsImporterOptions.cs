@@ -41,8 +41,29 @@ public class ContactsImporterOptions
 
     /// <summary>
     /// Number of rows processed in one database batch. Default 1000.
+    /// With <see cref="AdaptiveBatchSize"/>, the largest batch the import (execute phase) uses.
     /// </summary>
     public int BatchSize { get; set; } = 1000;
+
+    /// <summary>
+    /// Whether the import (execute phase) adapts its batch size to the database: batches slower than
+    /// <see cref="TargetBatchSeconds"/> get smaller, clearly faster ones larger, between <see cref="MinBatchSize"/>
+    /// and <see cref="BatchSize"/>. A database timeout or deadlock halves the batch at once. Protects the live site
+    /// on small database plans. <c>false</c> = every batch has <see cref="BatchSize"/> rows. Default <c>true</c>.
+    /// The analysis (dry run) only reads and always uses <see cref="BatchSize"/>.
+    /// </summary>
+    public bool AdaptiveBatchSize { get; set; } = true;
+
+    /// <summary>
+    /// Seconds of database work one import batch aims for when <see cref="AdaptiveBatchSize"/> is on. Default 2.
+    /// </summary>
+    public double TargetBatchSeconds { get; set; } = 2;
+
+    /// <summary>
+    /// Smallest batch the import uses when <see cref="AdaptiveBatchSize"/> is on. Default 50.
+    /// A value above <see cref="BatchSize"/> counts as <see cref="BatchSize"/> (fixed batch size).
+    /// </summary>
+    public int MinBatchSize { get; set; } = 50;
 
     /// <summary>
     /// Seconds one processing request works on batches before it returns progress to the browser. Default 15.
@@ -94,6 +115,11 @@ public class ContactsImporterOptions
     /// client that ignores the file size limit; parallel uploads can exceed it by the chunks in flight.
     /// </summary>
     internal long MaxUploadBytes => MaxFileSizeBytes > long.MaxValue / 2 ? long.MaxValue : 2 * MaxFileSizeBytes;
+
+    /// <summary>
+    /// Smallest import batch: <see cref="MinBatchSize"/>, at most <see cref="BatchSize"/>.
+    /// </summary>
+    internal int EffectiveMinBatchSize => Math.Min(MinBatchSize, BatchSize);
 
     internal TimeSpan ProcessingTimeBudget => TimeSpan.FromSeconds(ProcessingTimeBudgetSeconds);
 

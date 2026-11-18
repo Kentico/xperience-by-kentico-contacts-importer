@@ -16,15 +16,6 @@ internal interface IImportJobCleanupService
     public void DeleteChunks(Guid jobId);
 
     /// <summary>
-    /// "Delete import files now": deletes the uploaded chunks and reports of a job and, when the job is not
-    /// finished, cancels it (which raises <see cref="AfterContactImportEvent"/>). The job stays in the recent imports
-    /// list. Returns <c>false</c> when the job does not exist.
-    /// </summary>
-    /// <param name="jobId">Job whose files are deleted.</param>
-    /// <param name="userId">User who asked for it, for the event; <c>null</c> = not known.</param>
-    public bool DeleteImportFiles(Guid jobId, int? userId = null);
-
-    /// <summary>
     /// Runs <see cref="Sweep"/> unless it ran in this application instance within the last
     /// <see cref="ImportJobCleanupService.SweepInterval"/>. Cheap to call from every command.
     /// </summary>
@@ -60,31 +51,6 @@ internal sealed class ImportJobCleanupService(
     private DateTime? lastSweepUtc;
 
     public void DeleteChunks(Guid jobId) => store.DeleteChunks(jobId);
-
-    public bool DeleteImportFiles(Guid jobId, int? userId = null)
-    {
-        if (!store.JobExists(jobId))
-        {
-            return false;
-        }
-
-        var utcNow = UtcNow();
-        bool cancelled = false;
-        var updated = store.UpdateStatus(jobId, status =>
-        {
-            cancelled = !ImportJobStateMachine.IsTerminal(status.State);
-
-            return cancelled ? ImportJobStateMachine.Transition(status, ImportJobState.Cancelled, utcNow) : status;
-        });
-        store.DeleteChunks(jobId);
-        store.DeleteReports(jobId);
-        if (cancelled && updated is not null)
-        {
-            PublishCancelled(jobId, updated, userId);
-        }
-
-        return true;
-    }
 
     public ImportSweepResult? SweepIfDue()
     {

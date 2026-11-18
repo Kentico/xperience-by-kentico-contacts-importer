@@ -32,22 +32,24 @@ test.describe("contacts importer", () => {
 
     // Map: columns are suggested by name; a column without a match is not imported
     await importPage.continueToMapping();
-    await importPage.expectTarget(0, "ContactEmail");
-    await importPage.expectTarget(1, "ContactFirstName");
-    await importPage.expectTarget(2, "ContactLastName");
-    await importPage.expectTarget(3, "ContactCompanyName");
-    await importPage.expectTarget(4, "ContactBirthday");
+    await importPage.expectTarget(0, "Email");
+    await importPage.expectTarget(1, "First name");
+    await importPage.expectTarget(2, "Last name");
+    await importPage.expectTarget(3, "Company name");
+    await importPage.expectTarget(4, "Birthday");
     await importPage.expectTarget(5, "Do not import");
-    await importPage.expectKeyField("ContactEmail");
-    await importPage.setTarget(5, "ContactNotes");
+    await importPage.expectKeyField("Email");
+    await importPage.setTarget(5, "Notes");
 
-    // Upload: the job ends Uploaded with the expected row counts
+    // Upload: runs in the background while Options is in view; the job ends Uploaded with the expected row counts
     await importPage.saveAndUpload();
     await importPage.expectUploaded(small.rowsUploaded);
     await importPage.expectCount("rows-read", small.rowsRead);
     await importPage.expectCount("rows-uploaded", small.rowsUploaded);
     await importPage.expectCount("rows-skipped", small.rowsSkipped);
     await importPage.expectCount("likely-duplicates", small.likelyDuplicates);
+    await expect(importPage.uploadBar).toHaveAttribute("data-bar-mode", "summary");
+    await expect(importPage.uploadBar).toContainText("Rows to import: 201");
 
     // The list shows the import
     await importsList.goto();
@@ -66,6 +68,8 @@ test.describe("contacts importer", () => {
     await importPage.saveAndUpload();
     await importPage.expectUploaded(small.rowsUploaded);
 
+    // The client-side reports stay in the upload details after the upload is complete
+    await importPage.openUploadDetails();
     await expect(page.getByText("Skipped rows: 3")).toBeVisible();
     await expect(page.getByText("No value in the match field: 1")).toBeVisible();
     await expect(page.getByText("Email address is not valid: 1")).toBeVisible();
@@ -113,13 +117,16 @@ test.describe("contacts importer", () => {
     const jobId = await importsList.startNewImport();
     await importPage.selectFile(file.path);
     await importPage.continueToMapping();
-    await importPage.setTarget(2, "ContactNotes");
+    await importPage.setTarget(2, "Notes");
     await importPage.saveAndUpload();
 
-    // The failed request is retried; the upload stays unfinished
+    // The failed request is retried; the upload stays unfinished and its details open by themselves
     await expect.poll(() => blocked, { timeout: 30_000 }).toBeGreaterThan(0);
     await expect(page.getByText(/Connection problem/)).toBeVisible();
+    await expect(importPage.uploadDetails).toBeVisible();
     await importPage.expectUploadPhase("running");
+    await expect(page.getByText("Waiting for the upload to finish")).toBeVisible();
+    await expect(page.getByTestId("contacts-importer-options-next")).toBeDisabled();
 
     // Reload mid-upload: the browser asks before leaving, the page comes back at the File step
     page.on("dialog", (dialog) => void dialog.accept().catch(() => undefined));
@@ -128,21 +135,25 @@ test.describe("contacts importer", () => {
     await expect(page).toHaveURL(new RegExp(`${jobId}$`));
     await importPage.expectStep("file");
     await expect(page.getByText("Select the file again to continue")).toBeVisible();
+    await importPage.expectStepState("map", "locked");
+    await importPage.expectStepState("options", "upcoming");
 
-    // Another file is recognized by its fingerprint and cannot continue the upload
+    // Another file is recognized by its fingerprint and cannot continue the upload; the mapping is fixed
     await importPage.selectFile(otherFile.path);
     await expect(page.getByText("This is a different file")).toBeVisible();
     await expect(importPage.resumeUploadButton).toHaveCount(0);
+    await expect(page.getByTestId("contacts-importer-file-next")).toHaveCount(0);
 
-    // The same file continues with the stored mapping, without the Map step
+    // The same file continues with the stored mapping, without the Map step: the upload goes on in the bar
     await importPage.selectFile(file.path);
     await importPage.resumeUploadButton.click();
-    await importPage.expectStep("upload");
+    await importPage.expectStep("options");
     await importPage.expectUploaded(rows);
     await importPage.expectCount("rows-read", rows);
     await importPage.expectCount("rows-uploaded", rows);
     test.info().annotations.push({ type: "chunk uploads before the interruption", description: String(passed) });
     if (passed > 0) {
+      await importPage.openUploadDetails();
       await expect(page.getByText(/(parts were|part was) already on the server/)).toBeVisible();
     }
 
@@ -151,24 +162,29 @@ test.describe("contacts importer", () => {
     await expect(importsList.cell(file.name, "rows")).toHaveText(rows.toLocaleString("en-US"));
   });
 
-  test("shows an uploaded import again after a reload and can cancel it", async ({ page, importsList, importPage, uniqueFixture }) => {
+  test("shows an uploaded import again after a reload and can start a new import instead", async ({ page, importsList, importPage, uniqueFixture }) => {
     const file = await uniqueFixture("contacts-small.csv");
 
     await importsList.goto();
-    await importsList.startNewImport();
+    const jobId = await importsList.startNewImport();
     await importPage.selectFile(file.path);
     await importPage.continueToMapping();
     await importPage.saveAndUpload();
     await importPage.expectUploaded(small.rowsUploaded);
 
     await page.reload();
-    await importPage.expectStep("upload");
+    await importPage.expectStep("options");
     await importPage.expectUploaded(small.rowsUploaded);
     await importPage.expectCount("rows-skipped", small.rowsSkipped);
+    await importPage.expectStepState("upload", "locked");
 
-    await importPage.cancelImport();
+    // "Start a new import" opens a new one and keeps this one
+    await importPage.startNewImport();
+    expect(page.url()).not.toContain(jobId);
     await importsList.goto();
-    await expect(importsList.cell(file.name, "state")).toHaveText("Cancelled");
+    await expect(importsList.row(file.name)).toHaveCount(1);
+    await importsList.deleteImport(file.name);
+    await expect(importsList.row(file.name)).toHaveCount(0);
   });
 });
 
@@ -209,7 +225,7 @@ test.describe("contacts importer permissions", () => {
       };
       return {
         list: await send("contacts-importer/imports", "LIST_IMPORTS"),
-        deleteFiles: await send("contacts-importer/imports", "DELETE_FILES"),
+        deleteImport: await send("contacts-importer/imports", "DELETE_IMPORT"),
         loadConfig: await send(path, "LOAD_CONFIG"),
         getJob: await send(path, "GET_JOB"),
         saveConfig: await send(path, "SAVE_CONFIG"),
@@ -221,13 +237,13 @@ test.describe("contacts importer permissions", () => {
         confirm: await send(path, "CONFIRM_IMPORT"),
         getReport: await send(path, "GET_REPORT"),
         cancel: await send(path, "CANCEL_IMPORT"),
-        deleteImportFiles: await send(path, "DELETE_FILES"),
+        cancelAndDelete: await send(path, "DELETE_IMPORT"),
       };
     }, `contacts-importer/imports/${jobId}`);
 
     expect(statuses).toEqual({
       list: 200,
-      deleteFiles: 403,
+      deleteImport: 403,
       loadConfig: 403,
       getJob: 403,
       saveConfig: 403,
@@ -239,7 +255,7 @@ test.describe("contacts importer permissions", () => {
       confirm: 403,
       getReport: 403,
       cancel: 403,
-      deleteImportFiles: 403,
+      cancelAndDelete: 403,
     });
   });
 });

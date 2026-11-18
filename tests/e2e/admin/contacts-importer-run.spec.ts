@@ -9,7 +9,7 @@ import { ImportPage } from "./contactsImporterPage";
 async function uploadToOptions(importPage: ImportPage, filePath: string, rows: number): Promise<void> {
   await importPage.selectFile(filePath);
   await importPage.continueToMapping();
-  await importPage.expectKeyField("ContactEmail");
+  await importPage.expectKeyField("Email");
   await importPage.saveAndUpload();
   await importPage.expectUploaded(rows);
   await importPage.continueToOptions();
@@ -33,6 +33,7 @@ test.describe("contacts importer: check, run and results", () => {
     await importPage.expectAnalyzed();
     await importPage.expectCount("review-created", 30);
     await importPage.expectCount("review-updated", 0);
+    await importPage.expectMappingRow("First Name", "First name");
     await importPage.expectCount("expected-rows", 30);
     await importPage.expectCount("expected-created", 30);
     await importPage.expectCount("expected-skipped", 0);
@@ -77,7 +78,7 @@ test.describe("contacts importer: check, run and results", () => {
     await importPage.expectCount("review-updated", 10);
     await importPage.expectCount("review-unchanged", 20);
     await importPage.expectCount("expected-rows", 35);
-    await expect(page.getByRole("row", { name: "ContactFirstName 10 0" })).toBeVisible();
+    await expect(page.getByRole("row", { name: "First name 10 0" })).toBeVisible();
 
     await importPage.runImport();
     await importPage.expectResults("Completed");

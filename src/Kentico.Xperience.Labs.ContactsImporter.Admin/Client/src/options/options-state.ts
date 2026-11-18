@@ -21,7 +21,7 @@ export const DEFAULT_OPTIONS: OptionsDto = {
   reportIncludesKey: false,
   recipientListId: null,
   unsubscribed: 'keep',
-  bouncedAddress: 'addAndReport',
+  bouncedAddress: 'skipAndReport',
   consent: 'none',
   consentId: null,
   revokedConsent: 'keep',

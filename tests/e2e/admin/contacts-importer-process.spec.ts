@@ -10,7 +10,7 @@ import { ImportPage } from "./contactsImporterPage";
 async function uploadToOptions(importPage: ImportPage, filePath: string, rows: number): Promise<void> {
   await importPage.selectFile(filePath);
   await importPage.continueToMapping();
-  await importPage.expectKeyField("ContactEmail");
+  await importPage.expectKeyField("Email");
   await importPage.saveAndUpload();
   await importPage.expectUploaded(rows);
   await importPage.continueToOptions();
@@ -53,10 +53,9 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     await importPage.expectAnalyzed(10_000);
     await importPage.expectCount("review-skipped", 12);
 
-    // Cancelled before the run: nothing was imported
-    await importPage.cancelRunningImport();
-    await importPage.expectResults("Cancelled");
-    await expect(importPage.resultsStatus).toHaveAttribute("data-import-started", "false");
+    // Cancelled before the run: the import is deleted and nothing was imported
+    await importPage.cancelBeforeRun();
+    await expect(importsList.row(file.name)).toHaveCount(0);
     await new ContactsListPage(page).expectNoContact(rows[0].email);
   });
 
@@ -183,21 +182,12 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
       });
       await expect(page.getByText(/Connection problem: trying again/)).toBeVisible({ timeout: 30_000 });
 
-      // Once the first browser's last sign of life is old enough, "Continue here" takes the import over
-      await expect(async () => {
-        if (await other.resultsStatus.isVisible()) {
-          return;
-        }
+      // One "Continue here": while the first browser still counts as active this browser waits (with a notice) and asks
+      // again; it takes the import over once the first browser's last sign of life is old enough. (With the CI heartbeat
+      // of 10 s the first browser may already count as gone here, so the notice is not asserted; Vitest covers it.)
+      await other.continueProcessing();
 
-        // While the first browser still counts as active, "Continue here" only shows the same notice again;
-        // after the take over this browser is the one that processes.
-        await other.continueProcessing();
-        await expect
-          .poll(async () => (await other.resultsStatus.isVisible()) || (await other.isProcessing()), { timeout: 4_000 })
-          .toBe(true);
-      }).toPass({ timeout: 150_000, intervals: [3_000] });
-
-      await other.expectResults("Completed");
+      await other.expectResults("Completed", 240_000);
       await other.expectCount("actual-rows", total);
       await other.expectCount("actual-created", total);
       await new ContactsListPage(otherPage).expectContact(rows[total - 1]);

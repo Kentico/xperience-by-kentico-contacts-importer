@@ -6,7 +6,7 @@
   "scripts": {
     "test": "playwright test",
     "test:live-site": "playwright test --project=live-site",
-    "test:admin": "playwright test --project=admin-tests",
+    "test:admin": "playwright test --project=admin-tests --project=admin-import-runs",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
     "install:browsers": "playwright install chromium",

@@ -88,6 +88,56 @@ internal static class ImportJobStateMachine
         IsDriven(status.State) && IsHeartbeatStale(status, utcNow, heartbeatStale) ? ImportJobState.Paused : status.State;
 
     /// <summary>
+    /// Whether a driver works on the job right now: it is being analyzed or run and its heartbeat is fresh (the
+    /// opposite of the derived <see cref="ImportJobState.Paused"/>).
+    /// </summary>
+    public static bool IsActivelyDriven(ImportJobStatus status, DateTime utcNow, TimeSpan heartbeatStale) =>
+        IsDriven(status.State) && !IsHeartbeatStale(status, utcNow, heartbeatStale);
+
+    /// <summary>
+    /// Whether the job holds the one unfinished Run (PLAN D60): its import was confirmed and has not ended, so no other
+    /// import may be confirmed or started. Stored states Confirmed and Running (also when the heartbeat is stale and the
+    /// job shows as Paused); a status already read as Paused counts when it is in the execute phase. The heartbeat does
+    /// not matter. Analyses (Uploaded, Analyzing, Analyzed, Paused in the analysis) and finished jobs never count.
+    /// </summary>
+    public static bool IsUnfinishedRun(ImportJobStatus status) =>
+        status.State is ImportJobState.Confirmed or ImportJobState.Running
+        || (status.State == ImportJobState.Paused && status.Checkpoint.Phase == ImportPhase.Execute);
+
+    /// <summary>
+    /// Whether the job <paramref name="other"/> keeps the confirmed job <paramref name="starting"/> from starting its
+    /// Run (<c>Confirmed → Running</c>): <paramref name="other"/> is an unfinished Run (<see cref="IsUnfinishedRun"/>),
+    /// except a job confirmed later that has not started either. Of two confirmed jobs (confirmed by an earlier version,
+    /// before confirmations were serialized) the one confirmed first may start, so they never wait for each other.
+    /// </summary>
+    /// <param name="other">Status of the other job.</param>
+    /// <param name="otherId">ID of the other job; decides between two jobs confirmed at the same time.</param>
+    /// <param name="starting">Status of the job about to start.</param>
+    /// <param name="startingId">ID of the job about to start.</param>
+    public static bool BlocksRunStart(ImportJobStatus other, Guid otherId, ImportJobStatus starting, Guid startingId)
+    {
+        if (otherId == startingId || !IsUnfinishedRun(other))
+        {
+            return false;
+        }
+
+        if (other.State != ImportJobState.Confirmed || starting.State != ImportJobState.Confirmed)
+        {
+            return true;
+        }
+
+        int order = other.UpdatedUtc.CompareTo(starting.UpdatedUtc);
+
+        return order < 0 || (order == 0 && otherId.CompareTo(startingId) < 0);
+    }
+
+    /// <summary>
+    /// Whether the job ended an import that wrote contacts: Completed, or Failed or Cancelled in the execute phase.
+    /// </summary>
+    public static bool IsEndedRun(ImportJobStatus status) =>
+        IsTerminal(status.State) && status.Checkpoint.Phase == ImportPhase.Execute && status.FinishedUtc is not null;
+
+    /// <summary>
     /// A heartbeat is stale when there is none or it is older than the heartbeat age of the job
     /// (<see cref="GetHeartbeatStale"/>: <paramref name="heartbeatStale"/>, longer for a job with slow batches).
     /// </summary>
@@ -187,7 +237,7 @@ internal static class ImportJobStateMachine
 
         if (status.DriverToken is null)
         {
-            return Acquired(status, NewDriverToken(), instanceName, utcNow);
+            return Acquired(status, ProposedOrNewDriverToken(driverToken), instanceName, utcNow);
         }
 
         if (!IsHeartbeatStale(status, utcNow, heartbeatStale))
@@ -196,9 +246,16 @@ internal static class ImportJobStateMachine
         }
 
         return takeOver
-            ? Acquired(status, NewDriverToken(), instanceName, utcNow)
+            ? Acquired(status, ProposedOrNewDriverToken(driverToken), instanceName, utcNow)
             : new ImportDriverResult(ImportDriverOutcome.StaleRequiresTakeOver, status, null);
     }
+
+    /// <summary>
+    /// Token of a new driver: the one the browser made and stored before the call, when it is a GUID ("N" format),
+    /// so a tab reloaded while its first call runs still knows its token; otherwise a new one.
+    /// </summary>
+    private static string ProposedOrNewDriverToken(string? proposed) =>
+        proposed is { Length: 32 } && Guid.TryParseExact(proposed, "N", out var parsed) ? parsed.ToString("N") : NewDriverToken();
 
     private static bool IsDriven(ImportJobState state) => state is ImportJobState.Analyzing or ImportJobState.Running;
 
@@ -227,12 +284,23 @@ internal static class ImportJobStateMachine
             DriverToken = null,
             DriverCallId = null,
             LongestBatchSeconds = 0,
+            PhaseStartedUtc = null,
+            PhaseStartedByUserId = null,
             Error = null,
             ErrorArguments = null,
         };
 
     private static ImportJobStatus StartPhase(ImportJobStatus status, ImportPhase phase) =>
-        status with { Checkpoint = new ImportCheckpoint { Phase = phase }, Aggregates = new Dictionary<string, long>(), LongestBatchSeconds = 0, Error = null, ErrorArguments = null };
+        status with
+        {
+            Checkpoint = new ImportCheckpoint { Phase = phase },
+            Aggregates = new Dictionary<string, long>(),
+            LongestBatchSeconds = 0,
+            PhaseStartedUtc = status.UpdatedUtc,
+            PhaseStartedByUserId = null,
+            Error = null,
+            ErrorArguments = null,
+        };
 
     private static ImportJobStatus Finish(ImportJobStatus status, DateTime utcNow, ImportMessage? error) =>
         (status with { FinishedUtc = utcNow, DriverToken = null, DriverCallId = null }).WithError(error);

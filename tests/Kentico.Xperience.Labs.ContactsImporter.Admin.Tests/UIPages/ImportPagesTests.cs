@@ -60,11 +60,11 @@ internal class ImportPagesTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(Names(typeof(ImportsListPage)), Is.EqualTo(new[] { "DELETE_FILES", "LIST_IMPORTS" }));
+            Assert.That(Names(typeof(ImportsListPage)), Is.EqualTo(new[] { "DELETE_IMPORT", "LIST_IMPORTS" }));
             Assert.That(Names(typeof(ImportPage)), Is.EqualTo(new[]
             {
-                "CANCEL_IMPORT", "COMPLETE_UPLOAD", "CONFIRM_IMPORT", "DELETE_FILES", "GET_JOB", "GET_REPORT", "LOAD_CONFIG", "PROCESS_NEXT", "SAVE_CONFIG",
-                "SAVE_OPTIONS", "TRUNCATE_CHUNKS", "UPLOAD_CHUNK",
+                "CANCEL_IMPORT", "COMPLETE_UPLOAD", "CONFIRM_IMPORT", "DELETE_IMPORT", "GET_JOB", "GET_REPORT", "GET_RUNNING_IMPORT", "GET_SAMPLES", "LOAD_CONFIG", "PROCESS_NEXT",
+                "SAVE_CONFIG", "SAVE_OPTIONS", "TRUNCATE_CHUNKS", "UPLOAD_CHUNK",
             }));
         });
     }
@@ -139,6 +139,7 @@ internal class ImportPagesTests
         var page = new ImportPage(commands, new FakePermissions(), new NoUser(), null!) { JobId = "job-from-url" };
 
         await page.GetJob();
+        await page.GetRunningImport();
         await page.UploadChunk(new UploadChunkPayload { JobId = "job-from-payload" });
         await page.TruncateChunks(new TruncateChunksRequest { FromIndex = 2 });
         await page.CompleteUpload(new CompleteUploadRequest());
@@ -147,14 +148,16 @@ internal class ImportPagesTests
         await page.ProcessNext(new ProcessNextRequest { Phase = "analyze" }, cancellation.Token);
         await page.Confirm(new ConfirmImportRequest { StatementVersion = "7" });
         await page.GetReport(new GetReportRequest { Phase = "analyze" }, cancellation.Token);
+        await page.GetSamples();
         await page.Cancel();
-        await page.DeleteFiles();
+        await page.DeleteImport(new DeleteImportRequest { JobId = "job-from-request", DriverToken = "token-1" });
+        await page.DeleteImport(null!);
 
         Assert.That(commands.Calls, Is.EqualTo(new[]
         {
-            "GetJob job-from-url", "UploadChunk job-from-url", "TruncateChunks job-from-url", "CompleteUpload job-from-url",
-            "SaveOptions job-from-url", "ProcessNext job-from-url True", "Confirm job-from-url 7 0 False", "GetReport job-from-url True",
-            "Cancel job-from-url", "DeleteFiles job-from-url",
+            "GetJob job-from-url", "GetRunningImport job-from-url", "UploadChunk job-from-url", "TruncateChunks job-from-url", "CompleteUpload job-from-url",
+            "SaveOptions job-from-url", "ProcessNext job-from-url True", "Confirm job-from-url 7 0 False", "GetReport job-from-url True", "GetSamples job-from-url",
+            "Cancel job-from-url", "DeleteImport job-from-url token-1", "DeleteImport job-from-url ",
         }));
     }
 
@@ -222,10 +225,10 @@ internal class ImportPagesTests
         var page = new ImportsListPage(commands, null!, null!, new NoUser());
 
         await page.ListImports();
-        await page.DeleteFiles(new ImportJobRequest { JobId = "job-1" });
-        await page.DeleteFiles(null!);
+        await page.DeleteImport(new DeleteImportRequest { JobId = "job-1", DriverToken = "ignored" });
+        await page.DeleteImport(null!);
 
-        Assert.That(commands.Calls, Is.EqualTo(new[] { "ListImports", "DeleteFiles job-1", "DeleteFiles " }));
+        Assert.That(commands.Calls, Is.EqualTo(new[] { "ListImports", "DeleteImport job-1 ", "DeleteImport  " }));
     }
 
     private sealed class RecordingCommandService : IImportCommandService
@@ -264,6 +267,20 @@ internal class ImportPagesTests
             Calls.Add($"GetJob {jobId}");
 
             return new ImportJobResponse { Code = ImportCommandCodes.JOB_NOT_FOUND };
+        }
+
+        public GetSamplesResponse GetSamples(string? jobId)
+        {
+            Calls.Add($"GetSamples {jobId}");
+
+            return new GetSamplesResponse { Code = ImportCommandCodes.OK };
+        }
+
+        public RunningImportResponse GetRunningImport(string? jobId)
+        {
+            Calls.Add($"GetRunningImport {jobId}");
+
+            return new RunningImportResponse { Code = ImportCommandCodes.OK };
         }
 
         public SaveConfigResponse SaveConfig(string? jobId, SaveConfigRequest? request, int userId)
@@ -330,9 +347,9 @@ internal class ImportPagesTests
             return new ImportActionResponse { Code = ImportCommandCodes.OK };
         }
 
-        public ImportActionResponse DeleteFiles(string? jobId, int userId)
+        public ImportActionResponse DeleteImport(string? jobId, string? driverToken, int userId)
         {
-            Calls.Add($"DeleteFiles {jobId}");
+            Calls.Add($"DeleteImport {jobId} {driverToken}");
 
             return new ImportActionResponse { Code = ImportCommandCodes.OK };
         }

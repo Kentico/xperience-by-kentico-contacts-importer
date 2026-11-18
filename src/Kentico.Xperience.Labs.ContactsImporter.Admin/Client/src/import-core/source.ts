@@ -1,5 +1,5 @@
-/** Formats with a parser in this slice. JSON array / XLSX / zip arrive in slice 5 (see `openRecordSource`). */
-export type SourceFormat = 'csv' | 'ndjson';
+/** Formats with a parser. A `.zip` is a container of one file in one of these formats. */
+export type SourceFormat = 'csv' | 'ndjson' | 'json' | 'xlsx';
 
 /** Why a row could not be parsed. Such rows are yielded (with empty values) so callers can report them. */
 export type RowErrorCode = 'unterminatedQuote' | 'invalidJson' | 'notAnObject';
@@ -27,6 +27,12 @@ export interface SourceInfo {
   delimiterDetected?: boolean;
   /** CSV only: whether the first record is a header. */
   hasHeader?: boolean;
+  /** Name of the file read from a `.zip` container. */
+  zipEntry?: string;
+  /** XLSX only: the sheet being read. */
+  sheet?: string;
+  /** XLSX only: names of all worksheets, in workbook order. */
+  sheets?: string[];
 }
 
 /**
@@ -41,7 +47,10 @@ export interface RecordSource {
   readonly dynamicColumns: boolean;
   /** Size of the file in bytes. */
   readonly totalBytes: number;
-  /** Bytes of the file read so far (compressed bytes for `.gz`); compare with `totalBytes` for progress. */
+  /**
+   * Bytes of the file read so far (compressed bytes for `.gz`); compare with `totalBytes` for
+   * progress. Zip entries and XLSX sheets scale the compressed bytes read of the entry to the file size.
+   */
   readonly bytesRead: number;
   readonly info: SourceInfo;
   /** Rows in file order, one batch per decoded stream chunk. Can be iterated once. */
@@ -65,11 +74,34 @@ export type ImportErrorCode =
   | 'unsupportedEncoding'
   | 'recordTooLarge'
   | 'invalidConfig'
-  | 'sourceConsumed';
+  | 'sourceConsumed'
+  /** JSON array: the file is not valid JSON (`item`: 1-based array item where it broke). */
+  | 'invalidJson'
+  /** JSON array: the file does not start with `[` (e.g. NDJSON saved as `.json`). */
+  | 'jsonNotArray'
+  /** The zip file is damaged or not a zip file. */
+  | 'invalidZip'
+  /** The zip holds no data file. */
+  | 'zipEmpty'
+  /** The zip holds more than one data file (`count`). */
+  | 'zipMultipleEntries'
+  /** The zip entry is encrypted. */
+  | 'zipEncrypted'
+  /** The zip entry uses a compression method other than stored / deflate (`method`). */
+  | 'unsupportedCompression'
+  /** The file is not a readable XLSX workbook. */
+  | 'invalidXlsx'
+  /** XLSX: the chosen sheet does not exist (`sheet`). */
+  | 'sheetNotFound'
+  /** XLSX: more data rows than Excel allows (`maxRows`). */
+  | 'tooManyRows';
 
 /**
- * Values that describe an `ImportError`: `encoding` (`unsupportedEncoding`), `record` (CSV) or
- * `line` (NDJSON) and `maxChars` (`recordTooLarge`). Never values of the file.
+ * Values that describe an `ImportError`: `encoding` (`unsupportedEncoding`); `record` (CSV),
+ * `line` (NDJSON) or `item` (JSON array) and `maxChars` (`recordTooLarge`); `extension`
+ * (`unsupportedFormat` of a known but unsupported type); `item` (`invalidJson`); `count`
+ * (`zipMultipleEntries`); `method` (`unsupportedCompression`); `sheet` (`sheetNotFound`);
+ * `maxRows` (`tooManyRows`). Never values of the file's rows.
  */
 export type ImportErrorParams = Readonly<Record<string, string | number>>;
 

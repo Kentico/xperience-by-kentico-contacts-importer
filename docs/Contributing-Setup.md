@@ -75,6 +75,8 @@ The root `.mcp.json` registers the Aspire MCP server (`aspire agent mcp`), so AI
 
 Playwright tests for the live site and the administration live in `tests/e2e`; they need a licensed database. See [`tests/e2e/README.md`](../tests/e2e/README.md).
 
+To generate large import files (CSV, TSV, NDJSON, JSON, XLSX; gzipped or zipped) for performance tests, see [`tests/Kentico.Xperience.Labs.ContactsImporter.Admin.DataGenerator/README.md`](../tests/Kentico.Xperience.Labs.ContactsImporter.Admin.DataGenerator/README.md).
+
 ## Development Workflow
 
 1. Create a new branch with one of the following prefixes

@@ -13,7 +13,7 @@ public class ImportProcessorAudienceTests
     private const int ConsentId = 9;
     private const int UserId = 77;
 
-    private static readonly ImportOptions listAndConsent = new() { RecipientListId = ListId, Consent = ConsentMode.Blanket, ConsentId = ConsentId };
+    private static readonly ImportOptions listAndConsent = new() { RecipientListId = ListId, BouncedAddress = BouncedAddressBehavior.AddAndReport, Consent = ConsentMode.Blanket, ConsentId = ConsentId };
 
     private sealed class Fixture : IDisposable
     {
@@ -639,7 +639,7 @@ public class ImportProcessorAudienceTests
     }
 
     [Test]
-    public void Cleanup_That_Cancels_A_Job_Raises_The_Event()
+    public void Cancelling_Before_A_Delete_And_The_Cleanup_Raise_The_Event_Once()
     {
         using var fixture = new Fixture(options => options.AbandonedJobRetentionDays = 1);
         var deleted = fixture.Upload(["a@x.test"], new ImportOptions());
@@ -649,9 +649,9 @@ public class ImportProcessorAudienceTests
         fixture.Run(finished, ImportPhase.Execute);
         fixture.Events.Events.Clear();
 
-        fixture.Cleanup.DeleteImportFiles(deleted, 4);
-        fixture.Cleanup.DeleteImportFiles(deleted, 4);
-        fixture.Cleanup.DeleteImportFiles(finished, 4);
+        fixture.Processor.CancelIfIdle(deleted, null, 4);
+        fixture.Processor.CancelIfIdle(deleted, null, 4);
+        fixture.Processor.CancelIfIdle(finished, null, 4);
         var abandoned = fixture.Upload(["c@x.test"], new ImportOptions());
         fixture.Time.Advance(TimeSpan.FromDays(3));
         fixture.Cleanup.Sweep();

@@ -3,7 +3,8 @@ import { ImportError } from './source';
 import type { SourceRow } from './source';
 import type { TextFormatReader } from './text-source';
 
-const MAX_FLATTEN_DEPTH = 16;
+/** Nesting depth up to which objects are flattened to dotted paths (deeper = JSON text). */
+export const MAX_FLATTEN_DEPTH = 16;
 
 export interface NdjsonReaderOptions {
   /** Cap on the characters of one line. */

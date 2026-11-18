@@ -123,6 +123,12 @@ internal sealed record BatchPlan(IReadOnlyList<ContactCreate> Creates, IReadOnly
     /// contacts and existing contacts that are not updated. Empty when the job has no recipient list and no consent.
     /// </summary>
     public IReadOnlyList<AudienceTarget> Targets { get; init; } = [];
+
+    /// <summary>
+    /// Examples of changed and cleared values of updated contacts (<see cref="ImportValueSampleSet"/> rules within the
+    /// batch); empty unless the planner collects them.
+    /// </summary>
+    public IReadOnlyList<ImportValueSample> Samples { get; init; } = [];
 }
 
 /// <summary>
@@ -137,7 +143,9 @@ internal delegate IReadOnlyList<int> MissingReferenceLookup(ImportField field, I
 /// with the merge rule, and classification of each key as create / update / unchanged / skipped.
 /// The same code runs for the analysis and for the import; only the writes differ.
 /// </summary>
-internal sealed class BatchPlanner(ImportProcessingContext context)
+/// <param name="context">Job being processed.</param>
+/// <param name="collectSamples">Collect examples of changed and cleared values (<see cref="BatchPlan.Samples"/>); the analysis does.</param>
+internal sealed class BatchPlanner(ImportProcessingContext context, bool collectSamples = false)
 {
     private static readonly StringComparer similarKeyComparer = CultureInfo.InvariantCulture.CompareInfo.GetStringComparer(
         CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace | CompareOptions.IgnoreKanaType | CompareOptions.IgnoreWidth | CompareOptions.IgnoreSymbols);
@@ -257,6 +265,7 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
         var creates = new List<ContactCreate>();
         var updates = new List<ContactUpdate>();
         var targets = new List<AudienceTarget>();
+        var samples = collectSamples ? new ImportValueSampleSet() : null;
         for (int root = 0; root < groupCount; root++)
         {
             if (rowsByRoot[root] is not { } rows)
@@ -265,10 +274,14 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
             }
 
             rows.Sort((x, y) => x.Position.CompareTo(y.Position));
-            ClassifyGroup(batch, rows, matchesByRoot[root]?.Values.ToList() ?? [], creates, updates, targets);
+            ClassifyGroup(batch, rows, matchesByRoot[root]?.Values.ToList() ?? [], creates, updates, targets, samples);
         }
 
-        return new BatchPlan(creates, updates, [.. batch.Results.Select(r => r!.Value)], batch.Counts) { Targets = targets };
+        return new BatchPlan(creates, updates, [.. batch.Results.Select(r => r!.Value)], batch.Counts)
+        {
+            Targets = targets,
+            Samples = samples?.ToList() ?? [],
+        };
     }
 
     /// <summary>
@@ -399,7 +412,7 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
         return new PreparedRow(position, record.Row, record.Key, states, values, emailDropped, record.Consent);
     }
 
-    private void ClassifyGroup(PreparedBatch batch, List<PreparedRow> rows, List<ContactMatch> matches, List<ContactCreate> creates, List<ContactUpdate> updates, List<AudienceTarget> targets)
+    private void ClassifyGroup(PreparedBatch batch, List<PreparedRow> rows, List<ContactMatch> matches, List<ContactCreate> creates, List<ContactUpdate> updates, List<AudienceTarget> targets, ImportValueSampleSet? samples)
     {
         var counts = batch.Counts;
         var (states, values) = MergeRows(rows);
@@ -450,7 +463,7 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
             }
             else
             {
-                outcome = PlanUpdates(counts, states, values, matches, updates);
+                outcome = PlanUpdates(counts, states, values, matches, updates, rows[^1], samples);
                 AddTargets(targets, rows, states, values, SelectTargets(matches), -1, fieldsWritten: true);
             }
         }
@@ -559,7 +572,7 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
         return (states, values);
     }
 
-    private ImportRowOutcome PlanUpdates(ImportCounts counts, FieldValueState[] states, object?[] values, List<ContactMatch> matches, List<ContactUpdate> updates)
+    private ImportRowOutcome PlanUpdates(ImportCounts counts, FieldValueState[] states, object?[] values, List<ContactMatch> matches, List<ContactUpdate> updates, PreparedRow lastRow, ImportValueSampleSet? samples)
     {
         bool anyChanged = false;
         foreach (var target in SelectTargets(matches))
@@ -578,12 +591,14 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
                 {
                     changed = true;
                     counts.Add(ImportAggregateKeys.FieldChangedPrefix + field.Name);
+                    AddSample(samples, field, lastRow, current, values[i], cleared: false);
                 }
                 else if (states[i] == FieldValueState.Empty && context.ClearEmptyValues && !FieldValueConverter.IsEmpty(current))
                 {
                     changed = true;
                     counts.Add(ImportAggregateKeys.FieldChangedPrefix + field.Name);
                     counts.Add(ImportAggregateKeys.FieldClearedPrefix + field.Name);
+                    AddSample(samples, field, lastRow, current, null, cleared: true);
                 }
             }
 
@@ -598,6 +613,29 @@ internal sealed class BatchPlanner(ImportProcessingContext context)
         counts.Add(anyChanged ? ImportAggregateKeys.Updated : ImportAggregateKeys.Unchanged);
 
         return anyChanged ? ImportRowOutcome.Updated : ImportRowOutcome.Unchanged;
+    }
+
+    /// <summary>
+    /// Adds an example of a changed or cleared value unless the batch already has
+    /// <see cref="ImportValueSamples.PerField"/> of the field and kind from lower rows. With several matching contacts
+    /// (update all) a row has one example: the contact with the lowest ID.
+    /// </summary>
+    private static void AddSample(ImportValueSampleSet? samples, ImportField field, PreparedRow row, object? current, object? value, bool cleared)
+    {
+        if (samples is null || !samples.Wants(field.Name, cleared, row.Row))
+        {
+            return;
+        }
+
+        samples.Add(new ImportValueSample
+        {
+            Field = field.Name,
+            Cleared = cleared,
+            Row = row.Row,
+            Key = ImportValueSamples.Truncate(row.Key),
+            Current = ImportValueSamples.Format(field, current),
+            New = cleared ? null : ImportValueSamples.Format(field, value),
+        });
     }
 
     /// <summary>

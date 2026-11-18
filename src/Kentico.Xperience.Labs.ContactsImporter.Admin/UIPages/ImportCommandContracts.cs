@@ -13,11 +13,13 @@ internal static class ImportCommands
     public const string TRUNCATE_CHUNKS = "TRUNCATE_CHUNKS";
     public const string COMPLETE_UPLOAD = "COMPLETE_UPLOAD";
     public const string CANCEL_IMPORT = "CANCEL_IMPORT";
-    public const string DELETE_FILES = "DELETE_FILES";
+    public const string DELETE_IMPORT = "DELETE_IMPORT";
     public const string SAVE_OPTIONS = "SAVE_OPTIONS";
     public const string PROCESS_NEXT = "PROCESS_NEXT";
     public const string CONFIRM_IMPORT = "CONFIRM_IMPORT";
     public const string GET_REPORT = "GET_REPORT";
+    public const string GET_RUNNING_IMPORT = "GET_RUNNING_IMPORT";
+    public const string GET_SAMPLES = "GET_SAMPLES";
 }
 
 /// <summary>
@@ -48,8 +50,24 @@ internal static class ImportCommandCodes
     /// </summary>
     public const string CONSENT_PERMISSION_REQUIRED = "consentPermissionRequired";
 
-    /// <summary><c>PROCESS_NEXT</c> outcome: another request of this application instance is still processing the job.</summary>
+    /// <summary>
+    /// <c>CONFIRM_IMPORT</c> code and <c>PROCESS_NEXT</c> outcome: another import's Run was confirmed and has not ended
+    /// (<see cref="ImportJobStateMachine.IsUnfinishedRun"/>); only one Run is unfinished at a time (PLAN D60).
+    /// <c>PROCESS_NEXT</c> answers it only for a call that would start a confirmed Run.
+    /// </summary>
+    public const string OTHER_IMPORT_RUNNING = "otherImportRunning";
+
+    /// <summary>
+    /// <c>PROCESS_NEXT</c> outcome: another request of this application instance is still processing the job, or the
+    /// Run lock (<see cref="IImportRunLock"/>) is held by another request. Also a <c>CONFIRM_IMPORT</c> code for the Run lock.
+    /// </summary>
     public const string BUSY = "busy";
+
+    /// <summary><c>DELETE_IMPORT</c>: another browser tab or user analyzes or runs the import right now.</summary>
+    public const string IMPORT_ACTIVE = "importActive";
+
+    /// <summary><c>DELETE_IMPORT</c>: the files of the import could not be deleted (locked, storage not reachable).</summary>
+    public const string DELETE_FAILED = "deleteFailed";
 }
 
 /// <summary><c>LOAD_CONFIG</c> result: what the browser needs to parse, map and chunk a file.</summary>
@@ -198,7 +216,7 @@ internal sealed record ImportOptionsDto
     /// <summary><c>keep</c> or <c>resubscribe</c>; missing = <c>keep</c>. Stored as <c>keep</c> without a recipient list.</summary>
     public string? Unsubscribed { get; init; }
 
-    /// <summary><c>addAndReport</c> or <c>skipAndReport</c>; missing = <c>addAndReport</c>. Stored as the default without a recipient list.</summary>
+    /// <summary><c>addAndReport</c> or <c>skipAndReport</c>; missing = <c>skipAndReport</c>. Stored as the default without a recipient list.</summary>
     public string? BouncedAddress { get; init; }
 
     /// <summary><c>none</c>, <c>blanket</c> or <c>blanketWithColumnOverride</c>; missing = <c>none</c>.</summary>
@@ -551,7 +569,7 @@ internal sealed record CompleteUploadResponse
     public ImportStatusDto? Status { get; init; }
 }
 
-/// <summary>Result of <c>CANCEL_IMPORT</c> and <c>DELETE_FILES</c>.</summary>
+/// <summary>Result of <c>CANCEL_IMPORT</c> and <c>DELETE_IMPORT</c> (no status: the import is gone).</summary>
 internal sealed record ImportActionResponse
 {
     public required string Code { get; init; }
@@ -561,10 +579,17 @@ internal sealed record ImportActionResponse
     public ImportStatusDto? Status { get; init; }
 }
 
-/// <summary><c>DELETE_FILES</c> data on the imports list (the import page takes the job from its URL).</summary>
-internal sealed record ImportJobRequest
+/// <summary><c>DELETE_IMPORT</c> data.</summary>
+internal sealed record DeleteImportRequest
 {
+    /// <summary>Job to delete, on the imports list. The import page takes the job from its URL and ignores this.</summary>
     public string? JobId { get; init; }
+
+    /// <summary>
+    /// Driver token of the browser tab that analyzes the import (import page), so the tab can delete the import it
+    /// drives itself; <c>null</c> otherwise.
+    /// </summary>
+    public string? DriverToken { get; init; }
 }
 
 internal sealed record ImportListResponse
@@ -607,12 +632,97 @@ internal sealed record ImportListItemDto
     /// <summary>The job is not finished and can be opened to continue.</summary>
     public required bool CanContinue { get; init; }
 
-    /// <summary>The job still has uploaded chunks or reports on the server.</summary>
-    public required bool HasFiles { get; init; }
-
     /// <summary>Display name of the recipient list the import adds contacts to; <c>null</c> when none or it no longer exists.</summary>
     public string? RecipientListName { get; init; }
 
     /// <summary>Display name of the consent the import records agreements for; <c>null</c> when none or it no longer exists.</summary>
     public string? ConsentName { get; init; }
 }
+
+/// <summary>
+/// <c>GET_RUNNING_IMPORT</c> result: another import whose Run is unfinished, if any, and when the last Run of another
+/// import ended.
+/// </summary>
+internal sealed record RunningImportResponse
+{
+    public required string Code { get; init; }
+
+    public string? Message { get; init; }
+
+    /// <summary>
+    /// The other import (<see cref="ImportJobStateMachine.IsUnfinishedRun"/>); <c>null</c> when no other Run is unfinished.
+    /// </summary>
+    public RunningImportDto? Import { get; init; }
+
+    /// <summary>
+    /// When the newest Run of another import ended (Completed, or Failed or Cancelled while importing); <c>null</c>
+    /// when none did. A check older than this may count contacts that import changed since.
+    /// </summary>
+    public DateTime? LastRunEndedUtc { get; init; }
+}
+
+/// <summary>Another import whose Run is unfinished. File identity and counts only, no contact data.</summary>
+internal sealed record RunningImportDto
+{
+    public required string JobId { get; init; }
+
+    public required string FileName { get; init; }
+
+    /// <summary>
+    /// User name of the user who started the import; the creator of the import when that is not known (an import
+    /// confirmed but not started yet, or started by an earlier version). Empty when the user no longer exists.
+    /// </summary>
+    public required string UserName { get; init; }
+
+    /// <summary>
+    /// <c>Running</c>, <c>Paused</c> (started, nobody drives it: it waits to be continued or cancelled), or
+    /// <c>Confirmed</c> (confirmed, not started yet).
+    /// </summary>
+    public required string State { get; init; }
+
+    /// <summary>When the import started; <c>null</c> when it has not started yet or the time is not known.</summary>
+    public DateTime? StartedUtc { get; init; }
+
+    /// <summary>When a Run that has not started yet was confirmed; <c>null</c> once it started.</summary>
+    public DateTime? ConfirmedUtc { get; init; }
+
+    /// <summary>Last progress of a started Run (heartbeat of its driver); <c>null</c> when not known.</summary>
+    public DateTime? LastProgressUtc { get; init; }
+
+    public long RowsProcessed { get; init; }
+
+    public long RowsTotal { get; init; }
+}
+
+/// <summary>
+/// <c>GET_SAMPLES</c> result: examples of the values the import changes in existing contacts, from the current analysis
+/// (PLAN D57). Personal data (match values and contact values); loaded once by the Review step, never polled.
+/// </summary>
+internal sealed record GetSamplesResponse
+{
+    public required string Code { get; init; }
+
+    public string? Message { get; init; }
+
+    /// <summary>Fields with examples, ordered by field name; empty when the analysis found no changes.</summary>
+    public IReadOnlyList<ImportFieldSamplesDto> Fields { get; init; } = [];
+}
+
+/// <summary>Examples of one contact field: at most three cleared and three changed values, lowest rows first.</summary>
+internal sealed record ImportFieldSamplesDto
+{
+    /// <summary>Contact field (database column) name.</summary>
+    public required string Field { get; init; }
+
+    /// <summary>Values the import clears.</summary>
+    public IReadOnlyList<ImportValueSampleDto> Cleared { get; init; } = [];
+
+    /// <summary>Values the import replaces with another value.</summary>
+    public IReadOnlyList<ImportValueSampleDto> Changed { get; init; } = [];
+}
+
+/// <param name="Row">Source file row number.</param>
+/// <param name="Key">Match value of the row (for example the email).</param>
+/// <param name="Current">Current value of the contact; <c>null</c> when it has none.</param>
+/// <param name="New">Value after the import; <c>null</c> when it is cleared.</param>
+internal sealed record ImportValueSampleDto(long Row, string Key, string? Current, string? New);

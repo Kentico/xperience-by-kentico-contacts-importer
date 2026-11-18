@@ -254,13 +254,15 @@ describe('format and encoding detection', () => {
     expect(detectFormat('a.txt.gz')).toBe('csv');
     expect(detectFormat('a.ndjson')).toBe('ndjson');
     expect(detectFormat('a.jsonl.gz')).toBe('ndjson');
-    expect(detectFormat('a.xlsx')).toBeNull();
-    expect(detectFormat('a.json')).toBeNull();
+    expect(detectFormat('a.xlsx')).toBe('xlsx');
+    expect(detectFormat('a.json.gz')).toBe('json');
+    expect(detectFormat('a.zip')).toBeNull();
+    expect(detectFormat('a.xls')).toBeNull();
     expect(detectFormat('noextension')).toBeNull();
   });
 
   it('rejects formats without a parser unless the format is given', async () => {
-    await expect(openRecordSource(makeFile('a,b\n', 'a.xlsx'))).rejects.toMatchObject({
+    await expect(openRecordSource(makeFile('a,b\n', 'a.ods'))).rejects.toMatchObject({
       code: 'unsupportedFormat',
     });
     const source = await openRecordSource(makeFile('a,b\n1,2\n', 'export.dat'), { format: 'csv' });

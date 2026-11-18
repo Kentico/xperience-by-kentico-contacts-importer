@@ -82,7 +82,7 @@ test.describe("contacts importer: recipient lists and consent", () => {
     await uploadToOptions(importPage, file.path, 2, false);
 
     // The safe choices are preselected
-    await expect(page.getByTestId("contacts-importer-recipient-list")).toHaveValue("Do not change recipient lists");
+    await expect(page.getByTestId("contacts-importer-recipient-list")).toHaveValue("(None)");
     await expect(page.locator('input[name="contacts-importer-consent"][value="none"]')).toBeChecked();
     // Consent per row needs a mapped consent column
     await expect(page.locator('input[name="contacts-importer-consent"][value="blanketWithColumnOverride"]')).toBeDisabled();

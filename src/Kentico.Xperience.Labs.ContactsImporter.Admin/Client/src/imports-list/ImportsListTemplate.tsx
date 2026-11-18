@@ -7,6 +7,7 @@ import {
   CalloutPlacementType,
   CalloutType,
   CellType,
+  ColumnContentType,
   Dialog,
   Headline,
   HeadlineSize,
@@ -19,10 +20,11 @@ import type { TableAction, TableCell, TableRow } from '@kentico/xperience-admin-
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Commands } from '../shared/commands';
-import type { ImportActionResponse, ImportJobRequest, ImportListItemDto, ImportListResponse, JobState } from '../shared/commands';
+import type { DeleteImportRequest, ImportActionResponse, ImportListItemDto, ImportListResponse, JobState } from '../shared/commands';
 import { useAdminNavigate, useExecuteCommand, useIsMounted } from '../shared/hooks';
 import { useText } from '../shared/i18n';
-import { TestIds, Text, actionColumn, stringCell, testId, textColumn } from '../shared/ui';
+import { DIALOG_MAX_WIDTH, TestIds, Text, actionColumn, stringCell, testId, textColumn } from '../shared/ui';
+import { stateCell } from './StateCell';
 
 /** Client properties of `ImportsListPage` (UIPages/ImportsListPage.cs). */
 interface ImportsListProps {
@@ -50,7 +52,7 @@ const STATE_KEYS: Record<JobState, string> = {
 };
 
 /**
- * Recent imports with "New import", continue and "Delete files". The import page is a child
+ * Recent imports with "New import", continue and "Delete" (D51). The import page is a child
  * route of this page and replaces the list while it is open.
  */
 export const ImportsListTemplate = (props: ImportsListProps) => (
@@ -69,6 +71,7 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
   const [error, setError] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<ImportListItemDto | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const result = await execute<ImportListResponse>(Commands.ListImports);
@@ -102,17 +105,20 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
     }
 
     setDeleting(true);
-    const result = await execute<ImportActionResponse, ImportJobRequest>(Commands.DeleteFiles, { jobId: toDelete.jobId });
+    setDeleteError(null);
+    const result = await execute<ImportActionResponse, DeleteImportRequest>(Commands.DeleteImport, { jobId: toDelete.jobId });
     if (!isMounted()) {
       return;
     }
 
     setDeleting(false);
-    setToDelete(null);
-    if (!result || result.code !== 'ok') {
-      setError(result?.message ?? t('contactsimporter.list.deletefailed'));
+    if (result?.code === 'ok') {
+      setToDelete(null);
+      await load();
+    } else {
+      // The dialog stays open with the reason (for example: the import is running in another tab right now).
+      setDeleteError(result?.message ?? t('contactsimporter.list.deletefailed'));
     }
-    await load();
   }, [execute, isMounted, load, t, toDelete]);
 
   const columns = useMemo(
@@ -121,7 +127,7 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
       textColumn('size', t('contactsimporter.list.columns.size'), 10, 14),
       textColumn('created', t('contactsimporter.list.columns.created'), 18, 24),
       textColumn('createdBy', t('contactsimporter.list.columns.createdby'), 14, 24),
-      textColumn('state', t('contactsimporter.list.columns.state'), 16, 24),
+      { ...textColumn('state', t('contactsimporter.list.columns.state'), 16, 24), contentType: ColumnContentType.Component },
       textColumn('rows', t('contactsimporter.list.columns.rows'), 12, 16),
       textColumn('contactsCreated', t('contactsimporter.list.columns.contactscreated'), 12, 16),
       textColumn('contactsUpdated', t('contactsimporter.list.columns.contactsupdated'), 12, 16),
@@ -140,7 +146,7 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
           stringCell('size', bytes(item.fileSize)),
           stringCell('created', dateTime(item.createdUtc)),
           stringCell('createdBy', item.createdBy),
-          stringCell('state', STATE_KEYS[item.state] ? t(STATE_KEYS[item.state]) : item.state),
+          stateCell('state', item.state, STATE_KEYS[item.state] ? t(STATE_KEYS[item.state]) : item.state),
           stringCell('rows', item.rowsValid > 0 ? number(item.rowsValid) : ''),
           stringCell('contactsCreated', item.importStarted ? number(item.created) : ''),
           stringCell('contactsUpdated', item.importStarted ? number(item.updated) : ''),
@@ -158,9 +164,9 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
             },
             {
               identifier: DELETE_ACTION,
-              label: t('contactsimporter.list.deletefiles'),
+              label: t('contactsimporter.list.delete'),
               icon: 'xp-bin',
-              disabled: !item.hasFiles && !item.canContinue,
+              disabled: false,
               destructive: true,
             },
           ];
@@ -170,6 +176,7 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
             actions,
             onInvokeAction: (action: TableAction) => {
               if (action.identifier === DELETE_ACTION) {
+                setDeleteError(null);
                 setToDelete(item);
               } else {
                 openImport(item.jobId);
@@ -218,6 +225,7 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
         {truncated && <Text hint={true}>{t('contactsimporter.list.truncated')}</Text>}
       </Stack>
       <Dialog
+        maxWidth={DIALOG_MAX_WIDTH}
         isOpen={toDelete !== null}
         headline={t('contactsimporter.list.deleteheadline')}
         headerCloseButton={{ tooltipText: t('contactsimporter.list.close') }}
@@ -227,6 +235,7 @@ const ImportsList = ({ canImport, importPathTemplate, jobIdPlaceholder }: Import
         confirmAction={{ label: t('contactsimporter.list.deleteconfirm'), destructive: true, onClick: () => void confirmDelete() }}
         cancelAction={{ label: t('contactsimporter.list.cancel'), onClick: () => setToDelete(null) }}
       >
+        {deleteError && <NotificationBarAlert>{deleteError}</NotificationBarAlert>}
         <Text>{t('contactsimporter.list.deletemessage', { fileName: toDelete?.fileName ?? '' })}</Text>
       </Dialog>
     </Box>
