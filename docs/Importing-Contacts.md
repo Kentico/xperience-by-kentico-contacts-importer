@@ -115,7 +115,8 @@ If another import finished after your check, Review says so: that import may hav
 The browser drives the import: it asks the server to process the next part again and again. You see progress, speed, time left and running counts.
 
 - **Keep the tab open.** If you close it, or the computer sleeps, the import pauses. Open the import again and select **Continue**. Rows already processed are kept.
-- **Pause** stops after the current step. The import shows as paused at once, also in the list of imports and for other users. **Continue** goes on.
+- **Pause** stops after the current part. Until then the button shows **Pausing…**; this can take a few seconds. The import then shows as paused, also in the list of imports and for other users. **Continue** goes on.
+- An import paused with **Pause** stays paused when it is opened again (reload, another tab, another user). It continues only when someone selects **Continue**. You can leave the page of a paused import without a question.
 - If the import runs in another tab or for another user, you see that. Select **Continue here** to take it over: the page waits until the import has made no progress there for 60 seconds (or was paused there with **Pause**), then continues here. **Pause** stops waiting. Reloading the page does not count as another tab.
 - Short network or server problems are retried automatically.
 - If another import was started and has not finished (for example a run confirmed by two users at almost the same time), the import waits before it starts. The page names the other import with a button to open it, and enables **Continue** when that import is finished or cancelled. An import that has started always continues, also after a pause.

@@ -122,8 +122,15 @@ export const ProcessPanel = ({
         data-calls={snapshot.calls}
         data-answers={snapshot.processedCalls}
       >
-        {snapshot.status === 'pausing' ? t('contactsimporter.process.pausing') : active ? runningText : ''}
+        {snapshot.status === 'running' || waitingForOther ? runningText : ''}
       </Text>
+
+      {/* The call in flight finishes first (the server stops at its next batch): say so, it is not stuck. */}
+      {snapshot.status === 'pausing' && (
+        <div data-testid={TestIds.processPausing}>
+          <NotificationBarInfo>{t('contactsimporter.process.pausing')}</NotificationBarInfo>
+        </div>
+      )}
 
       {waitingForOther && (
         <div data-testid={TestIds.processWaitingForOther}>
@@ -199,9 +206,10 @@ export const ProcessPanel = ({
       <Inline spacing={Spacing.M}>
         {active && (
           <Button
-            label={t('contactsimporter.process.pause')}
+            label={snapshot.status === 'pausing' ? t('contactsimporter.process.pausingbutton') : t('contactsimporter.process.pause')}
             color={ButtonColor.Secondary}
             disabled={snapshot.status === 'pausing'}
+            inProgress={snapshot.status === 'pausing'}
             dataTestId={testId(TestIds.processPause)}
             onClick={view.pause}
           />

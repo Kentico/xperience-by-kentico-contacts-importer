@@ -90,7 +90,9 @@ const Analyzing = ({ execute, view, notice, onBackToOptions, renderActions, onRe
     phase: 'analyze',
     execute,
     initialProgress: progressFor('analyze', view.progress),
+    // Continues by itself unless a user paused it with Pause (then it waits for Continue).
     autoStart: true,
+    pausedByUser: view.status.pausedByUser,
   });
   const finished: FinishReason | null = loop.snapshot.status === 'finished' ? loop.snapshot.finishReason : null;
 

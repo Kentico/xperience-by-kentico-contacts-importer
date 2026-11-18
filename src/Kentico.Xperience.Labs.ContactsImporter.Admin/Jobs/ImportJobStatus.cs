@@ -89,6 +89,14 @@ internal sealed record ImportJobStatus
     /// <summary>User whose request started the current phase; <c>null</c> when not known.</summary>
     public int? PhaseStartedByUserId { get; init; }
 
+    /// <summary>
+    /// The user paused the analysis or the Run with Pause (<see cref="ImportJobStateMachine.TryPauseByDriver"/>): the
+    /// import stays paused when it is opened again, until someone continues it. Cleared by the next processing call that
+    /// gets the driver role (also a take over) and by every state change (finished, cancelled, reset to Uploaded).
+    /// An import paused any other way (tab closed, computer asleep, network lost) does not have it and continues on open.
+    /// </summary>
+    public bool PausedByUser { get; init; }
+
     /// <summary>The status with <paramref name="error"/> as <see cref="Error"/> and <see cref="ErrorArguments"/>.</summary>
     public ImportJobStatus WithError(ImportMessage? error) =>
         this with { Error = error?.Key, ErrorArguments = error is { Arguments.Count: > 0 } ? error.Arguments : null };

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { ProcessLoop, storageTokenStore } from '../process/process-loop';
+import { ProcessLoop, initialSnapshot, storageTokenStore } from '../process/process-loop';
 import type { LoopSnapshot } from '../process/process-loop';
 import { acquireTabLock } from '../process/tab-lock';
 import type { TabLock } from '../process/tab-lock';
@@ -28,8 +28,13 @@ export interface UseProcessLoopOptions {
   readonly phase: ProcessPhase;
   readonly execute: ExecuteCommand;
   readonly initialProgress: ProgressDto | null;
-  /** Start as soon as the step shows. */
+  /** Start as soon as the step shows (not when the import was paused with Pause, see pausedByUser). */
   readonly autoStart: boolean;
+  /**
+   * A user paused the import with Pause (GET_JOB status pausedByUser): it stays paused until the user selects
+   * Continue, which takes the import over when another tab or user paused it.
+   */
+  readonly pausedByUser?: boolean;
 }
 
 const IDLE_RATE: RateEstimate = { ratePerSecond: 0, etaSeconds: null };
@@ -38,24 +43,12 @@ const IDLE_RATE: RateEstimate = { ratePerSecond: 0, etaSeconds: null };
  * Thin React wrapper of `ProcessLoop`: one loop per mounted step, disposed on unmount. The driver
  * token is kept in session storage, so a reload of the tab continues as the same driver.
  */
-export function useProcessLoop({ jobId, phase, execute, initialProgress, autoStart }: UseProcessLoopOptions): ProcessLoopView {
+export function useProcessLoop({ jobId, phase, execute, initialProgress, autoStart, pausedByUser = false }: UseProcessLoopOptions): ProcessLoopView {
   const loopRef = useRef<ProcessLoop | null>(null);
   const lockRef = useRef<TabLock | null>(null);
   const estimatorRef = useRef(new RateEstimator(60_000));
-  const initialRef = useRef({ initialProgress, autoStart });
-  const [snapshot, setSnapshot] = useState<LoopSnapshot>(() => ({
-    status: 'idle',
-    phase,
-    progress: initialProgress,
-    pauseReason: null,
-    finishReason: null,
-    retry: null,
-    error: null,
-    calls: 0,
-    processedCalls: 0,
-    lastAnswerAtMs: null,
-    waitingForOther: false,
-  }));
+  const initialRef = useRef({ initialProgress, autoStart: shouldAutoStart(autoStart, pausedByUser), pausedByUser });
+  const [snapshot, setSnapshot] = useState<LoopSnapshot>(() => initialSnapshot(phase, initialProgress, pausedByUser));
   const [rate, setRate] = useState<RateEstimate>(IDLE_RATE);
   const [lockedByOtherTab, setLockedByOtherTab] = useState(false);
   const [waitingForLock, setWaitingForLock] = useState(false);
@@ -69,11 +62,13 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
           return;
         }
 
+        // Continue of an import a user paused before this page loaded takes it over (ProcessLoop.startTakesOver).
+        const takesOver = takeOver || loop.startTakesOver;
         if (!lockRef.current) {
           const name = `contacts-importer:${jobId}`;
           let lock = await acquireTabLock(name);
           // "Continue here" while another tab holds the lock: wait for it to let go.
-          if (!lock && takeOver && loopRef.current === loop && !lockWaitRef.current) {
+          if (!lock && takesOver && loopRef.current === loop && !lockWaitRef.current) {
             const waiting = new AbortController();
             lockWaitRef.current = waiting;
             setLockedByOtherTab(false);
@@ -101,7 +96,7 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
         const estimator = estimatorRef.current;
         estimator.reset();
         estimator.add(Date.now(), loop.snapshot.progress?.rowsProcessed ?? 0);
-        loop.start({ takeOver });
+        loop.start({ takeOver: takesOver });
       })();
     },
     [jobId],
@@ -114,6 +109,7 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
     const loop = new ProcessLoop({
       phase,
       initialProgress: initialRef.current.initialProgress,
+      pausedByUser: initialRef.current.pausedByUser,
       tokens: driverTokenStore(jobId),
       call: (request, signal) => execute<ProgressDto, ProcessNextRequest>(Commands.ProcessNext, request, signal),
       release: (driverToken) => execute<ImportActionResponse, PauseProcessingRequest>(Commands.PauseProcessing, { driverToken }),
@@ -122,6 +118,11 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
           calls = next.calls;
           estimator.add(Date.now(), next.progress.rowsProcessed);
           setRate(estimator.estimate(next.progress.rowsTotal));
+        }
+        // A paused or finished tab no longer processes: another tab of this browser may continue the import.
+        if ((next.status === 'paused' || next.status === 'finished') && loopRef.current === loop) {
+          lockRef.current?.release();
+          lockRef.current = null;
         }
 
         setSnapshot(next);
@@ -148,6 +149,11 @@ export function useProcessLoop({ jobId, phase, execute, initialProgress, autoSta
   }, []);
 
   return { snapshot, rate, lockedByOtherTab, waitingForOther: waitingForLock || snapshot.waitingForOther, start, pause };
+}
+
+/** Whether the step starts processing as soon as it shows: never after a Pause (the user selects Continue). */
+export function shouldAutoStart(autoStart: boolean, pausedByUser: boolean): boolean {
+  return autoStart && !pausedByUser;
 }
 
 /** Driver token of this tab for the import, kept in session storage (survives a reload of the tab). */

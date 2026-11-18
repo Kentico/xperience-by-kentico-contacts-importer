@@ -109,7 +109,7 @@ class FakeServer {
           return { code: 'inconsistent', message: 'Chunks do not match.', missingChunks: [], status: null } satisfies CompleteUploadResponse as TResult;
         }
 
-        const status: StatusDto = { state: 'Uploaded', chunks: this.storedChunks, profile, updatedUtc: '2026-11-16T12:00:00Z', error: null };
+        const status: StatusDto = { state: 'Uploaded', pausedByUser: false, chunks: this.storedChunks, profile, updatedUtc: '2026-11-16T12:00:00Z', error: null };
 
         return { code: 'ok', message: null, missingChunks: [], status } satisfies CompleteUploadResponse as TResult;
       }

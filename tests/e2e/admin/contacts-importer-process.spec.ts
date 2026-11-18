@@ -100,6 +100,43 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     await contacts.expectContact(rows[total - 1]);
   });
 
+  test("an import paused with Pause stays paused when it is opened again", async ({ page, importsList, importPage, uniqueFile }) => {
+    test.setTimeout(240_000);
+    const runId = newRunId();
+    const total = 1500;
+    const rows = testContacts(runId, 1, total);
+    const file = await uniqueFile("contacts-pause.csv", contactsCsv(rows));
+
+    await importsList.goto();
+    const jobId = await importsList.startNewImport();
+    await uploadToOptions(importPage, file.path, total);
+    await importPage.saveOptions();
+    await importPage.expectAnalyzed();
+    await importPage.runImport();
+    await importPage.expectStep("run");
+    await expect.poll(() => importPage.rowsProcessed(), { timeout: 60_000 }).toBeGreaterThan(0);
+
+    await importPage.pauseProcessing();
+    const pausedAt = await importPage.rowsProcessed();
+    expect(pausedAt).toBeLessThan(total);
+
+    // Reload: no leave question (nothing runs), and the import waits for Continue instead of continuing by itself
+    await page.reload();
+    await expect(page).toHaveURL(new RegExp(`${jobId}$`));
+    await importPage.expectStep("run");
+    await importPage.expectProcessStatus("paused");
+    await expect(importPage.processStatus).toHaveAttribute("data-pause-reason", "user");
+    await expect(page.getByTestId("contacts-importer-process-continue")).toBeVisible();
+    await page.waitForTimeout(3_000);
+    await expect(importPage.processStatus).toHaveAttribute("data-calls", "0");
+    expect(await importPage.rowsProcessed()).toBe(pausedAt);
+
+    await importPage.continueProcessing();
+    await importPage.expectResults("Completed");
+    await importPage.expectCount("actual-rows", total);
+    await importPage.expectCount("actual-created", total);
+  });
+
   test("cancels a running import and keeps what was imported", async ({ page, importsList, importPage, uniqueFile }) => {
     test.setTimeout(240_000);
     const runId = newRunId();

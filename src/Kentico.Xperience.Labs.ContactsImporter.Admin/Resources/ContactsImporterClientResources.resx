@@ -484,7 +484,10 @@
     <value>Pause</value>
   </data>
   <data name="contactsimporter.process.pausing" xml:space="preserve">
-    <value>Pausing after the current step…</value>
+    <value>Pausing after the current part. This can take a few seconds.</value>
+  </data>
+  <data name="contactsimporter.process.pausingbutton" xml:space="preserve">
+    <value>Pausing…</value>
   </data>
   <data name="contactsimporter.process.continue" xml:space="preserve">
     <value>Continue</value>
@@ -502,7 +505,7 @@
     <value>Last progress: {{time}}.</value>
   </data>
   <data name="contactsimporter.process.paused.user" xml:space="preserve">
-    <value>Paused. Rows processed so far are kept.</value>
+    <value>Paused. Rows processed so far are kept. Select Continue to go on.</value>
   </data>
   <data name="contactsimporter.process.paused.network" xml:space="preserve">
     <value>Paused: the server could not be reached. Check your connection, then continue.</value>

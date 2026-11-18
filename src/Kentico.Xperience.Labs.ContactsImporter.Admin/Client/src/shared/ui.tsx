@@ -56,6 +56,7 @@ export const TestIds = {
   processPause: 'contacts-importer-process-pause',
   processContinue: 'contacts-importer-process-continue',
   processWaitingForOther: 'contacts-importer-process-waiting-for-other',
+  processPausing: 'contacts-importer-process-pausing',
   reviewBack: 'contacts-importer-review-back',
   reviewRun: 'contacts-importer-review-run',
   /** Review: another import runs (`data-other-job-id`); Run waits for it. */

@@ -460,6 +460,12 @@ internal sealed record ImportStatusDto
     public required string State { get; init; }
 
     /// <summary>
+    /// The job is <c>Paused</c> because a user selected Pause (<see cref="ImportJobStatus.PausedByUser"/>): the client
+    /// does not continue it by itself when the import is opened, the user selects Continue.
+    /// </summary>
+    public bool PausedByUser { get; init; }
+
+    /// <summary>
     /// Stored chunks in index order: from the chunk files while the job is Uploading (gaps possible),
     /// from <c>status.json</c> afterwards.
     /// </summary>

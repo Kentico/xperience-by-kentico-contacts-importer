@@ -287,6 +287,8 @@ export interface StoredChunkDto {
 
 export interface StatusDto {
   state: JobState;
+  /** `Paused` because a user selected Pause: the import is not continued by itself when it is opened again. */
+  pausedByUser: boolean;
   chunks: StoredChunkDto[];
   profile: ImportProfile;
   updatedUtc: string;

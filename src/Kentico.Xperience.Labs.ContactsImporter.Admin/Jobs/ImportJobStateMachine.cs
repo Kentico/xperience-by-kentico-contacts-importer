@@ -64,7 +64,8 @@ internal static class ImportJobStateMachine
             return false;
         }
 
-        updated = status with { State = to, UpdatedUtc = utcNow };
+        // A deliberate pause holds only while the job stays in the state it was paused in.
+        updated = status with { State = to, UpdatedUtc = utcNow, PausedByUser = false };
         updated = to switch
         {
             ImportJobState.Uploaded => ResetProcessing(updated),
@@ -255,6 +256,8 @@ internal static class ImportJobStateMachine
     /// (<paramref name="driverToken"/>) may do this, and only while the job is Analyzing or Running. The stored state and
     /// the driver token stay: the same tab continues without a take over; another tab or user takes over as from any
     /// paused job. A Paused Run still holds the one unfinished Run (<see cref="IsUnfinishedRun"/>).
+    /// Sets <see cref="ImportJobStatus.PausedByUser"/>, so the import does not continue by itself when it is opened again;
+    /// the next call that gets the driver role (<see cref="AcquireDriver"/>) clears it.
     /// </summary>
     /// <param name="status">Current status.</param>
     /// <param name="driverToken">Driver token of the caller.</param>
@@ -271,7 +274,9 @@ internal static class ImportJobStateMachine
             return false;
         }
 
-        updated = status.HeartbeatUtc is null ? status : status with { HeartbeatUtc = null, UpdatedUtc = utcNow };
+        updated = status.HeartbeatUtc is null && status.PausedByUser
+            ? status
+            : status with { HeartbeatUtc = null, PausedByUser = true, UpdatedUtc = utcNow };
         return true;
     }
 
@@ -290,7 +295,7 @@ internal static class ImportJobStateMachine
     private static ImportDriverResult AcquiredCall(ImportJobStatus status, string token, string callId, string? instanceName, DateTime utcNow) =>
         new(
             ImportDriverOutcome.Acquired,
-            status with { DriverToken = token, DriverCallId = callId, HeartbeatUtc = utcNow, LastInstance = instanceName, UpdatedUtc = utcNow },
+            status with { DriverToken = token, DriverCallId = callId, HeartbeatUtc = utcNow, PausedByUser = false, LastInstance = instanceName, UpdatedUtc = utcNow },
             token,
             callId);
 

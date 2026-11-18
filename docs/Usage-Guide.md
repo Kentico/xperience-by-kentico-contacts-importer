@@ -134,7 +134,7 @@ The importer is built for speed on large files. Some behavior is intentional and
 
 ### Running imports
 
-- **The browser drives the import.** Keep the tab open. If it is closed, the computer sleeps, or the network is lost, the import pauses and continues from where it stopped when the import is opened again.
+- **The browser drives the import.** Keep the tab open. If it is closed, the computer sleeps, or the network is lost, the import pauses and continues from where it stopped when the import is opened again. An import paused with **Pause** is the exception: it stays paused until someone selects **Continue**. **Pause** waits for the batch in progress, so it can take a few seconds.
 - **A cancelled import stops after the batch it is working on.** That batch is written and in the row report, but the results can undercount by up to one batch.
 - **The import slows down when the database is busy.** It writes smaller batches when batches take longer than `TargetBatchSeconds` or the database times out, so the live site keeps working on small database plans; it speeds up again when the database is free. Settings: `AdaptiveBatchSize`, `TargetBatchSeconds`, `MinBatchSize` ([Options](./Setup.md#options)).
 - **Do not import during deployments.** The administration is not available while the application is read-only; run the import again after the deployment. Runs are safe to repeat.

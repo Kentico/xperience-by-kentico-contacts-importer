@@ -51,9 +51,12 @@ export const RunStep = ({ execute, view, onReload, onOpenImport }: RunStepProps)
     phase: 'execute',
     execute,
     initialProgress: progressFor('execute', view.progress),
+    // Continues by itself unless a user paused it with Pause (then it waits for Continue).
     autoStart: true,
+    pausedByUser: view.status.pausedByUser,
   });
   const { status } = loop.snapshot;
+  // Only while it runs or is pausing: a paused import (also one opened paused) can be left without a question.
   const active = status === 'running' || status === 'pausing';
   // The server refused to start the Run (PLAN D60): show the other import and watch it until it ends.
   const blockedByOther = status === 'paused' && loop.snapshot.pauseReason === 'otherImportRunning';

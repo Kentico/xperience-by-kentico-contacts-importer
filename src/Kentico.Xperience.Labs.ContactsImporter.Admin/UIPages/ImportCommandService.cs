@@ -1348,21 +1348,28 @@ internal sealed class ImportCommandService(
         return ChunkRejected(reason, texts.Get(ImportTextKeys.ChunkRejected(reason)), result.RowNumber);
     }
 
-    private ImportStatusDto ToDto(Guid jobId, ImportJobStatus status) => new()
+    private ImportStatusDto ToDto(Guid jobId, ImportJobStatus status)
     {
-        State = EffectiveState(status, UtcNow()).ToString(),
-        Chunks = ToDto(status.State == ImportJobState.Uploading ? store.ListChunks(jobId) : status.Chunks),
-        Profile = new ImportProfileDto
+        var state = EffectiveState(status, UtcNow());
+
+        return new()
         {
-            RowsRead = status.Profile.RowsRead,
-            RowsValid = status.Profile.RowsValid,
-            RowsRejected = status.Profile.RowsRejected,
-            LikelyDuplicates = status.Profile.LikelyDuplicates,
-            ChunkCount = status.Profile.ChunkCount,
-        },
-        UpdatedUtc = status.UpdatedUtc,
-        Error = status.ErrorMessage is { } error ? texts.Get(error) : null,
-    };
+            State = state.ToString(),
+            // Only while it shows as Paused: a driver that still works on the job (fresh heartbeat) is not paused.
+            PausedByUser = status.PausedByUser && state == ImportJobState.Paused,
+            Chunks = ToDto(status.State == ImportJobState.Uploading ? store.ListChunks(jobId) : status.Chunks),
+            Profile = new ImportProfileDto
+            {
+                RowsRead = status.Profile.RowsRead,
+                RowsValid = status.Profile.RowsValid,
+                RowsRejected = status.Profile.RowsRejected,
+                LikelyDuplicates = status.Profile.LikelyDuplicates,
+                ChunkCount = status.Profile.ChunkCount,
+            },
+            UpdatedUtc = status.UpdatedUtc,
+            Error = status.ErrorMessage is { } error ? texts.Get(error) : null,
+        };
+    }
 
     private SaveConfigResponse SaveFailed(string code, string textKey) => SaveFailed(code, new ImportMessage(textKey));
 

@@ -4,6 +4,7 @@ import type { JobState } from '../shared/commands';
 
 import { STEPS, stepForState, stepViews } from './model';
 import type { Step, StepContext, StepState } from './model';
+import { shouldAutoStart } from './useProcessLoop';
 
 /** `state` of every step, in step order, with `*` after the clickable ones. */
 function header(context: StepContext): string {
@@ -89,5 +90,13 @@ describe('stepViews', () => {
         }
       }
     }
+  });
+});
+
+describe('shouldAutoStart', () => {
+  it('continues the check or the import by itself, unless a user paused it with Pause', () => {
+    expect(shouldAutoStart(true, false)).toBe(true);
+    expect(shouldAutoStart(true, true)).toBe(false);
+    expect(shouldAutoStart(false, false)).toBe(false);
   });
 });

@@ -609,6 +609,85 @@ internal class ImportProcessCommandTests
     }
 
     [Test]
+    public void PauseProcessing_Keeps_The_Import_Paused_By_The_User_Until_A_Driver_Continues()
+    {
+        temp.Options.Value.ProcessingTimeBudgetSeconds = 0;
+        Upload(rows: 25);
+        Drive("analyze");
+        Confirm();
+        var first = service.ProcessNext(id, Next("execute"), UserId);
+        bool beforePause = service.GetJob(id).Status!.PausedByUser;
+
+        var paused = service.PauseProcessing(id, new PauseProcessingRequest { DriverToken = first.DriverToken });
+        var reopened = service.GetJob(id);
+        bool stored = temp.Store.ReadStatus(jobId)!.PausedByUser;
+        var otherTab = service.ProcessNext(id, Next("execute"), UserId);
+        bool afterRefusedCall = service.GetJob(id).Status!.PausedByUser;
+        var takenOver = service.ProcessNext(id, Next("execute", takeOver: true), UserId);
+        var continued = service.GetJob(id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(beforePause, Is.False);
+            Assert.That(paused.Status!.PausedByUser, Is.True);
+            Assert.That(reopened.Status!.State, Is.EqualTo("Paused"));
+            Assert.That(reopened.Status.PausedByUser, Is.True, "opened again, the import stays paused");
+            Assert.That(stored, Is.True);
+            Assert.That(otherTab.Outcome, Is.EqualTo("staleRequiresTakeOver"));
+            Assert.That(afterRefusedCall, Is.True);
+            Assert.That(takenOver.Outcome, Is.EqualTo("processed"));
+            Assert.That(continued.Status!.State, Is.EqualTo("Running"));
+            Assert.That(continued.Status.PausedByUser, Is.False, "continuing clears the pause");
+            Assert.That(temp.Store.ReadStatus(jobId)!.PausedByUser, Is.False);
+        });
+    }
+
+    [Test]
+    public void PausedByUser_Is_Cleared_When_The_Analysis_Finishes_Or_The_Import_Is_Cancelled()
+    {
+        temp.Options.Value.ProcessingTimeBudgetSeconds = 0;
+        Upload(rows: 25);
+        var analysis = service.ProcessNext(id, Next("analyze"), UserId);
+        service.PauseProcessing(id, new PauseProcessingRequest { DriverToken = analysis.DriverToken });
+        Drive("analyze", analysis.DriverToken);
+        bool afterAnalysis = temp.Store.ReadStatus(jobId)!.PausedByUser;
+        Confirm();
+        var run = service.ProcessNext(id, Next("execute"), UserId);
+        service.PauseProcessing(id, new PauseProcessingRequest { DriverToken = run.DriverToken });
+        bool beforeCancel = temp.Store.ReadStatus(jobId)!.PausedByUser;
+
+        var cancelled = service.Cancel(id, UserId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(afterAnalysis, Is.False);
+            Assert.That(beforeCancel, Is.True);
+            Assert.That(cancelled.Status!.State, Is.EqualTo("Cancelled"));
+            Assert.That(cancelled.Status.PausedByUser, Is.False);
+            Assert.That(temp.Store.ReadStatus(jobId)!.PausedByUser, Is.False);
+        });
+    }
+
+    [Test]
+    public void Job_Status_Serializes_PausedByUser_For_The_Client()
+    {
+        temp.Options.Value.ProcessingTimeBudgetSeconds = 0;
+        Upload(rows: 25);
+        var first = service.ProcessNext(id, Next("analyze"), UserId);
+        service.PauseProcessing(id, new PauseProcessingRequest { DriverToken = first.DriverToken });
+
+        var json = System.Text.Json.Nodes.JsonNode.Parse(
+            System.Text.Json.JsonSerializer.Serialize(service.GetJob(id).Status, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)))!.AsObject();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(json.Select(p => p.Key), Is.EqualTo(new[] { "state", "pausedByUser", "chunks", "profile", "updatedUtc", "error" }));
+            Assert.That(json["state"]!.GetValue<string>(), Is.EqualTo("Paused"));
+            Assert.That(json["pausedByUser"]!.GetValue<bool>(), Is.True);
+        });
+    }
+
+    [Test]
     public void PauseProcessing_Refuses_Invalid_Requests_And_Jobs_That_Are_Not_Processed()
     {
         Upload();

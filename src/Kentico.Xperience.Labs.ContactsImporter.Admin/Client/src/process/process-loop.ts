@@ -11,7 +11,8 @@ import { RetryExhaustedError, backoffDelay, sleep as defaultSleep, withRetry } f
  * - A failed request (network, server error) is retried with backoff; an answered call is never repeated.
  * - `pause()` lets the call in flight finish (the server stops at its next batch boundary anyway)
  *   and sends no further call. Only `dispose()` aborts a request. Then `release` tells the server
- *   (`PAUSE_PROCESSING`), so the import shows as paused at once for everyone.
+ *   (`PAUSE_PROCESSING`), so the import shows as paused at once for everyone. The server keeps that pause
+ *   (`pausedByUser`): a loop made for such an import starts paused and continues only on `start()`.
  * - The driver token is kept in a `TokenStore`, so a reloaded tab continues as the same driver. The
  *   loop makes the token and stores it before its first call (and before a take over); the server
  *   adopts it, so a reload while that call runs does not lose it.
@@ -116,6 +117,12 @@ export interface ProcessLoopOptions {
   onChange: (snapshot: LoopSnapshot) => void;
   /** Progress known before the first call (from `GET_JOB`). */
   initialProgress?: ProgressDto | null;
+  /**
+   * A user paused the import with Pause before this loop was made (`GET_JOB` `pausedByUser`: reload, other tab or user).
+   * The loop starts as paused by the user and waits for Continue; that first start takes the import over, because the
+   * stored token may not be the driver's (the server accepts a take over of a paused import at once).
+   */
+  pausedByUser?: boolean;
   /** Retry of failed requests. Default 6 attempts, 1 s doubling up to 30 s. */
   network?: Partial<BackoffOptions>;
   /** Retry after `transientError` / `busy` answers. Default 8 attempts, 2 s doubling up to 30 s. */
@@ -163,6 +170,8 @@ export class ProcessLoop {
   private active: Promise<void> | null = null;
   private pauseRequested = false;
   private disposed = false;
+  /** Paused by a user before this loop was made: the first start takes the import over. */
+  private resumeTakesOver: boolean;
   private current: LoopSnapshot;
 
   constructor(options: ProcessLoopOptions) {
@@ -171,23 +180,17 @@ export class ProcessLoop {
     this.server = { ...DEFAULT_SERVER_RETRY, ...options.server };
     this.now = options.now ?? Date.now;
     this.sleep = options.sleep ?? defaultSleep;
-    this.current = {
-      status: 'idle',
-      phase: options.phase,
-      progress: options.initialProgress ?? null,
-      pauseReason: null,
-      finishReason: null,
-      retry: null,
-      error: null,
-      calls: 0,
-      processedCalls: 0,
-      lastAnswerAtMs: null,
-      waitingForOther: false,
-    };
+    this.resumeTakesOver = options.pausedByUser ?? false;
+    this.current = initialSnapshot(options.phase, options.initialProgress ?? null, this.resumeTakesOver);
   }
 
   get snapshot(): LoopSnapshot {
     return this.current;
+  }
+
+  /** The next `start()` takes the import over (it was paused by a user before this loop was made). */
+  get startTakesOver(): boolean {
+    return this.resumeTakesOver;
   }
 
   /** A call is in flight or about to be sent. */
@@ -205,10 +208,12 @@ export class ProcessLoop {
       return false;
     }
 
+    const takeOver = (start.takeOver ?? false) || this.resumeTakesOver;
+    this.resumeTakesOver = false;
     this.pauseRequested = false;
     this.waits = new AbortController();
     this.update({ status: 'running', pauseReason: null, retry: null, error: null, waitingForOther: false });
-    const run = this.run(start.takeOver ?? false).finally(() => {
+    const run = this.run(takeOver).finally(() => {
       if (this.active === run) {
         this.active = null;
       }
@@ -492,6 +497,26 @@ export class ProcessLoop {
       this.options.onChange(this.current);
     }
   }
+}
+
+/**
+ * Snapshot of a loop before its first start: idle, or paused by the user when a user paused the import with Pause
+ * before the loop was made (it waits for Continue).
+ */
+export function initialSnapshot(phase: ProcessPhase, progress: ProgressDto | null, pausedByUser = false): LoopSnapshot {
+  return {
+    status: pausedByUser ? 'paused' : 'idle',
+    phase,
+    progress,
+    pauseReason: pausedByUser ? 'user' : null,
+    finishReason: null,
+    retry: null,
+    error: null,
+    calls: 0,
+    processedCalls: 0,
+    lastAnswerAtMs: null,
+    waitingForOther: false,
+  };
 }
 
 /** `TokenStore` over a `Storage` (session storage); storage errors are ignored (the token is then per page load). */

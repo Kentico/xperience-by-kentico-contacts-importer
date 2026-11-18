@@ -4,7 +4,7 @@ import type { AggregatesDto, JobState, ProcessNextRequest, ProcessOutcome, Progr
 
 import { NO_COUNTS } from '../import/model';
 
-import { ProcessLoop, storageTokenStore } from './process-loop';
+import { ProcessLoop, initialSnapshot, storageTokenStore } from './process-loop';
 import type { LoopSnapshot, ProcessLoopOptions, TokenStore } from './process-loop';
 
 const ZERO: AggregatesDto = NO_COUNTS;
@@ -580,5 +580,62 @@ describe('storageTokenStore', () => {
       store.set(null);
       expect(store.get()).toBeNull();
     }
+  });
+});
+
+describe('ProcessLoop of an import a user paused with Pause', () => {
+  it('starts paused by the user and sends nothing until Continue', () => {
+    const h = harness([], { pausedByUser: true });
+
+    expect(h.loop.snapshot).toMatchObject({ status: 'paused', pauseReason: 'user', calls: 0 });
+    expect(h.loop.startTakesOver).toBe(true);
+    expect(h.requests).toEqual([]);
+    expect(initialSnapshot('execute', null, true)).toEqual(h.loop.snapshot);
+    expect(initialSnapshot('analyze', null)).toMatchObject({ status: 'idle', pauseReason: null });
+  });
+
+  it('takes the import over on Continue (once), with a new token', async () => {
+    const tokens = memoryTokens('stored-token');
+    const h = harness([answer('processed', 10), answer('phaseFinished', 100, { state: 'Completed' })], { pausedByUser: true, tokens });
+
+    expect(h.loop.start()).toBe(true);
+    expect(h.loop.startTakesOver).toBe(false);
+    await h.loop.whenIdle();
+
+    expect(h.requests).toEqual([
+      { phase: 'execute', driverToken: 'new-1', takeOver: true },
+      { phase: 'execute', driverToken: 'token-1', takeOver: false },
+    ]);
+    expect(h.loop.snapshot).toMatchObject({ status: 'finished', finishReason: 'phaseFinished' });
+  });
+
+  it('continues without a take over after a pause in the same page', async () => {
+    let second!: (value: ProgressDto) => void;
+    const h = harness([
+      answer('processed', 10),
+      () =>
+        new Promise<ProgressDto>((resolve) => {
+          second = resolve;
+        }),
+      answer('processed', 30),
+      answer('phaseFinished', 100, { state: 'Completed' }),
+    ]);
+
+    h.loop.start();
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    h.loop.pause();
+    expect(h.loop.snapshot.status).toBe('pausing');
+    second(answer('processed', 20));
+    await h.loop.whenIdle();
+    expect(h.loop.snapshot).toMatchObject({ status: 'paused', pauseReason: 'user' });
+    expect(h.loop.startTakesOver).toBe(false);
+
+    h.loop.start();
+    await h.loop.whenIdle();
+
+    expect(h.requests.map((r) => r.takeOver)).toEqual([false, false, false, false]);
+    expect(h.loop.snapshot.status).toBe('finished');
   });
 });

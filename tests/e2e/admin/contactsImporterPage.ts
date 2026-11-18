@@ -414,6 +414,13 @@ export class ImportPage {
     return this.page.getByTestId("contacts-importer-attestation-statement");
   }
 
+  // Pause of the check or the import: "Pausing…" until the call in flight is answered, then paused by the user
+  async pauseProcessing(): Promise<void> {
+    await this.page.getByTestId("contacts-importer-process-pause").click({ timeout: 5_000 });
+    await this.expectProcessStatus("paused");
+    await expect(this.processStatus).toHaveAttribute("data-pause-reason", "user");
+  }
+
   async continueProcessing(): Promise<void> {
     await this.page.getByTestId("contacts-importer-process-continue").click({ timeout: 5_000 });
   }

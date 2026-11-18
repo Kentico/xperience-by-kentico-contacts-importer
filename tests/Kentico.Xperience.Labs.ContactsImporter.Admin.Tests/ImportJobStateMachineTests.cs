@@ -356,6 +356,46 @@ internal class ImportJobStateMachineTests
         });
     }
 
+    [TestCase(ImportJobState.Analyzing)]
+    [TestCase(ImportJobState.Running)]
+    public void Pause_By_The_Driver_Is_Kept_Until_A_Call_Gets_The_Driver_Role(ImportJobState state)
+    {
+        var status = Status(state) with { DriverToken = "mine", HeartbeatUtc = now.AddSeconds(-1) };
+
+        ImportJobStateMachine.TryPauseByDriver(status, "mine", now, out var paused);
+        bool pausedAgain = ImportJobStateMachine.TryPauseByDriver(paused, "mine", now.AddSeconds(5), out var pausedTwice);
+        var refused = ImportJobStateMachine.AcquireDriver(paused, null, false, null, now, stale);
+        var resumed = ImportJobStateMachine.AcquireDriver(paused, "mine", false, null, now, stale);
+        var takenOver = ImportJobStateMachine.AcquireDriver(paused, null, true, null, now, stale);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(status.PausedByUser, Is.False);
+            Assert.That(paused.PausedByUser, Is.True);
+            Assert.That(pausedAgain, Is.True);
+            Assert.That(pausedTwice, Is.SameAs(paused), "a repeated pause changes nothing");
+            Assert.That(refused.Status.PausedByUser, Is.True, "a call that does not get the driver role keeps the pause");
+            Assert.That(resumed.Status.PausedByUser, Is.False, "the pausing tab continues");
+            Assert.That(takenOver.Status.PausedByUser, Is.False, "another tab or user takes over");
+        });
+    }
+
+    [TestCase(ImportJobState.Analyzing, ImportJobState.Analyzed)]
+    [TestCase(ImportJobState.Analyzing, ImportJobState.Uploaded)]
+    [TestCase(ImportJobState.Analyzing, ImportJobState.Cancelled)]
+    [TestCase(ImportJobState.Running, ImportJobState.Completed)]
+    [TestCase(ImportJobState.Running, ImportJobState.Failed)]
+    [TestCase(ImportJobState.Running, ImportJobState.Cancelled)]
+    public void Pause_By_The_Driver_Is_Cleared_By_A_State_Change(ImportJobState from, ImportJobState to)
+    {
+        var status = Status(from) with { DriverToken = "mine", HeartbeatUtc = now.AddSeconds(-1) };
+        ImportJobStateMachine.TryPauseByDriver(status, "mine", now, out var paused);
+
+        var updated = ImportJobStateMachine.Transition(paused, to, now);
+
+        Assert.That(updated.PausedByUser, Is.False);
+    }
+
     [TestCase(ImportJobState.Running, "other")]
     [TestCase(ImportJobState.Running, null)]
     [TestCase(ImportJobState.Uploaded, "mine")]
