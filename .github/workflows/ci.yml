@@ -15,30 +15,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  dotnet-format:
-    name: .Net Format Check
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: global.json
-          cache: true
-          cache-dependency-path: "**/packages.lock.json"
-
-      - name: Restore dependencies
-        run: dotnet restore Kentico.Xperience.Labs.ContactsImporter.slnx --locked-mode
-
-      - name: Run dotnet format
-        run: dotnet format Kentico.Xperience.Labs.ContactsImporter.slnx --no-restore --verify-no-changes
-
   build_and_test:
     name: Build and Test
     runs-on: ubuntu-latest
-    needs: dotnet-format
     defaults:
       run:
         shell: pwsh
@@ -103,6 +82,12 @@ jobs:
           dotnet restore `
             --locked-mode
 
+      - name: Check formatting
+        run: |
+          dotnet format `
+            --no-restore `
+            --verify-no-changes
+
       # Release build runs npm ci and npm run build for the admin client
       - name: Build Solution
         run: |
@@ -128,10 +113,10 @@ jobs:
   # Needs an Xperience license (XPERIENCE_LICENSE_KEY repository secret, and the same
   # Dependabot secret for Dependabot PRs). Without it - e.g. PRs from forks - every
   # step after checkout is skipped and the job passes.
+  # Runs in parallel with build_and_test: building here is faster than waiting for its output.
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: dotnet-format
     defaults:
       run:
         shell: pwsh
