@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
-import { expect, type Download, type Locator, type Page } from "@playwright/test";
+import { expect, type Download, type Locator, type Page, type Route } from "@playwright/test";
 import { adminBaseUrl } from "../shared/config";
 import { AdminShellPage } from "./adminShellPage";
 
@@ -93,6 +93,12 @@ export class ImportsListPage {
     await this.row(fileName).getByTestId("button-delete").click();
     await expect(this.page.getByText("Delete this import?")).toBeVisible();
   }
+}
+
+// Processing calls held by ImportPage.holdProcessingAfterProgress: `release` sends them on ("continue") or fails
+// them as if the connection dropped ("abort"); later calls go through.
+export interface ProcessingGate {
+  release(how?: "continue" | "abort"): Promise<void>;
 }
 
 // One import: File -> Map -> Upload -> Options -> Review -> Run -> Results (Client/src/import/*.tsx).
@@ -416,9 +422,68 @@ export class ImportPage {
 
   // Pause of the check or the import: "Pausing…" until the call in flight is answered, then paused by the user
   async pauseProcessing(): Promise<void> {
+    await this.requestPause();
+    await this.expectPausedByUser();
+  }
+
+  async requestPause(): Promise<void> {
     await this.page.getByTestId("contacts-importer-process-pause").click({ timeout: 5_000 });
+  }
+
+  async expectPausedByUser(): Promise<void> {
     await this.expectProcessStatus("paused");
     await expect(this.processStatus).toHaveAttribute("data-pause-reason", "user");
+  }
+
+  // Keeps an import mid-run however fast the server is: the processing calls (PROCESS_NEXT) go through until one is
+  // answered with rows processed; each call after it waits in the browser until `release`, or for `delayMs` when
+  // given (calls go on, slowly; the import stays active for other browsers). One call processes as many rows as fit
+  // in ProcessingTimeBudgetSeconds, so on a fast database (CI) a small import can finish between two looks at the
+  // page. Call before the Run starts (the check sends PROCESS_NEXT too).
+  async holdProcessingAfterProgress(delayMs?: number): Promise<ProcessingGate> {
+    let holding = false;
+    let released: "continue" | "abort" | null = null;
+    const waiting = new Set<() => void>();
+    const handler = async (route: Route): Promise<void> => {
+      if (!(route.request().postData() ?? "").includes("PROCESS_NEXT")) {
+        await route.fallback();
+        return;
+      }
+
+      if (!holding) {
+        const response = await route.fetch();
+        const body = await response.text();
+        holding = /"rowsProcessed"\s*:\s*[1-9]/.test(body);
+        await route.fulfill({ response, body });
+        return;
+      }
+
+      if (!released) {
+        await new Promise<void>((resolve) => {
+          const done = (): void => {
+            clearTimeout(timer);
+            waiting.delete(done);
+            resolve();
+          };
+          const timer = delayMs === undefined ? undefined : setTimeout(done, delayMs);
+          waiting.add(done);
+        });
+      }
+
+      // A call of a page that was reloaded or closed meanwhile is gone (errors ignored).
+      await (released === "abort" ? route.abort("connectionfailed") : route.continue()).catch(() => undefined);
+    };
+    await this.page.route("**/admin/api/cmd", handler);
+
+    return {
+      release: async (how = "continue") => {
+        released = how;
+        await this.page.unroute("**/admin/api/cmd", handler);
+        for (const done of [...waiting]) {
+          done();
+        }
+      },
+    };
   }
 
   async continueProcessing(): Promise<void> {

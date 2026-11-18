@@ -12,12 +12,18 @@ test.describe("contacts importer: step flow", () => {
     // Random notes compress badly, so the file is uploaded in several chunks (small chunks in appsettings.CI.json)
     const file = await uniqueFile("contacts-background.csv", generateContactsCsv(rows, `bg${runId}`));
 
-    // Slow the chunk uploads down, so the upload is still running when Options shows
+    // Hold the chunk uploads after the first one until the checks below are done, so the upload is still running
+    // while Options shows (the bar appears only after a short delay; a few small chunks upload in about a second)
+    let chunks = 0;
+    let releaseChunks = (): void => undefined;
+    const chunksReleased = new Promise<void>((resolve) => {
+      releaseChunks = resolve;
+    });
     await page.route("**/admin/api/cmd", async (route) => {
-      if ((route.request().postData() ?? "").includes("UPLOAD_CHUNK")) {
-        await new Promise((resolve) => setTimeout(resolve, 400));
+      if ((route.request().postData() ?? "").includes("UPLOAD_CHUNK") && ++chunks > 1) {
+        await chunksReleased;
       }
-      await route.continue();
+      await route.continue().catch(() => undefined);
     });
 
     await importsList.goto();
@@ -46,6 +52,8 @@ test.describe("contacts importer: step flow", () => {
 
     // An option chosen during the upload is kept when the upload completes
     await importPage.chooseOption("newContacts", "skip");
+    expect(chunks, "the file is uploaded in more than one chunk").toBeGreaterThan(1);
+    releaseChunks();
     await importPage.expectUploaded(rows);
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await importPage.expectStepState("upload", "locked");
@@ -158,7 +166,7 @@ test.describe("contacts importer: step flow", () => {
     await importPage.saveAndUpload();
     await importPage.expectUploaded(3);
 
-    // A finished import: Results offers the reports, deleting is on the list
+    // A finished import: Results offers the reports and Delete; this test deletes it from the list
     await importsList.goto();
     await importsList.startNewImport();
     await importPage.selectFile(finished.path);
@@ -169,7 +177,7 @@ test.describe("contacts importer: step flow", () => {
     await importPage.expectAnalyzed();
     await importPage.runImport();
     await importPage.expectResults("Completed");
-    await expect(page.getByRole("button", { name: /Delete/ })).toHaveCount(0);
+    await expect(page.getByTestId("contacts-importer-results-delete")).toBeVisible();
 
     await importsList.goto();
     await expect(importsList.cell(unfinished.name, "state")).toHaveText("Uploaded");

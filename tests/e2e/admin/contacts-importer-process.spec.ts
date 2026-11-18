@@ -5,7 +5,9 @@ import { ImportPage } from "./contactsImporterPage";
 
 // Options changes, cancel, reload and take over of the check and the import. These tests create
 // contacts; every run uses its own email addresses (e2e.{runId}.{n}@example.com). The imports are
-// long enough to interrupt because appsettings.CI.json makes the batches and the processing calls small.
+// long enough to interrupt because appsettings.CI.json makes the batches and the processing calls small, and the
+// tests that interrupt an import hold its processing calls after the first answered one (holdProcessingAfterProgress):
+// on a fast database (CI) one call of a second imports more than a thousand rows.
 
 async function uploadToOptions(importPage: ImportPage, filePath: string, rows: number): Promise<void> {
   await importPage.selectFile(filePath);
@@ -62,7 +64,7 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
   test("continues a running import after a reload", async ({ page, importsList, importPage, uniqueFile }) => {
     test.setTimeout(240_000);
     const runId = newRunId();
-    const total = 1500;
+    const total = 6000;
     const rows = testContacts(runId, 1, total);
     const file = await uniqueFile("contacts-reload.csv", contactsCsv(rows));
 
@@ -72,6 +74,7 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     await importPage.saveOptions();
     await importPage.expectAnalyzed();
     await importPage.expectCount("review-created", total);
+    const gate = await importPage.holdProcessingAfterProgress();
     await importPage.runImport();
 
     // Wait until the import is under way
@@ -79,9 +82,11 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     await expect.poll(() => importPage.rowsProcessed(), { timeout: 60_000 }).toBeGreaterThan(0);
     expect(await importPage.rowsProcessed()).toBeLessThan(total);
 
-    // Reload mid-run: the browser asks before leaving; the page comes back at the Run step and continues by itself
+    // Reload mid-run (the held call is dropped): the browser asks before leaving; the page comes back at the Run step
+    // and continues by itself
     page.on("dialog", (dialog) => void dialog.accept().catch(() => undefined));
     await page.reload();
+    await gate.release();
     await expect(page).toHaveURL(new RegExp(`${jobId}$`));
     await importPage.expectStep("run");
     await importPage.expectProcessStatus("running");
@@ -103,7 +108,7 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
   test("an import paused with Pause stays paused when it is opened again", async ({ page, importsList, importPage, uniqueFile }) => {
     test.setTimeout(240_000);
     const runId = newRunId();
-    const total = 1500;
+    const total = 6000;
     const rows = testContacts(runId, 1, total);
     const file = await uniqueFile("contacts-pause.csv", contactsCsv(rows));
 
@@ -112,11 +117,15 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     await uploadToOptions(importPage, file.path, total);
     await importPage.saveOptions();
     await importPage.expectAnalyzed();
+    const gate = await importPage.holdProcessingAfterProgress();
     await importPage.runImport();
     await importPage.expectStep("run");
     await expect.poll(() => importPage.rowsProcessed(), { timeout: 60_000 }).toBeGreaterThan(0);
 
-    await importPage.pauseProcessing();
+    // Pause waits for the call in flight (held until now), then sends no further one
+    await importPage.requestPause();
+    await gate.release();
+    await importPage.expectPausedByUser();
     const pausedAt = await importPage.rowsProcessed();
     expect(pausedAt).toBeLessThan(total);
 
@@ -149,11 +158,14 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     await uploadToOptions(importPage, file.path, total);
     await importPage.saveOptions();
     await importPage.expectAnalyzed();
+    const gate = await importPage.holdProcessingAfterProgress();
     await importPage.runImport();
     await importPage.expectStep("run");
     await expect.poll(() => importPage.rowsProcessed(), { timeout: 60_000 }).toBeGreaterThan(0);
 
+    // Cancelled while the next call is held; that call never reaches the server
     await importPage.cancelRunningImport();
+    await gate.release("abort");
     await importPage.expectResults("Cancelled");
     await expect(importPage.resultsStatus).toHaveAttribute("data-import-started", "true");
     await expect(page.getByText("Cached contact data may be outdated")).toBeVisible();
@@ -185,7 +197,7 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
   test("another browser sees a running import and takes it over when it is left", async ({ page, browser, importsList, importPage, uniqueFile }) => {
     test.setTimeout(300_000);
     const runId = newRunId();
-    const total = 3000;
+    const total = 10000;
     const rows = testContacts(runId, 1, total);
     const file = await uniqueFile("contacts-takeover.csv", contactsCsv(rows));
 
@@ -194,6 +206,8 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
     await uploadToOptions(importPage, file.path, total);
     await importPage.saveOptions();
     await importPage.expectAnalyzed();
+    // Calls 3 s apart: the import keeps running (heartbeat newer than HeartbeatStaleSeconds) without finishing
+    const gate = await importPage.holdProcessingAfterProgress(3_000);
     await importPage.runImport();
     await importPage.expectStep("run");
     await expect.poll(() => importPage.rowsProcessed(), { timeout: 60_000 }).toBeGreaterThan(0);
@@ -217,6 +231,7 @@ test.describe("contacts importer: options, cancel, reload and take over", () => 
           await route.continue();
         }
       });
+      await gate.release("abort");
       await expect(page.getByText(/Connection problem: trying again/)).toBeVisible({ timeout: 30_000 });
 
       // One "Continue here": while the first browser still counts as active this browser waits (with a notice) and asks
