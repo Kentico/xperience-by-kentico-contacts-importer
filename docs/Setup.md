@@ -95,7 +95,7 @@ There is no background worker. Files are deleted when an import ends, and by a c
 
 | Files | Deleted when |
 | --- | --- |
-| Whole import (configuration, status, uploaded parts, reports) | The marketer cancels it before Run, starts a new import instead, or selects **Delete** in the list of imports. |
+| Whole import (configuration, status, uploaded parts, reports) | The marketer cancels it before Run, or selects **Delete** on Results or in the list of imports. (**Start a new import** keeps the current import.) |
 | Uploaded parts, and the examples of changed values that Review shows (match values and contact values) | The import completes, fails or is cancelled. A new check replaces the examples. |
 | Row report without match values | `ReportRetentionDays` after the import ended. |
 | Row report with match values | `ReportWithKeysRetentionHours` after the import ended. |
@@ -110,7 +110,7 @@ The package registers a [scheduled task](https://docs.kentico.com/documentation/
 
 1. Open the **Scheduled tasks** application.
 1. Select **New scheduled task configuration**.
-1. Enter a name (for example *Contacts Importer file cleanup*) and set **Task implementation** to `Kentico.Xperience.Labs.ContactsImporter.FileCleanup`.
+1. Enter a **Scheduled task configuration name** (for example *Contacts Importer file cleanup*) and set **Task implementation** to `Kentico.Xperience.Labs.ContactsImporter.FileCleanup`.
 1. Select **Enabled** and set the **Task schedule**. Daily is a good default. A file is deleted at the first run after its limit, so with a daily schedule a report with match values can stay up to a day past `ReportWithKeysRetentionHours`; run it hourly to keep it closer.
 1. **Save**.
 

@@ -14,8 +14,8 @@ How to import contacts with the **Contacts Importer (Labs)** application. For in
 Open **Contacts Importer (Labs)** and select **New import**. An import goes through these steps:
 
 1. **File** – choose the file and check how it is read.
-2. **Map** – choose which columns to import, the contact field of each, and the field that matches existing contacts.
-3. **Upload** – the browser reads the whole file and uploads the mapped columns.
+2. **Map** – choose which columns to import, the contact field of each, and the field that matches existing contacts. **Save and upload** starts the upload.
+3. **Upload** – the browser reads the whole file and uploads the mapped columns. The upload runs in a bar next to the Options step, so you can choose the options meanwhile.
 4. **Options** – choose what happens to new and existing contacts, the recipient list, consent and the import label.
 5. **Review** – the whole file is checked against existing contacts (a dry run). Nothing is changed.
 6. **Run** – the import writes the contacts.
@@ -32,7 +32,7 @@ Supported formats:
 | CSV / TSV (`.csv`, `.tsv`, `.tab`, `.txt`) | Delimiter (comma, semicolon, tab, pipe) and encoding are detected; you can change them. Encodings: UTF-8, UTF-16, Windows-1252, Windows-1250, ISO-8859-2. The first row holds the column names, or choose **Data (columns are numbered)**. Values can be quoted with `"`. |
 | NDJSON (`.ndjson`, `.jsonl`) | One JSON object per line. Same encodings as CSV. |
 | JSON (`.json`) | One array of objects: `[ {…}, {…} ]`. |
-| Excel (`.xlsx`) | The first sheet, or the sheet you choose when the workbook has several. The first row holds the column names. Older Excel formats (`.xls`, `.xlsb`) and `.ods` are not supported: save as `.xlsx` or CSV. |
+| Excel (`.xlsx`) | The first sheet, or the sheet you choose when the workbook has several. The first row holds the column names. Other spreadsheet formats (`.xls`, `.xlsb`, `.xlsm`, `.ods`, `.numbers`) are not supported: save as `.xlsx` or CSV. |
 | Gzip (`.gz`) | A gzipped CSV, TSV, NDJSON or JSON file, for example `contacts.csv.gz`. Not for Excel files. |
 | Zip (`.zip`) | A zip with exactly one file in one of the formats above. |
 
@@ -57,23 +57,25 @@ The largest file allowed is set by the administrator (5 GB by default).
 - Fields that point to another object (country, state, contact status, owner, …) take the object's ID, not its name. A row with an ID that does not exist is skipped.
 - **Consent columns (optional)**: a **Consent given** column (yes = `y`, `yes`, `true`, `1`, `x`) and a **Consent date** column. See [Consent agreements](#consent-agreements).
 
-Changing the mapping after the upload deletes the uploaded data; the file is uploaded again.
+Once the upload has started, the File, Map and Upload steps are locked. To use another file or another mapping, start a new import.
 
 ### 3. Upload
 
 The browser reads the whole file, keeps the mapped columns, and uploads them in compressed parts. You see rows read, parts uploaded, speed and time left.
 
-- **Skipped rows**: rows without a match value, with an invalid email in the match field, a date that cannot be read, or a value that is too long. They are not uploaded. Select **Download skipped rows** for a CSV with the row number and reason (`row,reason,field,detail`). The list is built in your browser and is not sent to the server; it holds up to 100,000 rows.
+- **Skipped rows**: rows that cannot be read, rows without a match value, with an invalid email in the match field, a date that cannot be read, or a value that is too long. They are not uploaded. Select **Download skipped rows** for a CSV with the row number and reason (`row,reason,field,detail`). The list is built in your browser and is not sent to the server; it holds up to 100,000 rows.
 - **Likely duplicates**: rows whose match value probably appeared earlier in the file (an estimate; about 1 in 100 can be counted by mistake). Select **Download likely duplicates** for the list of their row numbers, to fix the file. See [Duplicate rows](#duplicate-rows).
 
-Keep the tab open. If you close it, the upload pauses. To continue, open the import and select the same file again: parts already uploaded are not sent again. If you select a different file, the uploaded data is deleted and the upload starts over.
+Keep the tab open. If you close it, the upload pauses. To continue, open the import and select the same file again: parts already uploaded are not sent again. A different file cannot continue the upload: select the file the import was started with, or cancel the import and start a new one.
+
+**Save and check the file** on the Options step is available when the upload is complete.
 
 ### 4. Options
 
 | Option | Choices (default first) |
 | --- | --- |
 | Rows that match no contact | Create a new contact / Skip the row |
-| Rows that match an existing contact | Update the contact with the values from the file / Skip the row |
+| Rows that match an existing contact | Update the contact with the values from the file / Skip the row (never change existing contacts) |
 | Empty values in the file | Keep the value the contact already has / Clear the value of the contact |
 | Rows that match several contacts | Update the most recently changed contact / Update all matching contacts / Skip the row |
 | Rows with an email address that is not valid (only when email is mapped but is not the match field) | Skip the row / Import the row without the email address |
@@ -124,6 +126,7 @@ The browser drives the import: it asks the server to process the next part again
 - **Expected and imported**: the counts of the check next to the counts of the import.
 - **Row reports**: **Download check report** and **Download import report**.
 - **Contact groups are not recalculated**: imported contacts are not added to contact groups with conditions automatically. Open the groups that should include them and recalculate them, or let their scheduled recalculation run. See [Recalculate contact groups](https://docs.kentico.com/documentation/business-users/digital-marketing/contact-groups#recalculate-contact-groups). Recipient lists are not affected.
+- **Delete** removes the import, as in the list of imports (see [Recent imports](#recent-imports)).
 - If the import was cancelled or failed, cached contact data was not refreshed. An administrator can clear the cache in the **System** application (**Overview** → **Clear cache**). See [Clear the cache](https://docs.kentico.com/documentation/developers-and-admins/development/caching#clear-the-cache).
 
 ## Recipient lists

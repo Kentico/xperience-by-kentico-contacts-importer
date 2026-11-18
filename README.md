@@ -15,6 +15,7 @@ Some behavior is intentional, for speed on large files. Details: [Limitations an
 - Clean data is expected: duplicate rows are applied in file order (last non-empty value wins). Rows without a valid match value are always skipped.
 - Reference fields (country, state, contact status, owner) take IDs, not names.
 - The browser tab drives the import: closing it pauses the import. Do not import during deployments.
+- Only one import run at a time: a confirmed run that has not ended (also when paused) blocks the runs of other imports. Checks (dry runs) are not blocked.
 - Contacts added to a recipient list get no double opt-in email. Bounce records are never changed.
 - Web farm and SaaS need shared storage for the import files; see [Setup](./docs/Setup.md#storage).
 - File size is limited (5 GB by default); request size limits and timeouts of the hosting apply.

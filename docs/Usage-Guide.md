@@ -6,7 +6,7 @@ The file is read in the browser. Only the mapped columns are uploaded, and the s
 
 ## Contents
 
-- [Setup](./Setup.md) (developers and administrators): installation, options, storage for web farm and SaaS, permissions, import label field, index for a custom match field, request limits, event log.
+- [Setup](./Setup.md) (developers and administrators): installation, options, storage for web farm and SaaS, file cleanup and the optional scheduled task, permissions, import label field, index for a custom match field, request limits, event log.
 - [Import contacts](./Importing-Contacts.md) (marketers): steps, formats, options, recipient lists, consent, reports, recent imports.
 - [Audit contact imports](#audit-contact-imports) (developers): the `AfterContactImportEvent`.
 - [Limitations and documented choices](#limitations-and-documented-choices)
