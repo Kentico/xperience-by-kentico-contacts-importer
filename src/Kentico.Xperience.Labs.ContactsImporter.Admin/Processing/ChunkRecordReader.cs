@@ -34,9 +34,19 @@ internal sealed class ImportDataException(ImportMessage userMessage, Exception? 
 /// <summary>
 /// Reads the records of one stored chunk (gzipped NDJSON, validated at upload) in file order.
 /// </summary>
+/// <remarks>
+/// Records are split on line feeds only, as <see cref="ChunkValidator"/> splits them: a carriage return (also one before
+/// the line feed) is JSON whitespace inside the record, never a record break.
+/// </remarks>
 internal sealed class ChunkRecordReader : IDisposable
 {
+    private const int BufferSize = 64 * 1024;
+
     private readonly StreamReader reader;
+    private readonly char[] buffer = new char[BufferSize];
+    private readonly StringBuilder line = new();
+    private int position;
+    private int length;
     private readonly IReadOnlyDictionary<string, int> fieldIndexes;
     private readonly int fieldCount;
     private readonly int chunkIndex;
@@ -46,7 +56,7 @@ internal sealed class ChunkRecordReader : IDisposable
     /// <param name="chunkIndex">Index of the chunk, for error messages.</param>
     public ChunkRecordReader(Stream gzippedChunk, ImportProcessingContext context, int chunkIndex)
     {
-        reader = new StreamReader(new GZipStream(gzippedChunk, CompressionMode.Decompress), Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 64 * 1024);
+        reader = new StreamReader(new GZipStream(gzippedChunk, CompressionMode.Decompress), Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: BufferSize);
         fieldIndexes = context.FieldIndexes;
         fieldCount = context.Fields.Count;
         this.chunkIndex = chunkIndex;
@@ -60,9 +70,9 @@ internal sealed class ChunkRecordReader : IDisposable
         long skipped = 0;
         try
         {
-            while (skipped < count && reader.ReadLine() is { } line)
+            while (skipped < count && ReadRecordLine() is { } record)
             {
-                if (line.Length > 0)
+                if (record.Length > 0)
                 {
                     skipped++;
                 }
@@ -84,11 +94,11 @@ internal sealed class ChunkRecordReader : IDisposable
         var records = new List<ImportRecord>(maxCount);
         try
         {
-            while (records.Count < maxCount && reader.ReadLine() is { } line)
+            while (records.Count < maxCount && ReadRecordLine() is { } record)
             {
-                if (line.Length > 0)
+                if (record.Length > 0)
                 {
-                    records.Add(Parse(line));
+                    records.Add(Parse(record));
                 }
             }
         }
@@ -101,6 +111,42 @@ internal sealed class ChunkRecordReader : IDisposable
     }
 
     public void Dispose() => reader.Dispose();
+
+    /// <summary>
+    /// Next record line without its line feed, or <c>null</c> at the end of the chunk. Unlike
+    /// <see cref="TextReader.ReadLine"/>, a carriage return stays in the line.
+    /// </summary>
+    private string? ReadRecordLine()
+    {
+        line.Clear();
+        bool hasData = false;
+        while (true)
+        {
+            if (position == length)
+            {
+                length = reader.Read(buffer, 0, buffer.Length);
+                position = 0;
+                if (length == 0)
+                {
+                    return hasData ? line.ToString() : null;
+                }
+            }
+
+            hasData = true;
+            int newLine = Array.IndexOf(buffer, '\n', position, length - position);
+            if (newLine < 0)
+            {
+                line.Append(buffer, position, length - position);
+                position = length;
+                continue;
+            }
+
+            line.Append(buffer, position, newLine - position);
+            position = newLine + 1;
+
+            return line.ToString();
+        }
+    }
 
     private ImportDataException Unreadable(Exception ex) =>
         new(ImportMessages.ChunkUnreadable(chunkIndex), ex);

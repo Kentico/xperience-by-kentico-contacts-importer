@@ -128,6 +128,13 @@ The application declares these permissions. Assign them to roles in the [Role ma
 
 A typical setup: marketers who import get View + Import contacts. Only people who may confirm that contacts gave consent also get Confirm consent for imported contacts.
 
+**Import contacts also shows existing contact data.** The permissions of the Contacts application are not checked. A user with Import contacts can, without changing anything (a check only):
+
+- learn which email addresses or other match values belong to existing contacts (expected results report, counts);
+- see current values of existing contacts: **Examples of changes** on Review shows the current and new value of mapped fields, and reports can include the match value.
+
+Give Import contacts only to users who may see contact data.
+
 ## Contact field for the import label
 
 Marketers can write a label (for example `import-2026-11-17-newsletter.csv`) into a contact field to find the contacts of an import later, for example in a contact group condition. The field must be a text field that the import does not map to a file column; its current value is replaced.

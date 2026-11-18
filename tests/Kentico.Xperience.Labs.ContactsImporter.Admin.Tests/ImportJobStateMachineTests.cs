@@ -12,11 +12,12 @@ internal class ImportJobStateMachineTests
         var allowed = new Dictionary<ImportJobState, ImportJobState[]>
         {
             [ImportJobState.Configuring] = [ImportJobState.Uploading, ImportJobState.Failed, ImportJobState.Cancelled],
-            [ImportJobState.Uploading] = [ImportJobState.Uploaded, ImportJobState.Configuring, ImportJobState.Failed, ImportJobState.Cancelled],
-            [ImportJobState.Uploaded] = [ImportJobState.Analyzing, ImportJobState.Configuring, ImportJobState.Failed, ImportJobState.Cancelled],
-            [ImportJobState.Analyzing] = [ImportJobState.Analyzed, ImportJobState.Uploaded, ImportJobState.Configuring, ImportJobState.Failed, ImportJobState.Cancelled],
-            [ImportJobState.Analyzed] = [ImportJobState.Confirmed, ImportJobState.Uploaded, ImportJobState.Configuring, ImportJobState.Failed, ImportJobState.Cancelled],
-            [ImportJobState.Confirmed] = [ImportJobState.Running, ImportJobState.Uploaded, ImportJobState.Configuring, ImportJobState.Failed, ImportJobState.Cancelled],
+            // Nothing returns to Configuring (PLAN D50): a different file or mapping is a new import.
+            [ImportJobState.Uploading] = [ImportJobState.Uploaded, ImportJobState.Failed, ImportJobState.Cancelled],
+            [ImportJobState.Uploaded] = [ImportJobState.Analyzing, ImportJobState.Failed, ImportJobState.Cancelled],
+            [ImportJobState.Analyzing] = [ImportJobState.Analyzed, ImportJobState.Uploaded, ImportJobState.Failed, ImportJobState.Cancelled],
+            [ImportJobState.Analyzed] = [ImportJobState.Confirmed, ImportJobState.Uploaded, ImportJobState.Failed, ImportJobState.Cancelled],
+            [ImportJobState.Confirmed] = [ImportJobState.Running, ImportJobState.Uploaded, ImportJobState.Failed, ImportJobState.Cancelled],
             [ImportJobState.Running] = [ImportJobState.Completed, ImportJobState.Failed, ImportJobState.Cancelled],
             [ImportJobState.Paused] = [],
             [ImportJobState.Completed] = [],
@@ -169,37 +170,41 @@ internal class ImportJobStateMachineTests
         });
     }
 
-    [TestCase(ImportJobState.Configuring, ImportJobState.Configuring, false)]
-    [TestCase(ImportJobState.Uploading, ImportJobState.Configuring, true)]
-    [TestCase(ImportJobState.Uploaded, ImportJobState.Configuring, true)]
-    [TestCase(ImportJobState.Analyzing, ImportJobState.Configuring, true)]
-    [TestCase(ImportJobState.Analyzed, ImportJobState.Configuring, true)]
-    [TestCase(ImportJobState.Confirmed, ImportJobState.Configuring, true)]
-    public void Mapping_Change_Requires_New_Upload(ImportJobState state, ImportJobState expectedState, bool expectedDeleteChunks)
+    [Test]
+    public void Mapping_Change_Is_Allowed_Before_The_Upload_Starts()
+    {
+        var result = ImportJobStateMachine.ApplyConfigChange(Status(ImportJobState.Configuring), ImportConfigChange.Mapping, now);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Allowed, Is.True);
+            Assert.That(result.Status.State, Is.EqualTo(ImportJobState.Configuring));
+            Assert.That(result.Status.UpdatedUtc, Is.EqualTo(now));
+        });
+    }
+
+    [TestCase(ImportJobState.Uploading)]
+    [TestCase(ImportJobState.Uploaded)]
+    [TestCase(ImportJobState.Analyzing)]
+    [TestCase(ImportJobState.Analyzed)]
+    [TestCase(ImportJobState.Confirmed)]
+    public void Mapping_Change_Is_Refused_Once_The_Upload_Started(ImportJobState state)
     {
         var status = Status(state) with
         {
             Chunks = [new ImportChunkInfo { Index = 0, Sha256 = "aa", Rows = 1 }],
             Profile = new ImportProfile { RowsRead = 10, ChunkCount = 1 },
-            DriverToken = "token",
-            HeartbeatUtc = now,
         };
 
-        var result = ImportJobStateMachine.ApplyConfigChange(status, ImportConfigChange.Mapping, now);
+        var mapping = ImportJobStateMachine.ApplyConfigChange(status, ImportConfigChange.Mapping, now);
+        var none = ImportJobStateMachine.ApplyConfigChange(status, ImportConfigChange.None, now);
 
         Assert.Multiple(() =>
         {
-            Assert.That(result.Allowed, Is.True);
-            Assert.That(result.Status.State, Is.EqualTo(expectedState));
-            Assert.That(result.DeleteChunks, Is.EqualTo(expectedDeleteChunks));
-            Assert.That(result.Status.UpdatedUtc, Is.EqualTo(now));
-            if (expectedDeleteChunks)
-            {
-                Assert.That(result.Status.Chunks, Is.Empty);
-                Assert.That(result.Status.Profile, Is.EqualTo(new ImportProfile()));
-                Assert.That(result.Status.DriverToken, Is.Null);
-                Assert.That(result.Status.HeartbeatUtc, Is.Null);
-            }
+            Assert.That(mapping.Allowed, Is.False, "a different file or mapping is a new import (D50)");
+            Assert.That(mapping.Status, Is.SameAs(status));
+            Assert.That(none.Allowed, Is.True, "saving the unchanged configuration again (resume) is accepted");
+            Assert.That(none.Status, Is.SameAs(status));
         });
     }
 
@@ -225,7 +230,6 @@ internal class ImportJobStateMachineTests
         Assert.Multiple(() =>
         {
             Assert.That(result.Allowed, Is.True);
-            Assert.That(result.DeleteChunks, Is.False);
             Assert.That(result.Status.State, Is.EqualTo(expectedState));
             Assert.That(result.Status.Chunks, Is.EqualTo(chunks));
             Assert.That(result.Status.Profile.RowsRead, Is.EqualTo(10));
@@ -534,7 +538,6 @@ internal class ImportJobStateMachineTests
     }
 
     [TestCase(ImportJobState.Uploaded)]
-    [TestCase(ImportJobState.Configuring)]
     [TestCase(ImportJobState.Cancelled)]
     [TestCase(ImportJobState.Failed)]
     public void Leaving_Processing_Clears_The_Call_Id(ImportJobState to)

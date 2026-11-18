@@ -146,6 +146,7 @@ The importer is built for speed on large files. Some behavior is intentional and
 
 - **Shared storage is needed for a web farm or SaaS.** All instances must see the same storage folder, and on Azure App Service the folder should be registered for storage mapping to survive deployments. See [Storage](./Setup.md#storage). Real web farm and SaaS runs have not been tested yet.
 - **Deleted imports leave only event log entries and audit events.** Deleting an import (cancel before Run, **Delete** on Results or in the list) removes its configuration, status, uploaded data and reports; keep your own record through the audit event if you need one. An import that is being checked or run right now by another tab or user cannot be deleted.
+- **The Import contacts permission shows existing contact data.** A check (which changes nothing) tells which match values belong to existing contacts, and **Examples of changes** shows current field values. The Contacts application's permissions are not checked. See [Permissions](./Setup.md#permissions).
 - **Uploaded data and reports with match values are personal data** on the server until they are deleted (see [File cleanup](./Setup.md#file-cleanup)). Cleanup runs when the importer is opened, and on a schedule if you enable the optional scheduled task. Storage with soft delete or backups keeps deleted files for its own period.
 
 ## Administration language

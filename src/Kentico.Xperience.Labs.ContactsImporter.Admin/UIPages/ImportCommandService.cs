@@ -693,20 +693,8 @@ internal sealed class ImportCommandService(
         var job = isNew
             ? new ImportJob { JobId = id, CreatedByUserId = userId, CreatedUtc = utcNow, File = file, KeyField = keyField, Mapping = mapping, DateFormat = dateFormat, ConsentMapping = consentMapping }
             : existing! with { File = file, KeyField = keyField, Mapping = mapping, DateFormat = dateFormat, ConsentMapping = consentMapping };
-        if (job.Options.SourceField is { } sourceField && mapping.Any(m => string.Equals(m.Target, sourceField, StringComparison.Ordinal)))
-        {
-            // The stamp field is now a mapped column: the file value wins, the stamp is chosen again in the Options step.
-            job = job with { Options = job.Options with { SourceField = null, SourceValue = null, SourceStamp = SourceStampBehavior.CreatedOnly } };
-        }
-
-        if (job.Options.Consent == ConsentMode.BlanketWithColumnOverride && !HasConsentColumn(job))
-        {
-            // The column that said which rows agreed is gone. "Only those rows" never widens to every row: no consent
-            // is recorded until it is chosen again in the Options step.
-            job = job with { Options = job.Options with { Consent = ConsentMode.None, ConsentId = null, RevokedConsent = RevokedConsentBehavior.Keep } };
-        }
-
-
+        // Options are saved only after the upload has started, when the mapping no longer changes (D50): a mapping
+        // change never meets saved options that depend on it (source field, consent per row).
         var errors = ImportJobConfigValidator.Validate(job, fields, options.Value);
         if (errors.Count > 0)
         {
@@ -719,23 +707,49 @@ internal sealed class ImportCommandService(
         }
         else
         {
+            // PLAN D50: the file and mapping lock once the upload has started; a different file or mapping is a new import.
+            // Saving the unchanged configuration again (resuming an upload) is accepted in every state that is not final.
             var change = ImportJobStateMachine.ClassifyConfigChange(existing!, job);
-            var applied = ImportJobStateMachine.ApplyConfigChange(status!, change, utcNow);
-            if (ImportJobStateMachine.IsTerminal(status!.State) || !applied.Allowed)
+            if (ImportJobStateMachine.IsTerminal(status!.State) || !ImportJobStateMachine.ApplyConfigChange(status, change, utcNow).Allowed)
             {
                 return SaveFailed(ImportCommandCodes.INVALID_STATE, ImportMessages.InvalidState(EffectiveState(status, utcNow)));
             }
 
             if (change != ImportConfigChange.None)
             {
-                // Status first: once the job is back in Configuring nothing reads the old chunks.
-                store.UpdateStatus(id, current => ImportJobStateMachine.ApplyConfigChange(current, change, utcNow) is { Allowed: true } result ? result.Status : current);
-                if (applied.DeleteChunks)
+                // "Not while driven", as in SaveOptions: the state is checked again under the gate and job.json is written
+                // only when the stored status still accepted the change.
+                if (!processGate.TryEnter(id))
                 {
-                    store.DeleteChunks(id);
+                    return SaveFailed(ImportCommandCodes.INVALID_STATE, ImportTextKeys.BUSY);
                 }
 
-                store.WriteJob(job);
+                try
+                {
+                    bool applied = false;
+                    var stored = store.UpdateStatus(id, current =>
+                    {
+                        var result = ImportJobStateMachine.ApplyConfigChange(current, change, utcNow);
+                        applied = result.Allowed;
+
+                        return applied ? result.Status : current;
+                    });
+                    if (stored is null)
+                    {
+                        return SaveFailed(ImportCommandCodes.JOB_NOT_FOUND, ImportTextKeys.JOB_NOT_FOUND);
+                    }
+
+                    if (!applied)
+                    {
+                        return SaveFailed(ImportCommandCodes.INVALID_STATE, ImportMessages.InvalidState(EffectiveState(stored, utcNow)));
+                    }
+
+                    store.WriteJob(job);
+                }
+                finally
+                {
+                    processGate.Exit(id);
+                }
             }
         }
 

@@ -15,11 +15,11 @@ internal static class ImportJobStateMachine
     private static readonly Dictionary<ImportJobState, ImportJobState[]> transitions = new()
     {
         [ImportJobState.Configuring] = [ImportJobState.Uploading],
-        [ImportJobState.Uploading] = [ImportJobState.Uploaded, ImportJobState.Configuring],
-        [ImportJobState.Uploaded] = [ImportJobState.Analyzing, ImportJobState.Configuring],
-        [ImportJobState.Analyzing] = [ImportJobState.Analyzed, ImportJobState.Uploaded, ImportJobState.Configuring],
-        [ImportJobState.Analyzed] = [ImportJobState.Confirmed, ImportJobState.Uploaded, ImportJobState.Configuring],
-        [ImportJobState.Confirmed] = [ImportJobState.Running, ImportJobState.Uploaded, ImportJobState.Configuring],
+        [ImportJobState.Uploading] = [ImportJobState.Uploaded],
+        [ImportJobState.Uploaded] = [ImportJobState.Analyzing],
+        [ImportJobState.Analyzing] = [ImportJobState.Analyzed, ImportJobState.Uploaded],
+        [ImportJobState.Analyzed] = [ImportJobState.Confirmed, ImportJobState.Uploaded],
+        [ImportJobState.Confirmed] = [ImportJobState.Running, ImportJobState.Uploaded],
         [ImportJobState.Running] = [ImportJobState.Completed],
     };
 
@@ -67,13 +67,12 @@ internal static class ImportJobStateMachine
         updated = status with { State = to, UpdatedUtc = utcNow };
         updated = to switch
         {
-            ImportJobState.Configuring => ResetUpload(updated),
             ImportJobState.Uploaded => ResetProcessing(updated),
             ImportJobState.Analyzing => StartPhase(updated, ImportPhase.Analyze),
             ImportJobState.Running => StartPhase(updated, ImportPhase.Execute),
             ImportJobState.Completed or ImportJobState.Cancelled => Finish(updated, utcNow, null),
             ImportJobState.Failed => Finish(updated, utcNow, error ?? ImportMessages.Failed),
-            ImportJobState.Uploading or ImportJobState.Analyzed or ImportJobState.Confirmed or ImportJobState.Paused => updated,
+            ImportJobState.Configuring or ImportJobState.Uploading or ImportJobState.Analyzed or ImportJobState.Confirmed or ImportJobState.Paused => updated,
             _ => updated,
         };
 
@@ -184,33 +183,33 @@ internal static class ImportJobStateMachine
     }
 
     /// <summary>
-    /// Applies the reset rules for a configuration change:
-    /// a mapping change (file, key, mapping, consent columns, date format) needs a new upload, so the job returns to Configuring and the
-    /// caller must delete the uploaded chunks; an options change after analysis returns the job to Uploaded (analyze again).
-    /// No configuration change is allowed once the job is running or finished.
+    /// Applies the rules for a configuration change (PLAN D50): a mapping change (file, key, mapping, consent columns,
+    /// date format) is allowed only while the job is Configuring, before the upload starts; afterwards a different file
+    /// or mapping is a new import. An options change after analysis returns the job to Uploaded (analyze again).
+    /// No change is allowed once the job is running or finished; an unchanged configuration is always accepted.
     /// </summary>
     public static ImportConfigChangeResult ApplyConfigChange(ImportJobStatus status, ImportConfigChange change, DateTime utcNow)
     {
         if (change == ImportConfigChange.None)
         {
-            return new ImportConfigChangeResult(true, status, false);
+            return new ImportConfigChangeResult(true, status);
         }
 
         if (status.State is ImportJobState.Running or ImportJobState.Paused || IsTerminal(status.State))
         {
-            return new ImportConfigChangeResult(false, status, false);
+            return new ImportConfigChangeResult(false, status);
         }
 
         if (change == ImportConfigChange.Mapping)
         {
             return status.State == ImportJobState.Configuring
-                ? new ImportConfigChangeResult(true, status with { UpdatedUtc = utcNow }, false)
-                : new ImportConfigChangeResult(true, Transition(status, ImportJobState.Configuring, utcNow), true);
+                ? new ImportConfigChangeResult(true, status with { UpdatedUtc = utcNow })
+                : new ImportConfigChangeResult(false, status);
         }
 
         return status.State is ImportJobState.Analyzing or ImportJobState.Analyzed or ImportJobState.Confirmed
-            ? new ImportConfigChangeResult(true, Transition(status, ImportJobState.Uploaded, utcNow), false)
-            : new ImportConfigChangeResult(true, status with { UpdatedUtc = utcNow }, false);
+            ? new ImportConfigChangeResult(true, Transition(status, ImportJobState.Uploaded, utcNow))
+            : new ImportConfigChangeResult(true, status with { UpdatedUtc = utcNow });
     }
 
     /// <summary>
@@ -271,9 +270,6 @@ internal static class ImportJobStateMachine
 
     private static string NewDriverToken() => Guid.NewGuid().ToString("N");
 
-    private static ImportJobStatus ResetUpload(ImportJobStatus status) =>
-        ResetProcessing(status) with { Chunks = [], Profile = new ImportProfile() };
-
     private static ImportJobStatus ResetProcessing(ImportJobStatus status) =>
         status with
         {
@@ -316,14 +312,13 @@ internal enum ImportConfigChange
     /// <summary>Only processing behaviors changed.</summary>
     Options,
 
-    /// <summary>File, key field, column mapping, consent columns or date format changed; uploaded data no longer matches.</summary>
+    /// <summary>File, key field, column mapping, consent columns or date format changed; allowed only before the upload starts.</summary>
     Mapping,
 }
 
-/// <param name="Allowed">False when the job is running or finished; the change must be refused.</param>
+/// <param name="Allowed">False when the job's state does not accept the change; the change must be refused.</param>
 /// <param name="Status">Status to store when allowed.</param>
-/// <param name="DeleteChunks">The caller must delete the uploaded chunks (a new upload is required).</param>
-internal sealed record ImportConfigChangeResult(bool Allowed, ImportJobStatus Status, bool DeleteChunks);
+internal sealed record ImportConfigChangeResult(bool Allowed, ImportJobStatus Status);
 
 internal enum ImportDriverOutcome
 {

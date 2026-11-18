@@ -29,10 +29,18 @@ internal class ImportCommandServiceTests
         schema = new FakeContactFieldSchemaProvider(TestData.Fields);
         users = new FakeUserNameProvider { Names = { [UserId] = "administrator" } };
         events = new Processing.FakeEventPublisher();
-        var ingest = new ChunkIngestService(temp.Store, schema, temp.Options, time);
-        var cleanup = new ImportJobCleanupService(temp.Store, temp.Options, time, NullLogger<ImportJobCleanupService>.Instance);
+        service = CreateService(temp.Store);
+
+        jobId = Guid.NewGuid();
+        id = jobId.ToString("D");
+    }
+
+    private ImportCommandService CreateService(IImportJobStore store, IImportProcessGate? gate = null)
+    {
+        var ingest = new ChunkIngestService(store, schema, temp.Options, time);
+        var cleanup = new ImportJobCleanupService(store, temp.Options, time, NullLogger<ImportJobCleanupService>.Instance);
         var processor = new ImportProcessor(
-            temp.Store,
+            store,
             schema,
             new Processing.FakeContactRepository(),
             cleanup,
@@ -41,24 +49,22 @@ internal class ImportCommandServiceTests
             time,
             NullLogger<ImportProcessor>.Instance,
             events: events);
-        service = new ImportCommandService(
-            temp.Store,
+
+        return new ImportCommandService(
+            store,
             ingest,
             schema,
             cleanup,
             users,
             processor,
-            new ImportReportPager(temp.Store),
-            new ImportReportReader(temp.Store),
-            new ImportProcessGate(),
+            new ImportReportPager(store),
+            new ImportReportReader(store),
+            gate ?? new ImportProcessGate(),
             new ResourceImportTexts(),
             new FakeChoiceProvider(),
             new FakeChoiceProvider(),
             temp.Options,
             time);
-
-        jobId = Guid.NewGuid();
-        id = jobId.ToString("D");
     }
 
     [TearDown]
@@ -311,62 +317,110 @@ internal class ImportCommandServiceTests
         });
     }
 
-    [Test]
-    public void SaveConfig_With_A_Changed_Mapping_Deletes_Uploaded_Chunks()
+    private static IEnumerable<TestCaseData> MappingChanges()
+    {
+        yield return new TestCaseData(Config(keyField: "ContactLastName", mapping: ("Surname", "ContactLastName"))).SetName("SaveConfig_Refuses_A_Changed_Mapping_Once_The_Upload_Started");
+        yield return new TestCaseData(Config(fingerprint: "ffff", size: 99)).SetName("SaveConfig_Refuses_Another_File_Once_The_Upload_Started");
+        yield return new TestCaseData(Config(dateFormat: "dmy")).SetName("SaveConfig_Refuses_Another_Date_Format_Once_The_Upload_Started");
+    }
+
+    [TestCaseSource(nameof(MappingChanges))]
+    public void SaveConfig_With_Another_File_Or_Mapping_After_The_Upload_Started_Is_Refused(SaveConfigRequest changed)
     {
         StartUpload();
         Upload(0, 1, 3);
+        byte[] jobBefore = File.ReadAllBytes(temp.JobPath(jobId, "job.json"));
+
+        var response = service.SaveConfig(id, changed, UserId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.INVALID_STATE), "a different file or mapping is a new import (D50)");
+            Assert.That(State(), Is.EqualTo(ImportJobState.Uploading));
+            Assert.That(StoredChunks(), Is.EqualTo(new[] { 0 }));
+            Assert.That(File.ReadAllBytes(temp.JobPath(jobId, "job.json")), Is.EqualTo(jobBefore));
+        });
+    }
+
+    [TestCase(ImportJobState.Uploading)]
+    [TestCase(ImportJobState.Uploaded)]
+    [TestCase(ImportJobState.Analyzing)]
+    [TestCase(ImportJobState.Analyzed)]
+    [TestCase(ImportJobState.Confirmed)]
+    public void SaveConfig_After_The_Upload_Started_Accepts_Only_The_Same_Config(ImportJobState state)
+    {
+        StartUpload();
+        Upload(0, 1, 3);
+        temp.Store.UpdateStatus(jobId, s => s with { State = state });
+        byte[] jobBefore = File.ReadAllBytes(temp.JobPath(jobId, "job.json"));
+
+        var same = service.SaveConfig(id, Config(), UserId);
+        var changed = service.SaveConfig(id, Config(dateFormat: "dmy"), UserId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(same.Code, Is.EqualTo(ImportCommandCodes.OK), "saving the unchanged configuration again (resume) is accepted");
+            Assert.That(changed.Code, Is.EqualTo(ImportCommandCodes.INVALID_STATE));
+            Assert.That(State(), Is.EqualTo(state));
+            Assert.That(StoredChunks(), Is.EqualTo(new[] { 0 }));
+            Assert.That(File.ReadAllBytes(temp.JobPath(jobId, "job.json")), Is.EqualTo(jobBefore));
+        });
+    }
+
+    [Test]
+    public void SaveConfig_Can_Change_The_Mapping_Before_The_Upload_Starts()
+    {
+        StartUpload();
+        temp.Store.UpdateStatus(jobId, s => s with { State = ImportJobState.Configuring });
 
         var response = service.SaveConfig(id, Config(keyField: "ContactLastName", mapping: ("Surname", "ContactLastName")), UserId);
 
         Assert.Multiple(() =>
         {
-            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK));
+            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK), response.Message);
             Assert.That(response.Status!.State, Is.EqualTo("Uploading"));
-            Assert.That(response.Status.Chunks, Is.Empty);
-            Assert.That(temp.Store.HasChunks(jobId), Is.False);
             Assert.That(temp.Store.ReadJob(jobId)!.Mapping.Single(), Is.EqualTo(new ImportFieldMapping { Source = "Surname", Target = "ContactLastName" }));
         });
     }
 
     [Test]
-    public void SaveConfig_With_Another_File_Deletes_Uploaded_Chunks()
+    public void SaveConfig_Writes_Nothing_When_The_Job_Starts_Running_After_It_Was_Read()
     {
         StartUpload();
         Upload(0, 1, 3);
+        // The job is read while it still accepts a mapping change; another instance starts the Run before the write.
+        temp.Store.UpdateStatus(jobId, s => s with { State = ImportJobState.Configuring });
+        var fileSystem = new HookedImportFileSystem(new PhysicalImportFileSystem());
+        var raced = CreateService(temp.NewStore(fileSystem));
+        fileSystem.AfterRead = HookedImportFileSystem.On("status.json", () => temp.Store.UpdateStatus(jobId, s => s with { State = ImportJobState.Running }));
+        byte[] jobBefore = File.ReadAllBytes(temp.JobPath(jobId, "job.json"));
 
-        var response = service.SaveConfig(id, Config(fingerprint: "ffff", size: 99), UserId);
+        var response = raced.SaveConfig(id, Config(keyField: "ContactLastName", mapping: ("Surname", "ContactLastName")), UserId);
 
         Assert.Multiple(() =>
         {
-            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK));
-            Assert.That(temp.Store.HasChunks(jobId), Is.False);
-            Assert.That(temp.Store.ReadJob(jobId)!.File.Fingerprint, Is.EqualTo("ffff"));
+            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.INVALID_STATE));
+            Assert.That(State(), Is.EqualTo(ImportJobState.Running));
+            Assert.That(StoredChunks(), Is.EqualTo(new[] { 0 }), "the running import keeps its data");
+            Assert.That(File.ReadAllBytes(temp.JobPath(jobId, "job.json")), Is.EqualTo(jobBefore));
         });
     }
 
     [Test]
-    public void SaveConfig_After_The_Upload_Keeps_It_Unless_The_Mapping_Changes()
+    public void SaveConfig_With_A_Changed_Mapping_Is_Refused_While_The_Job_Is_Processed()
     {
         StartUpload();
-        Upload(0, 1, 3);
-        Assert.That(service.CompleteUpload(id, Profile(3, 1)).Code, Is.EqualTo(ImportCommandCodes.OK));
+        temp.Store.UpdateStatus(jobId, s => s with { State = ImportJobState.Configuring });
+        var gate = new ImportProcessGate();
+        var busy = CreateService(temp.Store, gate);
+        Assert.That(gate.TryEnter(jobId), Is.True);
 
-        var same = service.SaveConfig(id, Config(), UserId);
-        var stateAfterSame = State();
-        var changed = service.SaveConfig(id, Config(dateFormat: "dmy"), UserId);
+        var response = busy.SaveConfig(id, Config(dateFormat: "dmy"), UserId);
 
         Assert.Multiple(() =>
         {
-            Assert.That(same.Code, Is.EqualTo(ImportCommandCodes.OK));
-            Assert.That(same.Status!.State, Is.EqualTo("Uploaded"));
-            Assert.That(same.Status.Profile.RowsValid, Is.EqualTo(3));
-            Assert.That(stateAfterSame, Is.EqualTo(ImportJobState.Uploaded));
-
-            Assert.That(changed.Code, Is.EqualTo(ImportCommandCodes.OK));
-            Assert.That(changed.Status!.State, Is.EqualTo("Uploading"));
-            Assert.That(changed.Status.Profile.RowsValid, Is.Zero);
-            Assert.That(temp.Store.HasChunks(jobId), Is.False);
+            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.INVALID_STATE));
+            Assert.That(temp.Store.ReadJob(jobId)!.DateFormat, Is.EqualTo("iso"));
         });
     }
 

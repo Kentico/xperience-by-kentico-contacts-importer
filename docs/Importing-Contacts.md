@@ -97,7 +97,7 @@ Every row is compared with the existing contacts. Nothing is changed. You see:
 - New contacts, contacts to change, rows with no changes, skipped rows.
 - All counts, including recipient list, bounce and consent counts.
 - Changes by contact field, and how many values would be cleared.
-- **Examples of changes**: for each field, up to three contacts from the first rows of the file, with the row number, the match value (for example the email), the current value and the new value. Values that would be cleared come first, marked as a warning. These are examples, not all changes; the expected results report lists every row the import updates. The examples are personal data: they are stored with the uploaded data and deleted with it.
+- **Examples of changes**: for each field, up to three contacts from the first rows of the file, with the row number, the match value (for example the email), the current value and the new value. Values that would be cleared come first, marked as a warning. These are examples, not all changes; the expected results report lists every row the import updates. The examples are personal data: they are stored with the uploaded data and deleted with it. Anyone who can import sees them, also without access to the Contacts application.
 - **Download expected results**: what the import would do with each row and why. Use it to find rows that would be skipped and fix the file before you run. After the run, Results has the actual report (see [Row reports](#row-reports)).
 
 The check is valid for 24 hours (the administrator can change this). If you run the import later, the file is checked again.

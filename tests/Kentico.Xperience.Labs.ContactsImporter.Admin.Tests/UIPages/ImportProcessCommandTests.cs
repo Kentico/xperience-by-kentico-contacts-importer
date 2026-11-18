@@ -392,7 +392,7 @@ internal class ImportProcessCommandTests
     }
 
     [Test]
-    public void SaveConfig_Drops_A_Source_Field_That_Becomes_A_Mapped_Column()
+    public void SaveConfig_Cannot_Map_The_Source_Field_After_The_Upload()
     {
         Upload();
         service.SaveOptions(id, Options(sourceField: "ContactSource", sourceValue: "webinar"));
@@ -404,12 +404,12 @@ internal class ImportProcessCommandTests
             Mapping = [new ImportMappingDto { Source = "Email", Target = "ContactEmail" }, new ImportMappingDto { Source = "Source", Target = "ContactSource" }],
             DateFormat = "iso",
         };
-        Assert.That(service.SaveConfig(id, config, UserId).Code, Is.EqualTo(ImportCommandCodes.OK));
+        Assert.That(service.SaveConfig(id, config, UserId).Code, Is.EqualTo(ImportCommandCodes.INVALID_STATE));
 
         Assert.Multiple(() =>
         {
-            Assert.That(StoredOptions().SourceField, Is.Null);
-            Assert.That(StoredOptions().SourceValue, Is.Null);
+            Assert.That(StoredOptions().SourceField, Is.EqualTo("ContactSource"));
+            Assert.That(StoredOptions().SourceValue, Is.EqualTo("webinar"));
         });
     }
 

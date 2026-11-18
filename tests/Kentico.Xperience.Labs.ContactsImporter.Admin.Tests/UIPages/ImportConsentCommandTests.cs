@@ -244,7 +244,7 @@ internal class ImportConsentCommandTests
     }
 
     [Test]
-    public void SaveConfig_With_Other_Consent_Columns_Needs_A_New_Upload()
+    public void SaveConfig_With_Other_Consent_Columns_After_The_Upload_Is_Refused()
     {
         Upload(agreed: "Opt in");
 
@@ -252,14 +252,14 @@ internal class ImportConsentCommandTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK));
-            Assert.That(response.Status!.State, Is.EqualTo("Uploading"));
-            Assert.That(temp.Store.HasChunks(jobId), Is.False, "the uploaded rows carry the values of the old column");
+            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.INVALID_STATE), "other consent columns are a new import (D50)");
+            Assert.That(temp.Store.HasChunks(jobId), Is.True);
+            Assert.That(temp.Store.ReadJob(jobId)!.ConsentMapping!.Agreed, Is.EqualTo("Opt in"));
         });
     }
 
     [Test]
-    public void SaveConfig_Without_The_Consent_Column_Turns_Consent_Per_Row_Off_Instead_Of_Widening_It()
+    public void SaveConfig_Cannot_Remove_The_Consent_Column_That_Consent_Per_Row_Uses()
     {
         Upload(agreed: "Opt in");
         Assert.That(
@@ -270,11 +270,9 @@ internal class ImportConsentCommandTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(response.Code, Is.EqualTo(ImportCommandCodes.OK), string.Join(' ', response.Errors));
-            Assert.That(StoredOptions().Consent, Is.EqualTo(ConsentMode.None), "never falls back to consent for every row");
-            Assert.That(StoredOptions().ConsentId, Is.Null);
-            Assert.That(StoredOptions().RevokedConsent, Is.EqualTo(RevokedConsentBehavior.Keep));
-            Assert.That(response.Job!.AttestationRequired, Is.False);
+            Assert.That(response.Code, Is.AnyOf(ImportCommandCodes.INVALID_CONFIG, ImportCommandCodes.INVALID_STATE));
+            Assert.That(StoredOptions().Consent, Is.EqualTo(ConsentMode.BlanketWithColumnOverride));
+            Assert.That(temp.Store.ReadJob(jobId)!.ConsentMapping!.Agreed, Is.EqualTo("Opt in"));
         });
     }
 

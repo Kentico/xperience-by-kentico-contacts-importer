@@ -98,6 +98,8 @@ internal sealed record ChunkValidationResult(bool IsValid, int Rows, long FirstR
 /// never trusts the browser: any invalid record rejects the whole chunk.
 /// </summary>
 /// <remarks>
+/// Records are split on line feeds only; a carriage return (also one before the line feed) is JSON whitespace inside
+/// the record. <see cref="ChunkRecordReader"/> reads stored chunks by the same rule.
 /// The consent property <c>c</c> is required on every record when the job maps consent columns and refused otherwise.
 /// It is an object with <c>a</c> (required, <c>true</c> or <c>false</c>: consent given) and <c>d</c> (optional, the
 /// consent date as <c>yyyy-MM-dd</c> or <c>yyyy-MM-ddTHH:mm:ss</c> with an optional fraction and offset; <c>null</c> =
