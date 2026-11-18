@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
@@ -135,9 +134,14 @@ internal sealed partial class ImportResourcesTests
             .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}Client{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
                 && !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
 
-    /// <summary>The admin project folder, found from the path of this source file (the build output can be anywhere).</summary>
-    private static string AdminProject([CallerFilePath] string thisFile = "") =>
-        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", "..", "src", "Kentico.Xperience.Labs.ContactsImporter.Admin"));
+    /// <summary>
+    /// The admin project folder, written into this assembly at build time (<c>AssemblyMetadata</c> in the project file).
+    /// Not from <c>[CallerFilePath]</c>: CI builds map source paths (<c>ContinuousIntegrationBuild</c>), and the build
+    /// output can be anywhere.
+    /// </summary>
+    private static string AdminProject() =>
+        typeof(ImportResourcesTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(attribute => attribute.Key == "AdminProjectDirectory").Value!;
 
     [GeneratedRegex(@"\{(\d+)(?:[,:][^}]*)?\}")]
     private static partial Regex PlaceholderPattern();

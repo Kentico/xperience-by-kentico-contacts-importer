@@ -249,3 +249,37 @@ internal static class TestData
         };
     }
 }
+
+/// <summary>
+/// Makes deleting a job's uploaded parts fail, on every OS: Windows keeps a part open without sharing; Linux and macOS
+/// make the parts folder read-only (deleting a file needs write permission on its folder). Undone on dispose.
+/// </summary>
+internal sealed class UndeletableChunks : IDisposable
+{
+    private readonly FileStream? openPart;
+    private readonly string? folder;
+    private readonly UnixFileMode mode;
+
+    public UndeletableChunks(string chunksFolder)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            openPart = File.Open(Directory.GetFiles(chunksFolder)[0], FileMode.Open, FileAccess.Read, FileShare.None);
+        }
+        else
+        {
+            folder = chunksFolder;
+            mode = File.GetUnixFileMode(chunksFolder);
+            File.SetUnixFileMode(chunksFolder, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+    }
+
+    public void Dispose()
+    {
+        openPart?.Dispose();
+        if (folder is not null && !OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(folder, mode);
+        }
+    }
+}

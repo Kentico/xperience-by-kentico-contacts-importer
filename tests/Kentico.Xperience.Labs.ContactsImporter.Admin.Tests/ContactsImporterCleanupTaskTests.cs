@@ -78,7 +78,7 @@ internal class ContactsImporterCleanupTaskTests
         var other = CreateFinishedJob();
 
         string message;
-        using (File.Open(temp.JobPath(locked, "chunks", "0.ndjson.gz"), FileMode.Open, FileAccess.Read, FileShare.None))
+        using (new UndeletableChunks(temp.JobPath(locked, "chunks")))
         {
             message = task.Run(CancellationToken.None);
         }

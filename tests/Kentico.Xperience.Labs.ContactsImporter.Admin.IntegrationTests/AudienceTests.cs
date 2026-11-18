@@ -178,7 +178,7 @@ public class AudienceTests : ImportIntegrationTest
         var jobId = harness.Upload(Email, emailTargets,
         [
             Row("new"), Row("existing"), Row("subscribed"), Row("unsubscribed"), Row("otherlist"), Row("bounced"),
-        ], ListOptions);
+        ], ListOptions with { BouncedAddress = BouncedAddressBehavior.AddAndReport });
 
         var analysis = harness.Run(jobId, ImportPhase.Analyze);
         var afterAnalysis = Rows();

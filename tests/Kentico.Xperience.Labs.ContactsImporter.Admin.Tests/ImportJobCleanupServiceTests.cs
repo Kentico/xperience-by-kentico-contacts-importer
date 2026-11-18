@@ -227,7 +227,7 @@ internal class ImportJobCleanupServiceTests
         Directory.CreateDirectory(Path.Combine(temp.Root, "not-a-job"));
 
         ImportSweepResult result;
-        using (File.Open(temp.JobPath(locked, "chunks", "0.ndjson.gz"), FileMode.Open, FileAccess.Read, FileShare.None))
+        using (new UndeletableChunks(temp.JobPath(locked, "chunks")))
         {
             result = service.Sweep();
         }

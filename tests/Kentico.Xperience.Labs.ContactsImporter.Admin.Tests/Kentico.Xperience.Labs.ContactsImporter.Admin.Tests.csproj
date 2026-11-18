@@ -21,4 +21,9 @@
     <ProjectReference Include="..\..\src\Kentico.Xperience.Labs.ContactsImporter.Admin\Kentico.Xperience.Labs.ContactsImporter.Admin.csproj" />
   </ItemGroup>
 
+  <!-- Real path of the admin project for ImportResourcesTests (CI maps source paths, so [CallerFilePath] does not work). -->
+  <ItemGroup>
+    <AssemblyMetadata Include="AdminProjectDirectory" Value="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)../../src/Kentico.Xperience.Labs.ContactsImporter.Admin))" />
+  </ItemGroup>
+
 </Project>
