@@ -28,7 +28,7 @@
     "eslint": "10.15.0",
     "eslint-plugin-playwright": "2.12.2",
     "prettier": "3.10.1",
-    "typescript": "5.9.3",
+    "typescript": "6.0.3",
     "typescript-eslint": "8.73.0"
   }
 }
