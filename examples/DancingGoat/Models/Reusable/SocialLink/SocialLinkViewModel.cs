@@ -1,4 +1,7 @@
-﻿namespace DancingGoat.Models
+﻿using System;
+using System.Linq;
+
+namespace DancingGoat.Models
 {
     public record SocialLinkViewModel(string Title, string Url, string IconPath)
     {

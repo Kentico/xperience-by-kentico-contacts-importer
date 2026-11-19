@@ -1,0 +1,48 @@
+/*
+ * Interior pages — page head + crumb, auth pages, contacts, generic page
+ * content (privacy, errors).
+ */
+
+/* ---------- page head ---------- */
+.page-head { padding: var(--page-head-clearance) 0 0 0; }
+.page-head .lede { color: var(--color-ink-soft); max-width: 60ch; margin: 20px 0 0 0; font-size: var(--text-lg); }
+
+.crumb { display: flex; align-items: center; gap: 10px; font-size: var(--text-md); font-weight: 500; letter-spacing: 0; color: var(--color-ink-soft); margin: 0 0 22px 0; }
+.crumb a { transition: color 0.2s; }
+.crumb a:hover { color: var(--color-accent-text); }
+.crumb .sep { opacity: 0.45; }
+
+/* ---------- auth pages ---------- */
+.auth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 48px; align-items: stretch; }
+.auth-card { background: var(--color-card); border: 1px solid var(--color-line); border-radius: var(--radius-card); padding: 46px 48px; }
+.auth-card h2 { margin-bottom: 10px; }
+.auth-card .auth-sub { color: var(--color-ink-soft); margin: 0 0 28px 0; font-size: var(--text-md); }
+.auth-aside { background: transparent; color: var(--color-ink); border-radius: 0; padding: 46px 48px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; position: relative; overflow: hidden; }
+.auth-aside > * { position: relative; z-index: 2; }
+.auth-aside h2 { margin-bottom: 12px; }
+.auth-aside p { color: var(--color-ink-soft); margin: 0 0 28px 0; max-width: 38ch; font-size: var(--text-md); }
+
+/* ---------- contacts ---------- */
+.contact-layout { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 72px; margin-top: 48px; align-items: start; }
+.contact-card { background: var(--color-card); border: 1px solid var(--color-line); border-radius: var(--radius-card); padding: 40px 44px; }
+.info-list { list-style: none; margin: 30px 0 0 0; padding: 0; display: grid; gap: 26px; }
+.info-list li { display: grid; gap: 6px; font-size: var(--text-base); line-height: var(--leading-body); }
+.info-list .k { color: var(--color-accent-text); }
+.info-list a { border-bottom: 1px solid currentColor; transition: color 0.2s; }
+.info-list a:hover { color: var(--color-accent-text); }
+.place-block { border-top: 1px solid var(--color-line); padding: 24px 0; display: flex; justify-content: space-between; align-items: baseline; gap: 24px; flex-wrap: wrap; }
+.place-block h3, .place-block h4 { margin: 0; }
+.place-block p { margin: 0; color: var(--color-ink-soft); }
+
+/* ---------- simple content pages (privacy, errors, confirmations) ---------- */
+.page-content { margin-top: 48px; }
+.page-content .btn { margin-top: 26px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1080px) {
+    .contact-layout, .auth-grid { grid-template-columns: 1fr; gap: 36px; }
+}
+
+@media (max-width: 640px) {
+    .auth-card, .auth-aside { padding: 32px 26px; }
+}

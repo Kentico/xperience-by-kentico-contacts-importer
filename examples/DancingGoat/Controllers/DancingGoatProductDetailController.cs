@@ -1,4 +1,9 @@
-﻿using CMS.ContentEngine;
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+using CMS.ContentEngine;
 
 using DancingGoat;
 using DancingGoat.Commerce;
@@ -20,25 +25,31 @@ namespace DancingGoat.Controllers
         private readonly IContentRetriever contentRetriever;
         private readonly ProductParametersExtractor productParametersExtractor;
         private readonly ProductVariantsExtractor productVariantsExtractor;
-        private readonly TagTitleRetriever tagTitleRetriever;
+        private readonly TagRetriever tagRetriever;
         private readonly IPreferredLanguageRetriever currentLanguageRetriever;
         private readonly CalculationService calculationService;
+        private readonly FreeShippingEligibilityService freeShippingEligibilityService;
+        private readonly CartItemDiscountEligibilityService cartItemDiscountEligibilityService;
 
 
         public DancingGoatProductDetailController(
             IContentRetriever contentRetriever,
             ProductParametersExtractor productParametersExtractor,
             ProductVariantsExtractor productVariantsExtractor,
-            TagTitleRetriever tagTitleRetriever,
+            TagRetriever tagRetriever,
             IPreferredLanguageRetriever currentLanguageRetriever,
-            CalculationService calculationService)
+            CalculationService calculationService,
+            FreeShippingEligibilityService freeShippingEligibilityService,
+            CartItemDiscountEligibilityService cartItemDiscountEligibilityService)
         {
             this.contentRetriever = contentRetriever;
             this.productParametersExtractor = productParametersExtractor;
             this.productVariantsExtractor = productVariantsExtractor;
-            this.tagTitleRetriever = tagTitleRetriever;
+            this.tagRetriever = tagRetriever;
             this.currentLanguageRetriever = currentLanguageRetriever;
             this.calculationService = calculationService;
+            this.freeShippingEligibilityService = freeShippingEligibilityService;
+            this.cartItemDiscountEligibilityService = cartItemDiscountEligibilityService;
         }
 
 
@@ -61,11 +72,17 @@ namespace DancingGoat.Controllers
 
             var productItem = productPage.ProductPageProduct.FirstOrDefault() as IProductFields;
 
-            var tag = productItem.ProductFieldTags.Any() ? await tagTitleRetriever.GetTagTitle(productItem.ProductFieldTags.First().Identifier, languageName, cancellationToken) : null;
+            var productTag = productItem.ProductFieldTags.Any() ? await tagRetriever.GetTag(productItem.ProductFieldTags.First().Identifier, languageName, cancellationToken) : null;
+            var tag = ProductListItemTagViewModel.GetViewModel(productTag?.Title);
 
             var parameters = await productParametersExtractor.ExtractParameters(productItem, languageName, cancellationToken);
 
             var variantValues = productVariantsExtractor.ExtractVariantsValue(productItem);
+
+            var variantSkuCodes = productVariantsExtractor.ExtractVariantsSKUCode(productItem);
+
+            var categoryTags = await tagRetriever.GetTags(productItem.ProductFieldCategory.Select(category => category.Identifier), languageName, cancellationToken);
+            bool isMerchandise = categoryTags.Any(categoryTag => string.Equals(categoryTag.Name, DancingGoatTaxonomyConstants.MERCHANDISE_CATEGORY_TAG_NAME, StringComparison.Ordinal));
 
             int contentItemId = (productItem as IContentItemFieldsSource).SystemFields.ContentItemID;
 
@@ -73,7 +90,16 @@ namespace DancingGoat.Controllers
 
             var appliedCandidate = calculationResultItem.PromotionData.CatalogPromotionCandidates.FirstOrDefault(c => c.Applied)?.PromotionCandidate as DancingGoatCatalogPromotionCandidate;
 
-            return View(new ProductViewModel(productItem.ProductFieldName, productItem.ProductFieldDescription, productItem.ProductFieldImage.FirstOrDefault()?.ImageFile.Url, calculationResultItem.LineSubtotalAfterLineDiscount, productItem.ProductFieldPrice, appliedCandidate, tag, contentItemId, parameters, variantValues));
+            var freeShippingPromotions = await freeShippingEligibilityService.GetFreeShippingPromotions(calculationResultItem, cancellationToken);
+
+            var cartItemDiscounts = await cartItemDiscountEligibilityService.GetCartItemDiscounts(calculationResultItem, cancellationToken);
+
+            ViewBag.Title = productItem.ProductFieldName;
+
+            return View(new ProductViewModel(productItem.ProductFieldName, productItem.ProductFieldDescription, productItem.ProductFieldImage.FirstOrDefault()?.ImageFile.Url, calculationResultItem.LineSubtotalAfterLineDiscount, productItem.ProductFieldPrice, appliedCandidate, tag, contentItemId, parameters, variantValues, (productItem as IProductSKU)?.ProductSKUCode, variantSkuCodes, isMerchandise, freeShippingPromotions, cartItemDiscounts)
+            {
+                WebPage = productPage
+            });
         }
     }
 }

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit.Analyzers" />
+    <PackageReference Include="NUnit3TestAdapter" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- File-system store, time provider and chunk helpers shared with the unit tests -->
+    <Compile Include="..\Kentico.Xperience.Labs.ContactsImporter.Admin.Tests\TestSupport.cs" Link="TestSupport.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Kentico.Xperience.Labs.ContactsImporter.Admin\Kentico.Xperience.Labs.ContactsImporter.Admin.csproj" />
+  </ItemGroup>
+
+</Project>

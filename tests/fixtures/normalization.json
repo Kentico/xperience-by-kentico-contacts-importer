@@ -1,0 +1,38 @@
+{
+  "description": "TS <-> C# parity vectors for dedupe key normalization and email validity. Loaded by Client unit tests and Admin.Tests. normalizedKey null = invalid key (row skipped).",
+  "keyCases": [
+    { "keyField": "ContactEmail", "input": "Jane@Example.COM", "normalizedKey": "jane@example.com" },
+    { "keyField": "ContactEmail", "input": "  jane@example.com \t", "normalizedKey": "jane@example.com" },
+    { "keyField": "ContactEmail", "input": " jane@example.com ", "normalizedKey": "jane@example.com" },
+    { "keyField": "ContactEmail", "input": "﻿jane@example.com", "normalizedKey": "jane@example.com" },
+    { "keyField": "ContactEmail", "input": "JOSÉ@EXAMPLE.COM", "normalizedKey": "josé@example.com" },
+    { "keyField": "ContactEmail", "input": "İSTANBUL@EXAMPLE.COM", "normalizedKey": "i̇stanbul@example.com" },
+    { "keyField": "ContactEmail", "input": "ΟΔΟΣ@EXAMPLE.COM", "normalizedKey": "οδος@example.com" },
+    { "keyField": "ContactEmail", "input": "ΟΔΟΣ.GR@EXAMPLE.COM", "normalizedKey": "οδοσ.gr@example.com" },
+    { "keyField": "ContactEmail", "input": "", "normalizedKey": null },
+    { "keyField": "ContactEmail", "input": "   ", "normalizedKey": null },
+    { "keyField": "ContactEmail", "input": "not-an-email", "normalizedKey": null },
+    { "keyField": "ContactEmail", "input": "a@b", "normalizedKey": null },
+    { "keyField": "ContactEmail", "input": "a b@example.com", "normalizedKey": null },
+    { "keyField": "CustomerID", "input": "  AbC-123 ", "normalizedKey": "AbC-123" },
+    { "keyField": "CustomerID", "input": "ABC", "normalizedKey": "ABC" },
+    { "keyField": "CustomerID", "input": "\t\r\n", "normalizedKey": null },
+    { "keyField": "CustomerID", "input": "a b", "normalizedKey": "a b" }
+  ],
+  "emailCases": [
+    { "input": "jane@example.com", "valid": true },
+    { "input": "jane.doe+tag@sub.example.co.uk", "valid": true },
+    { "input": "josé@example.com", "valid": true },
+    { "input": "jane@example", "valid": false },
+    { "input": "@example.com", "valid": false },
+    { "input": "jane@", "valid": false },
+    { "input": "jane@@example.com", "valid": false },
+    { "input": "jane @example.com", "valid": false },
+    { "input": "jane@.com", "valid": false },
+    { "input": "", "valid": false }
+  ],
+  "lengthCases": [
+    { "description": "key of 450 chars valid, 451 invalid (non-email key)", "keyField": "CustomerID", "repeatChar": "x", "validLength": 450, "invalidLength": 451 },
+    { "description": "email of 254 chars valid, 255 invalid (local part padded, domain @example.com)", "keyField": "ContactEmail", "repeatChar": "a", "domain": "@example.com", "validLength": 254, "invalidLength": 255 }
+  ]
+}

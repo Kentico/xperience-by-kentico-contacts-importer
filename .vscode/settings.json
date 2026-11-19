@@ -13,35 +13,23 @@
   },
 
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "biomejs.biome",
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit"
-  },
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
 
   "[markdown]": {
-    "editor.defaultFormatter": "biomejs.biome"
-  },
-
-  "[typescriptreact]": {
-    "editor.defaultFormatter": "biomejs.biome"
-  },
-
-  "[xml]": {
-    "editor.defaultFormatter": "DotJoshJohnson.xml"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
 
   "[csharp]": {
+    "editor.defaultFormatter": "ms-dotnettools.csharp"
+  },
+  "[aspnetcorerazor]": {
     "editor.defaultFormatter": "ms-dotnettools.csharp"
   },
 
   "files.associations": {
     ".azuredevops/**/*.yml": "azure-pipelines"
   },
-  "dotnet.defaultSolution": "Kentico.Xperience.Contacts.Importer.sln",
 
-  "[aspnetcorerazor]": {
-    "editor.defaultFormatter": "ms-dotnettools.csharp"
-  },
-
-  "biome.lspBin": "./src/Kentico.Xperience.Contacts.Importer/Admin/Client/node_modules/@biomejs/biome/bin/biome"
+  "dotnet.defaultSolution": "Kentico.Xperience.Labs.ContactsImporter.slnx",
+  "dotnet.solution.autoOpen": "Kentico.Xperience.Labs.ContactsImporter.slnx"
 }

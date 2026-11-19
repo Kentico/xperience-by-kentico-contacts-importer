@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit.Analyzers" />
+    <PackageReference Include="NUnit3TestAdapter" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- TypeScript/C# parity fixtures shared with the Client unit tests -->
+    <None Include="..\fixtures\**\*" Link="fixtures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Kentico.Xperience.Labs.ContactsImporter.Admin\Kentico.Xperience.Labs.ContactsImporter.Admin.csproj" />
+  </ItemGroup>
+
+  <!-- Real path of the admin project for ImportResourcesTests (CI maps source paths, so [CallerFilePath] does not work). -->
+  <ItemGroup>
+    <AssemblyMetadata Include="AdminProjectDirectory" Value="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)../../src/Kentico.Xperience.Labs.ContactsImporter.Admin))" />
+  </ItemGroup>
+
+</Project>

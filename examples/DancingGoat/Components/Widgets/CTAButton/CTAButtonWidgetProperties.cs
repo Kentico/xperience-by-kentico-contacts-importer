@@ -20,9 +20,7 @@ namespace DancingGoat.Widgets
         /// Page where the button points to.
         /// </summary>
         [UrlSelectorComponent(Label = "{$dancinggoat.ctabuttonwidget.linkurl.label$}", Order = 1)]
-#pragma warning disable KXE0004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         [ExcludeFromAiraTranslation]
-#pragma warning restore KXE0004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         public string LinkUrl { get; set; }
 
 

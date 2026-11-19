@@ -1,4 +1,6 @@
-﻿using DancingGoat.Models;
+﻿using System.Collections.Generic;
+
+using DancingGoat.Models;
 
 using Kentico.Xperience.Admin.Base.FormAnnotations;
 

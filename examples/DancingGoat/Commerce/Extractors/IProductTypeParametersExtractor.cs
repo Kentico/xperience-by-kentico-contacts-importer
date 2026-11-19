@@ -1,4 +1,8 @@
-﻿namespace DancingGoat.Commerce
+﻿using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace DancingGoat.Commerce
 {
     /// <summary>
     /// Extractor of product parameters based on the product type.

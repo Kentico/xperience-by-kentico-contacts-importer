@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    Contacts Importer keeps import job files (configuration, status, uploaded data, reports) under
+    ~/App_Data/contacts-importer by default. The Web SDK makes every *.json file in the project folder a Content
+    item, so without this the job files created while developing would be copied to the build output, published
+    with the application and shown there as imports.
+
+    Only the default storage path is covered. When ContactsImporter:StoragePath points to another folder inside the
+    project folder, add the same two Remove items for that folder to the project file.
+    To turn this off, set the ContactsImporterExcludeStorageFromProject property to false.
+  -->
+  <ItemGroup Condition="'$(ContactsImporterExcludeStorageFromProject)' != 'false'">
+    <Content Remove="App_Data\contacts-importer\**" />
+    <None Remove="App_Data\contacts-importer\**" />
+  </ItemGroup>
+</Project>

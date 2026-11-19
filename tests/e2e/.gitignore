@@ -1,0 +1,8 @@
+node_modules/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# Admin sign-in storage state (live auth cookies); regenerated on every run
+playwright/.auth/

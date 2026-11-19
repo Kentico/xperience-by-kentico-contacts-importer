@@ -1,0 +1,63 @@
+# Kentico.Xperience.* and @kentico/* are updated with the update-xperience agent skill,
+# which also regenerates examples/DancingGoat for the new version.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "Kentico.Xperience.*"
+    groups:
+      # Bumps together; keep sdk.version in aspire.config.json in step
+      aspire:
+        patterns: ["Aspire.*", "CommunityToolkit.Aspire.*"]
+      nuget:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "@kentico/*"
+      # Must match the React version the Xperience admin ships
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "@types/react"
+      - dependency-name: "@types/react-dom"
+      # Held back until @kentico/xperience-webpack-config supports them
+      - dependency-name: "typescript"
+        versions: [">=7"]
+      - dependency-name: "@babel/*"
+        versions: [">=8"]
+    groups:
+      npm:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /tests/e2e
+    schedule:
+      interval: weekly
+    ignore:
+      # Held back for now (major rewrite)
+      - dependency-name: "typescript"
+        versions: [">=7"]
+    groups:
+      e2e:
+        update-types: [minor, patch]
+
+  # global.json pins the SDK exactly (see AGENTS.md). CI fails on this PR until the lock files are
+  # regenerated with the new SDK: dotnet restore --force-evaluate
+  - package-ecosystem: dotnet-sdk
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]

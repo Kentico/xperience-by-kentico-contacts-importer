@@ -36,7 +36,7 @@ public class DancingGoatButtonWidgetProperties : IEmailWidgetProperties
         Label = "{$dancinggoat.buttonwidget.buttontype.label$}",
         Order = 3,
         ExplanationText = "{$dancinggoat.buttonwidget.buttontype.explanationtext$}",
-        Options = $"{nameof(DancingGoatButtonType.Button)};{{$dancinggoat.buttonwidget.buttontype.option.button$}}\r\n{{nameof(DancingGoatButtonType.Link)}};{{$dancinggoat.buttonwidget.buttontype.option.link$}}",
+        Options = $"{nameof(DancingGoatButtonType.Button)};{{$dancinggoat.buttonwidget.buttontype.option.button$}}\r\n{nameof(DancingGoatButtonType.Link)};{{$dancinggoat.buttonwidget.buttontype.option.link$}}",
         OptionsValueSeparator = ";")]
     public string ButtonType { get; set; } = nameof(DancingGoatButtonType.Button);
 

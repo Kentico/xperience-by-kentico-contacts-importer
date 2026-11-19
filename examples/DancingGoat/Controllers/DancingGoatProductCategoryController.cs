@@ -1,4 +1,10 @@
-﻿using CMS.ContentEngine;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+using CMS.ContentEngine;
 
 using DancingGoat;
 using DancingGoat.Commerce;
@@ -23,6 +29,9 @@ namespace DancingGoat.Controllers
         private readonly IPreferredLanguageRetriever currentLanguageRetriever;
         private readonly ProductRepository productRepository;
         private readonly CalculationService calculationService;
+        private readonly FreeShippingEligibilityService freeShippingEligibilityService;
+        private readonly CartItemDiscountEligibilityService cartItemDiscountEligibilityService;
+        private readonly ProductVariantsExtractor productVariantsExtractor;
 
         private const string PRODUCT_CATEGORY_FIELD_NAME = "ProductFieldCategory";
 
@@ -33,7 +42,10 @@ namespace DancingGoat.Controllers
             ITaxonomyRetriever taxonomyRetriever,
             IPreferredLanguageRetriever currentLanguageRetriever,
             ProductRepository productRepository,
-            CalculationService calculationService)
+            CalculationService calculationService,
+            FreeShippingEligibilityService freeShippingEligibilityService,
+            CartItemDiscountEligibilityService cartItemDiscountEligibilityService,
+            ProductVariantsExtractor productVariantsExtractor)
         {
             this.contentRetriever = contentRetriever;
             this.navigationService = navigationService;
@@ -41,6 +53,9 @@ namespace DancingGoat.Controllers
             this.currentLanguageRetriever = currentLanguageRetriever;
             this.productRepository = productRepository;
             this.calculationService = calculationService;
+            this.freeShippingEligibilityService = freeShippingEligibilityService;
+            this.cartItemDiscountEligibilityService = cartItemDiscountEligibilityService;
+            this.productVariantsExtractor = productVariantsExtractor;
         }
 
 
@@ -55,36 +70,25 @@ namespace DancingGoat.Controllers
 
             var tagCollection = await TagCollection.Create(productCategoryPage.ProductCategoryTag.Select(t => t.Identifier));
 
-            var products = await GetProductsByTags(tagCollection, cancellationToken);
+            var products = await productRepository.GetProductsByTags(PRODUCT_CATEGORY_FIELD_NAME, tagCollection, User.Identity.IsAuthenticated, cancellationToken);
 
             var productPageUrls = await productRepository.GetProductPageUrls(products.Cast<IContentItemFieldsSource>().Select(p => p.SystemFields.ContentItemID), cancellationToken);
 
             var productTagsTaxonomy = await taxonomyRetriever.RetrieveTaxonomy(DancingGoatTaxonomyConstants.PRODUCT_TAGS_TAXONOMY_NAME, languageName, cancellationToken);
 
+            var productCategoriesTaxonomy = await taxonomyRetriever.RetrieveTaxonomy(DancingGoatTaxonomyConstants.PRODUCT_CATEGORIES_TAXONOMY_NAME, languageName, cancellationToken);
+
             var categoryMenu = await navigationService.GetStoreNavigationItemViewModels(languageName, cancellationToken);
 
             var calculationResultItems = await calculationService.CalculateCatalogPrices(products, cancellationToken);
 
-            return View(ProductListingViewModel.GetViewModel(productCategoryPage, products, calculationResultItems, productPageUrls, productTagsTaxonomy, categoryMenu, languageName));
-        }
+            var productIdsWithVariants = productVariantsExtractor.GetProductIdsWithVariants(products);
 
+            var freeShippingProductIds = await freeShippingEligibilityService.GetFreeShippingEligibleProductIds(calculationResultItems, cancellationToken);
 
-        public async Task<IEnumerable<IProductFields>> GetProductsByTags(TagCollection tagCollection, CancellationToken cancellationToken = default)
-        {
-            var products = await contentRetriever.RetrieveContentOfReusableSchemas<IProductFields>(
-                    [IProductFields.REUSABLE_FIELD_SCHEMA_NAME],
-                    new RetrieveContentOfReusableSchemasParameters
-                    {
-                        LinkedItemsMaxLevel = 1,
-                        WorkspaceNames = [DancingGoatConstants.COMMERCE_WORKSPACE_NAME],
-                        IncludeSecuredItems = User.Identity.IsAuthenticated
-                    },
-                    query => query.Where(where => where.WhereContainsTags(PRODUCT_CATEGORY_FIELD_NAME, tagCollection)),
-                    new RetrievalCacheSettings($"WhereContainsTags_{PRODUCT_CATEGORY_FIELD_NAME}_{string.Join("_", tagCollection.TagIdentifiers)}"),
-                    cancellationToken
-                );
+            var specialOfferProductIds = await cartItemDiscountEligibilityService.GetSpecialOfferProductIds(calculationResultItems, cancellationToken);
 
-            return products;
+            return View(ProductListingViewModel.GetViewModel(productCategoryPage, products, calculationResultItems, productPageUrls, productTagsTaxonomy, categoryMenu, languageName, productIdsWithVariants, productCategoriesTaxonomy, freeShippingProductIds, specialOfferProductIds));
         }
     }
 }

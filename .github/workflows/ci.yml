@@ -3,16 +3,16 @@ name: "CI: Build and Test"
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "**.cs"
-      - "**.cshtml"
-      - "**.tsx"
-      - "**.js"
-      - "**.json"
-      - "**.csproj"
-      - "**.props"
-      - "**.targets"
-      - "**.sln"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A newer push to the same pull request or branch cancels the run in progress
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build_and_test:
@@ -27,25 +27,93 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
       DOTNET_NOLOGO: 1
+      # Throwaway SQL Server of this job (service container below); not a secret.
+      SQL_SA_PASSWORD: Ci-Integration-Tests-1
+      # Integration tests (tests/Kentico.Xperience.Labs.ContactsImporter.Admin.IntegrationTests) run against this Xperience database.
+      # They need no license. The database name must end with "-integration": the tests delete all contacts.
+      CONTACTSIMPORTER_INTEGRATION_SQL: Data Source=localhost,1433;Initial Catalog=contacts-importer-integration;User ID=sa;Password=Ci-Integration-Tests-1;Encrypt=False
+
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: Ci-Integration-Tests-1
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Ci-Integration-Tests-1 -C -Q 'SELECT 1' -b"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: "**/package-lock.json"
+
+      # The e2e job runs only with a license; static checks run here for every PR
+      - name: Check e2e tests
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          npm run typecheck
+          npm run lint
+          npm run format:check
+
+      # From the repository root (no project appsettings.json to rewrite, no sample data), so the database has the plain Xperience schema.
+      - name: Create integration test database
+        run: |
+          dotnet tool restore
+          dotnet kentico-xperience-dbmanager -- `
+            --server-name "localhost,1433" `
+            --username sa `
+            --password $env:SQL_SA_PASSWORD `
+            --admin-password $env:SQL_SA_PASSWORD `
+            --database-name contacts-importer-integration `
+            --recreate-existing-database
+          if ($LASTEXITCODE -ne 0) { throw "kentico-xperience-dbmanager failed ($LASTEXITCODE)" }
 
       - name: Install dependencies
         run: |
           dotnet restore `
             --locked-mode
 
+      - name: Check formatting
+        run: |
+          dotnet format `
+            --no-restore `
+            --verify-no-changes
+
+      # Release build runs npm ci and npm run build for the admin client
       - name: Build Solution
         run: |
           dotnet build `
             --configuration Release `
             --no-restore
+
+      - name: Check admin client
+        working-directory: src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run format:check
+
+      - name: Test admin client
+        working-directory: src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client
+        run: npm test
 
       - name: Test Solution
         run: |
@@ -53,3 +121,107 @@ jobs:
             --configuration Release `
             --no-build `
             --no-restore
+
+  # Needs an Xperience license (XPERIENCE_LICENSE_KEY repository secret, and the same
+  # Dependabot secret for Dependabot PRs). Without it - e.g. PRs from forks - every
+  # step after checkout is skipped and the job passes.
+  # Runs in parallel with build_and_test: building here is faster than waiting for its output.
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    services:
+      sql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: Pass@12345
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Pass@12345 -C -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      # Pinned; dependabot does not update service images - bump by hand
+      mailpit:
+        image: axllent/mailpit:v1.31.6
+        ports:
+          - 1025:1025
+          - 8025:8025
+
+    env:
+      ASPNETCORE_ENVIRONMENT: CI
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+      DOTNET_NOLOGO: 1
+      HAS_LICENSE: ${{ secrets.XPERIENCE_LICENSE_KEY != '' }}
+      DANCING_GOAT_BASE_URL: http://localhost:5080
+      # Xperience's command-line parser rejects --urls, so Kestrel's address comes from ASPNETCORE_URLS
+      ASPNETCORE_URLS: http://localhost:5080
+      E2E_WEB_SERVER_COMMAND: dotnet run --project ../../examples/DancingGoat --configuration Release --no-build --no-launch-profile
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Skip without license
+        if: env.HAS_LICENSE != 'true'
+        run: Write-Host "::notice title=E2E skipped::XPERIENCE_LICENSE_KEY is not available to this run."
+
+      - name: Setup .NET
+        if: env.HAS_LICENSE == 'true'
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - name: Setup Node.js
+        if: env.HAS_LICENSE == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: "**/package-lock.json"
+
+      - name: Create database
+        if: env.HAS_LICENSE == 'true'
+        env:
+          XPERIENCE_LICENSE_KEY: ${{ secrets.XPERIENCE_LICENSE_KEY }}
+        run: |
+          $license = Join-Path $env:RUNNER_TEMP 'xperience-license.txt'
+          Set-Content $license $env:XPERIENCE_LICENSE_KEY -NoNewline
+          ./scripts/Initialize-Database.ps1 -LicenseFile $license
+          Remove-Item $license
+
+      # Release build embeds the admin client (npm ci + npm run build)
+      - name: Build
+        if: env.HAS_LICENSE == 'true'
+        run: |
+          dotnet restore --locked-mode
+          dotnet build --configuration Release --no-restore
+
+      - name: Install Playwright
+        if: env.HAS_LICENSE == 'true'
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run e2e tests
+        if: env.HAS_LICENSE == 'true'
+        working-directory: tests/e2e
+        run: npm test
+
+      # Failures only: artifacts of public repositories are downloadable by anyone, and
+      # traces include signed-in admin pages
+      - name: Upload Playwright report
+        if: failure() && env.HAS_LICENSE == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report
+          retention-days: 7

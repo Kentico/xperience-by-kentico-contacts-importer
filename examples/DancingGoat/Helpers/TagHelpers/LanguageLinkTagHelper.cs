@@ -1,12 +1,17 @@
-﻿using CMS.Websites;
+﻿using System;
+using System.Threading.Tasks;
+
+using CMS.Websites;
 
 using Kentico.Content.Web.Mvc;
 using Kentico.Content.Web.Mvc.Routing;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Razor.TagHelpers;
+using Microsoft.AspNetCore.Routing;
 
 namespace DancingGoat.Helpers
 {
@@ -50,22 +55,24 @@ namespace DancingGoat.Helpers
 
         public override async Task ProcessAsync(TagHelperContext context, TagHelperOutput output)
         {
+            var isCurrentLanguage = string.Equals(currentLanguageRetriever.Get(), LanguageName, StringComparison.InvariantCultureIgnoreCase);
+
             // Page data context is initialized
             if (pageDataContextRetriever.TryRetrieve(out var webPageContext))
             {
                 var url = await webPageUrlRetriever.Retrieve(webPageContext.WebPage.WebPageItemID, LanguageName);
 
-                CreateActionLinkWithHref(output, url.RelativePath);
+                CreateActionLinkWithHref(output, ResolveLanguageSwitchHref(url), isCurrentLanguage);
                 return;
             }
 
             var httpContext = httpContextAccessor.HttpContext;
 
             // Create a link for the current language (the URL stays as it is)
-            if (currentLanguageRetriever.Get() == LanguageName)
+            if (isCurrentLanguage)
             {
                 var url = UriHelper.GetEncodedUrl(httpContext.Request);
-                CreateActionLinkWithHref(output, url);
+                CreateActionLinkWithHref(output, url, true);
                 return;
             }
 
@@ -93,10 +100,35 @@ namespace DancingGoat.Helpers
         }
 
 
-        private void CreateActionLinkWithHref(TagHelperOutput output, string url)
+        private string ResolveLanguageSwitchHref(WebPageUrl url)
+        {
+            // A language served from its own domain lives on a different host than the current request, so the link
+            // has to cross hosts via the absolute URL. A same-host target (path-prefix channels) keeps the relative
+            // path. Hosts are compared on authority (host and port) to match how the routing engine matches domains.
+            var currentAuthority = httpContextAccessor.HttpContext?.Request.Host.Value;
+
+            if (string.IsNullOrEmpty(currentAuthority)
+                || !Uri.TryCreate(url.AbsoluteUrl, UriKind.Absolute, out var absoluteUri))
+            {
+                return url.RelativePath;
+            }
+
+            return string.Equals(absoluteUri.Authority, currentAuthority, StringComparison.OrdinalIgnoreCase)
+                ? url.RelativePath
+                : url.AbsoluteUrl;
+        }
+
+
+        private void CreateActionLinkWithHref(TagHelperOutput output, string url, bool isCurrentLanguage)
         {
             output.TagName = "a";
             output.Attributes.Add("href", url);
+
+            if (isCurrentLanguage)
+            {
+                output.Attributes.Add("aria-current", "true");
+            }
+
             output.TagMode = TagMode.StartTagAndEndTag;
             output.Content.SetContent(LinkText);
         }

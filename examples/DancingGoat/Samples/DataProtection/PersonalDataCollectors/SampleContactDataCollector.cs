@@ -1,4 +1,6 @@
-﻿using CMS.Activities;
+﻿using System.Collections.Generic;
+
+using CMS.Activities;
 using CMS.DataEngine;
 using CMS.DataProtection;
 using CMS.Globalization;
@@ -51,10 +53,12 @@ namespace Samples.DancingGoat
         {
             using (var writer = CreateWriter(outputFormat))
             {
-                var dataCollector = new SampleContactDataCollectorCore(writer, activityInfoProvider, countryInfoProvider, stateInfoProvider, consentAgreementInfoProvider, bizFormInfoProvider);
+                var dataCollector = new SampleContactDataCollectorCore(activityInfoProvider, countryInfoProvider, stateInfoProvider, consentAgreementInfoProvider, bizFormInfoProvider);
+                dataCollector.CollectData(identities, writer);
+
                 return new PersonalDataCollectorResult
                 {
-                    Text = dataCollector.CollectData(identities)
+                    Text = writer.GetResult()
                 };
             }
         }

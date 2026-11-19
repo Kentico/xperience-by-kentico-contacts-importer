@@ -1,4 +1,7 @@
-﻿using DancingGoat.Models;
+﻿using System.Linq;
+using System.Threading.Tasks;
+
+using DancingGoat.Models;
 using DancingGoat.Widgets;
 
 using Kentico.Content.Web.Mvc;
@@ -42,9 +45,11 @@ namespace DancingGoat.Widgets
             {
                 ImagePath = image?.ImageFile.Url,
                 Text = properties.Text,
+                Subtext = properties.Subtext,
                 ButtonText = properties.ButtonText,
                 ButtonTarget = properties.ButtonTarget,
-                Theme = properties.Theme
+                SecondaryButtonText = properties.SecondaryButtonText,
+                SecondaryButtonTarget = properties.SecondaryButtonTarget
             });
         }
 

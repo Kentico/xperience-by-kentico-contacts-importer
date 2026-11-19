@@ -1,0 +1,17 @@
+<Project>
+  <!-- Versions for examples/ (DancingGoat, AppHost). Everything comes from the root file except the
+       Xperience group below, so DancingGoat can run a newer Xperience than the minimum the libraries in
+       src/ build against. Keep these versions >= the root ones; the update-xperience skill sets them. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove(Directory.Packages.props, $(MSBuildThisFileDirectory)..))" />
+
+  <ItemGroup Label="Xperience">
+    <!-- Update: declared in the root for src/ -->
+    <PackageVersion Update="Kentico.Xperience.Admin" Version="31.10.3" />
+    <PackageVersion Update="Kentico.Xperience.WebApp" Version="31.10.3" />
+    <!-- Include: DancingGoat only -->
+    <PackageVersion Include="Kentico.Xperience.AzureStorage" Version="31.10.3" />
+    <PackageVersion Include="Kentico.Xperience.ImageProcessing" Version="31.10.3" />
+    <PackageVersion Include="Kentico.Xperience.ManagementApi" Version="31.10.3" />
+    <PackageVersion Include="Kentico.Xperience.Mjml" Version="31.10.3" />
+  </ItemGroup>
+</Project>

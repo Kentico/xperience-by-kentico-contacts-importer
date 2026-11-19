@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc.Rendering;
+﻿using System;
+
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Razor.TagHelpers;
@@ -30,13 +32,13 @@ public class ActiveProductCategoryLinkTagHelper : TagHelper
     {
         var urlHelper = urlHelperFactory.GetUrlHelper(ViewContext);
 
-        var currentPath = ViewContext.HttpContext.Request.Path.Value?.ToLowerInvariant();
+        var currentPath = Normalize(ViewContext.HttpContext.Request.Path.Value);
 
         // Resolve ActiveHref using UrlHelper
-        var activeHrefResolved = urlHelper.Content(ActiveHref);
+        var activeHrefResolved = Normalize(urlHelper.Content(ActiveHref));
 
         if (!string.IsNullOrEmpty(currentPath) && !string.IsNullOrEmpty(activeHrefResolved) &&
-            (currentPath == activeHrefResolved || currentPath.StartsWith(activeHrefResolved)))
+            string.Equals(currentPath, activeHrefResolved, StringComparison.CurrentCultureIgnoreCase))
         {
             var existingClass = output.Attributes["class"]?.Value?.ToString() ?? "";
             output.Attributes.SetAttribute("class", $"{existingClass} active".Trim());
@@ -44,5 +46,11 @@ public class ActiveProductCategoryLinkTagHelper : TagHelper
 
         // Remove asp-active attribute so it doesn't appear in the rendered HTML
         output.Attributes.RemoveAll("asp-active");
+    }
+
+
+    private static string Normalize(string path)
+    {
+        return string.IsNullOrEmpty(path) ? path : path.TrimEnd('/');
     }
 }

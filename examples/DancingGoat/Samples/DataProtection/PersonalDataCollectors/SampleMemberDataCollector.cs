@@ -1,4 +1,6 @@
-﻿using CMS.DataEngine;
+﻿using System.Collections.Generic;
+
+using CMS.DataEngine;
 using CMS.DataProtection;
 
 namespace Samples.DancingGoat
@@ -18,10 +20,12 @@ namespace Samples.DancingGoat
         {
             using (var writer = CreateWriter(outputFormat))
             {
-                var dataCollector = new SampleMemberDataCollectorCore(writer);
+                var dataCollector = new SampleMemberDataCollectorCore();
+                dataCollector.CollectData(identities, writer);
+
                 return new PersonalDataCollectorResult
                 {
-                    Text = dataCollector.CollectData(identities)
+                    Text = writer.GetResult()
                 };
             }
         }

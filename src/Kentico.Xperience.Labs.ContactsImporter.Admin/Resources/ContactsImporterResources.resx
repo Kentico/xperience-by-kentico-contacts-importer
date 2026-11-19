@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="contactsimporter.application.name" xml:space="preserve">
+    <value>Contacts Importer (Labs)</value>
+  </data>
+  <data name="contactsimporter.page.imports" xml:space="preserve">
+    <value>Imports</value>
+  </data>
+  <data name="contactsimporter.page.import" xml:space="preserve">
+    <value>Import</value>
+  </data>
+  <data name="contactsimporter.permission.import" xml:space="preserve">
+    <value>Import contacts</value>
+  </data>
+  <data name="contactsimporter.permission.confirmconsent" xml:space="preserve">
+    <value>Confirm consent for imported contacts</value>
+  </data>
+  <data name="contactsimporter.error.invalidjobid" xml:space="preserve">
+    <value>The import ID is not valid.</value>
+  </data>
+  <data name="contactsimporter.error.jobnotfound" xml:space="preserve">
+    <value>The import does not exist.</value>
+  </data>
+  <data name="contactsimporter.error.jobunreadable" xml:space="preserve">
+    <value>The files of the import cannot be read.</value>
+  </data>
+  <data name="contactsimporter.error.invalidrequest" xml:space="preserve">
+    <value>The request is not valid.</value>
+  </data>
+  <data name="contactsimporter.error.invalidstate" xml:space="preserve">
+    <value>This action is not possible while the import is {0}.</value>
+  </data>
+  <data name="contactsimporter.error.invalidconfig" xml:space="preserve">
+    <value>The import settings are not valid.</value>
+  </data>
+  <data name="contactsimporter.error.jobidmismatch" xml:space="preserve">
+    <value>The uploaded data belongs to a different import.</value>
+  </data>
+  <data name="contactsimporter.error.truncateindex" xml:space="preserve">
+    <value>The chunk index is not valid.</value>
+  </data>
+  <data name="contactsimporter.error.busy" xml:space="preserve">
+    <value>The import is being processed right now. Try again in a moment.</value>
+  </data>
+  <data name="contactsimporter.error.importactive" xml:space="preserve">
+    <value>This import is being checked or run right now in another browser tab or by another user, so it cannot be deleted. Delete it after it ends, or once it has been paused for a short time.</value>
+  </data>
+  <data name="contactsimporter.error.deletefailed" xml:space="preserve">
+    <value>The import could not be deleted from the server. Try again in a moment.</value>
+  </data>
+  <data name="contactsimporter.error.sourcefieldmapped" xml:space="preserve">
+    <value>The import source field must not be one of the mapped contact fields.</value>
+  </data>
+  <data name="contactsimporter.error.analysisexpired" xml:space="preserve">
+    <value>The analysis is too old to import from. Analyze the file again.</value>
+  </data>
+  <data name="contactsimporter.error.noreport" xml:space="preserve">
+    <value>This report is not available.</value>
+  </data>
+  <data name="contactsimporter.error.consentcolumnrequired" xml:space="preserve">
+    <value>Consent can be recorded for selected rows only when a "Consent given" column is chosen in the mapping.</value>
+  </data>
+  <data name="contactsimporter.error.consentpermissionrequired" xml:space="preserve">
+    <value>This import changes recipient list subscriptions or records consent. To run it you need the permission "Confirm consent for imported contacts" of the Contacts Importer application.</value>
+  </data>
+  <data name="contactsimporter.error.attestationrequired" xml:space="preserve">
+    <value>This import changes recipient list subscriptions or records consent and must be confirmed with the current consent statement. Read the statement and confirm again.</value>
+  </data>
+  <data name="contactsimporter.error.otherimportrunning" xml:space="preserve">
+    <value>Another import ('{0}') was started and has not finished. Only one import can run at a time. Run this import after that one is finished or cancelled.</value>
+  </data>
+  <data name="contactsimporter.error.failed" xml:space="preserve">
+    <value>The import failed.</value>
+  </data>
+  <data name="contactsimporter.error.unexpected" xml:space="preserve">
+    <value>The import stopped because of an unexpected error. See the event log for details.</value>
+  </data>
+  <data name="contactsimporter.error.unreadablejob" xml:space="preserve">
+    <value>The import configuration cannot be read. Start a new import.</value>
+  </data>
+  <data name="contactsimporter.error.transient" xml:space="preserve">
+    <value>A temporary problem interrupted the import. It continues with the next attempt.</value>
+  </data>
+  <data name="contactsimporter.error.processingbusy" xml:space="preserve">
+    <value>Another request is still processing the import. It continues with the next attempt.</value>
+  </data>
+  <data name="contactsimporter.error.cachefailed" xml:space="preserve">
+    <value>The import is done, but clearing the cache failed. It is tried again with the next attempt.</value>
+  </data>
+  <data name="contactsimporter.error.chunkmissing" xml:space="preserve">
+    <value>Uploaded data chunk {0} is missing. Upload the file again.</value>
+  </data>
+  <data name="contactsimporter.error.chunkincomplete" xml:space="preserve">
+    <value>Uploaded data chunk {0} is incomplete. Upload the file again.</value>
+  </data>
+  <data name="contactsimporter.error.chunkunreadable" xml:space="preserve">
+    <value>Uploaded data chunk {0} cannot be read. Upload the file again.</value>
+  </data>
+  <data name="contactsimporter.error.abandoned" xml:space="preserve">
+    <value>The import was abandoned and its files were deleted.</value>
+  </data>
+  <data name="contactsimporter.error.attestationmissing" xml:space="preserve">
+    <value>The import changes recipient list subscriptions or consent agreements and must be confirmed with the consent statement. Run the analysis and confirm the import again.</value>
+  </data>
+  <data name="contactsimporter.error.fieldmissing" xml:space="preserve">
+    <value>A mapped contact field no longer exists or cannot be imported. Map the columns again.</value>
+  </data>
+  <data name="contactsimporter.error.audienceunchecked" xml:space="preserve">
+    <value>The recipient list or consent of the import could not be checked.</value>
+  </data>
+  <data name="contactsimporter.error.recipientlistmissing" xml:space="preserve">
+    <value>The selected recipient list does not exist, is not a recipient list or is being deleted. Select another recipient list.</value>
+  </data>
+  <data name="contactsimporter.error.consentmissing" xml:space="preserve">
+    <value>The selected consent does not exist. Select another consent.</value>
+  </data>
+  <data name="contactsimporter.error.consentnotselected" xml:space="preserve">
+    <value>A consent must be selected when consent agreements are recorded.</value>
+  </data>
+  <data name="contactsimporter.error.consentcolumnsmissing" xml:space="preserve">
+    <value>Consent from a file column needs a mapped consent column. Map a consent column or choose another consent option.</value>
+  </data>
+  <data name="contactsimporter.error.jobidempty" xml:space="preserve">
+    <value>The job ID is empty.</value>
+  </data>
+  <data name="contactsimporter.error.dateformatinvalid" xml:space="preserve">
+    <value>The date format is missing or too long.</value>
+  </data>
+  <data name="contactsimporter.error.filenameinvalid" xml:space="preserve">
+    <value>The file name is missing or too long.</value>
+  </data>
+  <data name="contactsimporter.error.fileempty" xml:space="preserve">
+    <value>The file is empty.</value>
+  </data>
+  <data name="contactsimporter.error.filetoolarge" xml:space="preserve">
+    <value>The file is larger than the allowed {0} bytes.</value>
+  </data>
+  <data name="contactsimporter.error.fingerprintinvalid" xml:space="preserve">
+    <value>The file fingerprint is not a hex string.</value>
+  </data>
+  <data name="contactsimporter.error.nomapping" xml:space="preserve">
+    <value>No columns are mapped.</value>
+  </data>
+  <data name="contactsimporter.error.sourcecolumninvalid" xml:space="preserve">
+    <value>A mapped source column name is missing or too long.</value>
+  </data>
+  <data name="contactsimporter.error.fieldnotimportable" xml:space="preserve">
+    <value>'{0}' is not an importable contact field.</value>
+  </data>
+  <data name="contactsimporter.error.fieldmappedtwice" xml:space="preserve">
+    <value>Contact field '{0}' is mapped more than once.</value>
+  </data>
+  <data name="contactsimporter.error.fieldtypenotsupported" xml:space="preserve">
+    <value>Contact field '{0}' has a data type that cannot be imported.</value>
+  </data>
+  <data name="contactsimporter.error.keyfieldnotmapped" xml:space="preserve">
+    <value>The key field must be one of the mapped contact fields.</value>
+  </data>
+  <data name="contactsimporter.error.keyfieldnotallowed" xml:space="preserve">
+    <value>Contact field '{0}' cannot be the key field: only text, whole number and GUID fields can.</value>
+  </data>
+  <data name="contactsimporter.error.consentcolumnsempty" xml:space="preserve">
+    <value>The consent columns are set without a column.</value>
+  </data>
+  <data name="contactsimporter.error.consentcolumninvalid" xml:space="preserve">
+    <value>A consent source column name is missing or too long.</value>
+  </data>
+  <data name="contactsimporter.error.consentcolumnssame" xml:space="preserve">
+    <value>The consent given and consent date columns must be different columns.</value>
+  </data>
+  <data name="contactsimporter.error.consentcolumnmapped" xml:space="preserve">
+    <value>A consent column cannot also be mapped to a contact field.</value>
+  </data>
+  <data name="contactsimporter.error.optionunknown" xml:space="preserve">
+    <value>An option has an unknown value.</value>
+  </data>
+  <data name="contactsimporter.error.recipientlistinvalid" xml:space="preserve">
+    <value>The recipient list is not valid.</value>
+  </data>
+  <data name="contactsimporter.error.sourcefieldnottext" xml:space="preserve">
+    <value>The import source field must be a text contact field.</value>
+  </data>
+  <data name="contactsimporter.error.sourcevalueinvalid" xml:space="preserve">
+    <value>The import source value is missing or too long for the field.</value>
+  </data>
+  <data name="contactsimporter.error.chunkrejected.invalidpayload" xml:space="preserve">
+    <value>The uploaded data is not valid. Reload the page and upload the file again.</value>
+  </data>
+  <data name="contactsimporter.error.chunkrejected.jobnotfound" xml:space="preserve">
+    <value>The import does not exist.</value>
+  </data>
+  <data name="contactsimporter.error.chunkrejected.invalidstate" xml:space="preserve">
+    <value>The import does not accept uploaded data in its current state. Reload the page.</value>
+  </data>
+  <data name="contactsimporter.error.chunkrejected.invalidconfiguration" xml:space="preserve">
+    <value>The mapping no longer matches the contact fields. Go back to the mapping and save it again.</value>
+  </data>
+  <data name="contactsimporter.error.chunkrejected.toolarge" xml:space="preserve">
+    <value>A part of the upload is larger than the server allows.</value>
+  </data>
+  <data name="contactsimporter.error.chunkrejected.uploadtoolarge" xml:space="preserve">
+    <value>The file holds more data than one import can upload.</value>
+  </data>
+  <data name="contactsimporter.error.chunkrejected.hashmismatch" xml:space="preserve">
+    <value>A part of the upload was damaged on the way. Try again.</value>
+  </data>
+  <data name="contactsimporter.error.chunkrejected.invalidgzip" xml:space="preserve">
+    <value>A part of the upload could not be unpacked. Try again.</value>
+  </data>
+  <data name="contactsimporter.error.chunkrejected.decompressedtoolarge" xml:space="preserve">
+    <value>A part of the upload is larger than the server allows when unpacked.</value>
+  </data>
+  <data name="contactsimporter.error.chunkrejected.invalidrecord" xml:space="preserve">
+    <value>The uploaded data has a row the server cannot accept.</value>
+  </data>
+  <data name="contactsimporter.error.chunkrejected.rowcountmismatch" xml:space="preserve">
+    <value>A part of the upload does not have the number of rows it declares. Try again.</value>
+  </data>
+  <data name="contactsimporter.error.chunkrejected.roworder" xml:space="preserve">
+    <value>The uploaded rows are not in file order. Reload the page and upload the file again.</value>
+  </data>
+  <data name="contactsimporter.error.uploadnotcompletable" xml:space="preserve">
+    <value>The upload cannot be finished in the current state of the import. Reload the page.</value>
+  </data>
+  <data name="contactsimporter.error.uploadinconsistent" xml:space="preserve">
+    <value>The uploaded data is not complete or does not match the file. Continue the upload, or start it again.</value>
+  </data>
+  <data name="contactsimporter.attestation.statement" xml:space="preserve">
+    <value>I confirm that documented consent exists for the contacts in this import: consent to receive the emails sent to the selected recipient list, and the selected consent, as far as this import sets them. My organization keeps the record of when and how each contact agreed and can provide it on request.</value>
+    <comment>Consent statement confirmed in the Run dialog. When this text changes, bump ImportAttestationPolicy.StatementVersion (Jobs/ImportAttestationPolicy.cs): confirmations of the old text are then asked again.</comment>
+  </data>
+</root>
