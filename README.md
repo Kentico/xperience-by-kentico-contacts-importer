@@ -2,8 +2,12 @@
 
 [![Kentico Labs](https://img.shields.io/badge/Kentico_Labs-grey?labelColor=orange&logo=data:image/svg+xml;base64,PHN2ZyBjbGFzcz0ic3ZnLWljb24iIHN0eWxlPSJ3aWR0aDogMWVtOyBoZWlnaHQ6IDFlbTt2ZXJ0aWNhbC1hbGlnbjogbWlkZGxlO2ZpbGw6IGN1cnJlbnRDb2xvcjtvdmVyZmxvdzogaGlkZGVuOyIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik05NTYuMjg4IDgwNC40OEw2NDAgMjc3LjQ0VjY0aDMyYzE3LjYgMCAzMi0xNC40IDMyLTMycy0xNC40LTMyLTMyLTMyaC0zMjBjLTE3LjYgMC0zMiAxNC40LTMyIDMyczE0LjQgMzIgMzIgMzJIMzg0djIxMy40NEw2Ny43MTIgODA0LjQ4Qy00LjczNiA5MjUuMTg0IDUxLjIgMTAyNCAxOTIgMTAyNGg2NDBjMTQwLjggMCAxOTYuNzM2LTk4Ljc1MiAxMjQuMjg4LTIxOS41MnpNMjQxLjAyNCA2NDBMNDQ4IDI5NS4wNFY2NGgxMjh2MjMxLjA0TDc4Mi45NzYgNjQwSDI0MS4wMjR6IiAgLz48L3N2Zz4=)](https://github.com/Kentico/.github/blob/main/SUPPORT.md#labs-limited-support) [![CI: Build and Test](https://github.com/Kentico/xperience-by-kentico-contacts-importer/actions/workflows/ci.yml/badge.svg)](https://github.com/Kentico/xperience-by-kentico-contacts-importer/actions/workflows/ci.yml)
 
+| Package                                       | NuGet                                                                                                                                                                                                                             |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Kentico.Xperience.Labs.ContactsImporter.Admin | [![Kentico.Xperience.Labs.ContactsImporter.Admin - NuGet Package](https://img.shields.io/nuget/v/Kentico.Xperience.Labs.ContactsImporter.Admin.svg)](https://www.nuget.org/packages/Kentico.Xperience.Labs.ContactsImporter.Admin) |
+
 > [!NOTE]
-> This package replaces `Kentico.Xperience.Contacts.Importer`, which is deprecated (its final release is 1.0.0-prerelease-5). Replace that package reference with `Kentico.Xperience.Labs.ContactsImporter.Admin` and use the namespace `Kentico.Xperience.Labs.ContactsImporter.Admin`. See [releases](https://github.com/Kentico/xperience-by-kentico-contacts-importer/releases).
+> Migrating from `Kentico.Xperience.Contacts.Importer`? The package was renamed to `Kentico.Xperience.Labs.ContactsImporter.Admin` (final release under the old ID: 1.0.0-prerelease-5). Version 1.0.0-prerelease-6 is a rewrite of the importer (dry run, recipient lists, consent, resumable imports) with breaking API changes. Swap your package reference, update `using` statements to `Kentico.Xperience.Labs.ContactsImporter.Admin`, and replace `AddContactsImport()` and `UseContactsImport()` with `AddContactsImporter()` (see [Quick Start](#quick-start)).
 
 ## Description
 
@@ -58,9 +62,11 @@ Some behavior is intentional, for speed on large files. Details: [Limitations an
 
 ### Library Version Matrix
 
-| Xperience Version | Library Version    |
-| ----------------- | ------------------ |
-| >= 31.10.3        | 1.0.0-prerelease-5 |
+| Xperience Version | Library Version                                 | Package ID                                      |
+| ----------------- | ----------------------------------------------- | ----------------------------------------------- |
+| >= 31.10.3        | >= 1.0.0-prerelease-6                           | `Kentico.Xperience.Labs.ContactsImporter.Admin` |
+| >= 31.0.1         | 1.0.0-prerelease-4 - 1.0.0-prerelease-5 (final) | `Kentico.Xperience.Contacts.Importer`           |
+| 30.5.1 - 31.0.0   | 1.0.0-prerelease-3                              | `Kentico.Xperience.Contacts.Importer`           |
 
 ### Dependencies
 

@@ -34,7 +34,7 @@ Last verification (2026-11-18, slice 8): NUnit 1053, Vitest 470, package build 0
 
 Working end to end in admin: upload CSV/TSV/NDJSON/JSON/XLSX (.gz, single-entry .zip) → map → options → dry run → review → run → results, resume/takeover/cancel, report download. Recipient list add (subscribed, no DOI email), keep/resubscribe unsubscribed, bounce counts/skip, consent agreements, attestation on Run.
 
-Release version: `Kentico.Xperience.Labs.ContactsImporter.Admin` `1.0.0-prerelease-5` (D39).
+Release version: `Kentico.Xperience.Labs.ContactsImporter.Admin` `1.0.0-prerelease-6` (D39, D62).
 
 MVP deliverable (D38): done — README "Limitations" + `docs/Usage-Guide.md` "Limitations and documented choices".
 
