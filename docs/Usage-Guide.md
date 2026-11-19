@@ -1,5 +1,10 @@
 # Usage Guide
 
+> [!WARNING]
+> This package ID is deprecated and 1.0.0-prerelease-5 is the final release under it. Future releases ship as `Kentico.Xperience.Labs.ContactsImporter.Admin` (namespace `Kentico.Xperience.Labs.ContactsImporter.Admin`). See [releases](https://github.com/Kentico/xperience-by-kentico-contacts-importer/releases).
+>
+> Run `dotnet list package --deprecated` to find old references. Suppress warning `KXCI0001` until you migrate, if needed.
+
 ## Screenshot
 
 ![Import page](../images/screenshot.png)

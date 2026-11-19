@@ -10,6 +10,7 @@ namespace Microsoft.Extensions.DependencyInjection;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
+    [Obsolete(DeprecationMessages.PackageRenamed, DiagnosticId = DeprecationMessages.DiagnosticId, UrlFormat = DeprecationMessages.Url)]
     public static IServiceCollection AddContactsImport(this IServiceCollection services) =>
         services.AddTransient<IImportService, ImportService>();
 }
@@ -20,6 +21,7 @@ public static class ServiceCollectionExtensions
 /// </summary>
 public static class ApplicationBuilderExtensions
 {
+    [Obsolete(DeprecationMessages.PackageRenamed, DiagnosticId = DeprecationMessages.DiagnosticId, UrlFormat = DeprecationMessages.Url)]
     public static IApplicationBuilder UseContactsImport(this IApplicationBuilder builder)
     {
         builder.UseWebSockets();
