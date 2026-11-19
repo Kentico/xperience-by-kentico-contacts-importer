@@ -4,6 +4,11 @@
 [![CI: Build and Test](https://github.com/Kentico/xperience-by-kentico-contacts-importer/actions/workflows/ci.yml/badge.svg)](https://github.com/Kentico/xperience-by-kentico-contacts-importer/actions/workflows/ci.yml)
 [![NuGet Package](https://img.shields.io/nuget/v/Kentico.Xperience.Contacts.Importer.svg)](https://www.nuget.org/packages/Kentico.Xperience.Contacts.Importer)
 
+> [!WARNING]
+> This package ID is deprecated and 1.0.0-prerelease-5 is the final release under it. Future releases ship as `Kentico.Xperience.Labs.ContactsImporter.Admin` (namespace `Kentico.Xperience.Labs.ContactsImporter.Admin`). See [releases](https://github.com/Kentico/xperience-by-kentico-contacts-importer/releases).
+>
+> Run `dotnet list package --deprecated` to find old references. Suppress warning `KXCI0001` until you migrate, if needed.
+
 ## Description
 
 Enables bulk import and deletion of contacts in an Xperience by Kentico solution using a `.csv` file. Imported contacts can be automatically assigned to a contact group or recipient list during the import process.
@@ -12,10 +17,10 @@ Enables bulk import and deletion of contacts in an Xperience by Kentico solution
 
 ### Library Version Matrix
 
-| Xperience Version | Library Version    |
-| ----------------- | ---------------    |
-| 30.5.1-31.0.0     | 1.0.0-prerelease-3 |
-| >= 31.0.1         | 1.0.0-prerelease-4 |
+| Xperience Version | Library Version            |
+| ----------------- | -------------------------- |
+| 30.5.1-31.0.0     | 1.0.0-prerelease-3         |
+| >= 31.0.1         | 1.0.0-prerelease-5 (final) |
 
 ### Dependencies
 

@@ -3,6 +3,7 @@
 	<PropertyGroup>
 		<Product>Xperience by Kentico Contacts Importer</Product>
 		<Title>$(Product)</Title>
+		<Description>DEPRECATED: replaced by Kentico.Xperience.Labs.ContactsImporter.Admin. Bulk import and deletion of contacts in Xperience by Kentico from a CSV file.</Description>
 		<PackageId>Kentico.Xperience.Contacts.Importer</PackageId>
 		<VersionSuffix Condition="$(Configuration) == 'Debug'">$([System.DateTime]::Now.ToString('yyMMddHHmm'))</VersionSuffix>
 		<PackageOutputDir Condition="$(Configuration) == 'Debug'">$(LOCAL_NUGET_REPO)\</PackageOutputDir>
