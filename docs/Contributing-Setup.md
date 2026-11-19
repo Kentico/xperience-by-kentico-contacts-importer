@@ -116,5 +116,5 @@ The package version comes from `VersionPrefix` and `VersionSuffix` in `Directory
 
 Publish pipeline (Azure DevOps):
 
-1. Run the `.azuredevops/pipelines/build-and-release.yml` pipeline for `main`. It builds, signs, packs, and after approval pushes the packages to nuget.org.
+1. Run the `.azuredevops/pipelines/build-and-release.yaml` pipeline for `main`. It builds, signs, packs, and after approval pushes the packages to nuget.org.
 1. After a successful full release, create the GitHub release and tag `v<version>` on the released commit, with generated release notes.
