@@ -12,11 +12,15 @@ updates:
       # Bumps together; keep sdk.version in aspire.config.json in step
       aspire:
         patterns: ["Aspire.*", "CommunityToolkit.Aspire.*"]
+      # Everything else in one pull request, majors included
       nuget:
-        update-types: [minor, patch]
+        patterns: ["*"]
 
+  # One entry for both npm folders: a group spans them, so each update is one pull request a week
   - package-ecosystem: npm
-    directory: /src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client
+    directories:
+      - /src/Kentico.Xperience.Labs.ContactsImporter.Admin/Client
+      - /tests/e2e
     schedule:
       interval: weekly
     ignore:
@@ -27,25 +31,15 @@ updates:
       - dependency-name: "@types/react"
       - dependency-name: "@types/react-dom"
       # Held back until @kentico/xperience-webpack-config supports them
-      - dependency-name: "typescript"
-        versions: [">=7"]
       - dependency-name: "@babel/*"
         versions: [">=8"]
-    groups:
-      npm:
-        update-types: [minor, patch]
-
-  - package-ecosystem: npm
-    directory: /tests/e2e
-    schedule:
-      interval: weekly
-    ignore:
-      # Held back for now (major rewrite)
+      # Held back for now (major rewrite; the admin client also needs @kentico/xperience-webpack-config support)
       - dependency-name: "typescript"
         versions: [">=7"]
     groups:
-      e2e:
-        update-types: [minor, patch]
+      # Majors too: fewer pull requests means fewer CI runs (see the merge queue note in docs/Contributing-Setup.md)
+      npm:
+        patterns: ["*"]
 
   # global.json pins the SDK exactly (see AGENTS.md). CI fails on this PR until the lock files are
   # regenerated with the new SDK: dotnet restore --force-evaluate

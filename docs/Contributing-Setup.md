@@ -104,6 +104,15 @@ To generate large import files (CSV, TSV, NDJSON, JSON, XLSX; gzipped or zipped)
 
 1. This repository uses `lf` line endings for text files. EditorConfig and Git enforce this on all platforms; no Git line-ending override is needed.
 
+## Merging pull requests
+
+Set up once by a repository admin, in a branch ruleset for `main` (**Settings** → **Rules**):
+
+- Require status checks to pass: **Build and Test** and **E2E Tests**. Leave **Require branches to be up to date before merging** off.
+- Require merge queue. The CI workflow runs for `merge_group` events: each queued pull request is tested on top of `main` and the pull requests ahead of it, so open pull requests (for example several Dependabot updates) don't need updating and a new CI run after every merge.
+
+Merge with **Merge when ready**, which adds the pull request to the queue.
+
 ## Releasing
 
 The package version comes from `VersionPrefix` and `VersionSuffix` in `Directory.Build.props`. A release is that version, published from `main`.

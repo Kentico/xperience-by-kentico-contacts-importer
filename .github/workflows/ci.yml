@@ -5,6 +5,10 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # Merge queue: each queued pull request is tested on top of main and the ones ahead of it,
+  # so open pull requests never need updating and re-running after another one merges
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
