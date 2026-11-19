@@ -1,5 +1,8 @@
 # Usage Guide
 
+> [!NOTE]
+> This package replaces `Kentico.Xperience.Contacts.Importer`, which is deprecated (its final release is 1.0.0-prerelease-5). Replace that package reference with `Kentico.Xperience.Labs.ContactsImporter.Admin`; see [Installation](#installation).
+
 The Contacts Importer lets marketers import contacts into Xperience by Kentico from CSV, TSV, NDJSON, JSON and Excel (`.xlsx`) files, also gzipped (`.gz`) or zipped (`.zip`). It matches rows to existing contacts, checks the whole file in a dry run before anything changes, and can add contacts to a recipient list and record consent agreements.
 
 The file is read in the browser. Only the mapped columns are uploaded, and the server writes contacts in batches while the browser tab stays open.
