@@ -165,18 +165,19 @@
       },
       "CommunityToolkit.Aspire.Hosting.MailPit": {
         "type": "Direct",
-        "requested": "[13.6.1, )",
-        "resolved": "13.6.1",
-        "contentHash": "vX+bmgc0GmseZD9GcqqGhqFSheuIYVfSG9AnXjQkmzkKbPuxfbBOqj/+bkUF9lnzVWiQiyjM2Y+78iytcwizDw==",
+        "requested": "[17.0.0, )",
+        "resolved": "17.0.0",
+        "contentHash": "eLHm6vVGrPJnkMjk1zdPWinbltIkP5UrzQsur6oU9LfqkjPae+jLgreEmSnLwuB2BWFuHNziDD3sYa1zuU1GDA==",
         "dependencies": {
-          "Aspire.Hosting": "13.6.4"
+          "Aspire.Hosting": "17.0.0",
+          "Microsoft.Extensions.Hosting.Abstractions": "10.0.15"
         }
       },
       "SonarAnalyzer.CSharp": {
         "type": "Direct",
-        "requested": "[10.36.0.15337, )",
-        "resolved": "10.36.0.15337",
-        "contentHash": "jGLAZUjheSURfe0T/dJYGUrMOrLt1fxaInpChq75YJvrywsxFoUKK/EM6PSfTjkt4pbaq2ywIQjgQzhrmmj5Ow=="
+        "requested": "[10.37.0.15768, )",
+        "resolved": "10.37.0.15768",
+        "contentHash": "73Qo5UF1HSCwUGqiZ9XOKXWNRAe3WN8dfsj3pWIi5oIuenY1Uo9WuMinGibs3up9zcJ5CFk5Ex/Ei/S17mcBvg=="
       },
       "Aspire.Hosting": {
         "type": "Transitive",
